@@ -1,6 +1,7 @@
 mod common;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use axum::body::Bytes;
@@ -676,6 +677,84 @@ async fn double_submit_is_conflict() {
     assert!(v["error"].is_string());
     assert_eq!(f.requests().len(), 1);
     assert_eq!(f.app.store.nodes(&conv).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn send_after_done_is_appended_under_the_reply() {
+    let f = fixture(deepseek_reply("想", "喵~")).await;
+    let conv = f.create_conv().await;
+    let first = f.send(&conv, "一").await;
+    let second = f.send(&conv, "二").await;
+    assert_eq!(
+        second[0].1["user_node"]["parent_id"],
+        first[3].1["node"]["id"]
+    );
+    assert_eq!(f.conversation(&conv).await["title"], "一");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_sends_keep_a_single_branch() {
+    // Sends only: every accepted turn extends the current branch, so the tree stays a chain
+    // (no node has two children) and the title comes from the first accepted message. Workers
+    // retry on 409 at once, so requests keep arriving while each turn saves its reply.
+    const TURNS: usize = 30;
+    let f = fixture(deepseek_reply("想", "喵~")).await;
+    let conv = f.create_conv().await;
+    let accepted = AtomicUsize::new(0);
+    let workers = (0..8).map(|w| {
+        let (f, conv, accepted) = (&f, conv.as_str(), &accepted);
+        async move {
+            let mut attempt = 0;
+            while accepted.load(Ordering::SeqCst) < TURNS {
+                attempt += 1;
+                let r = f
+                    .post(conv, f.send_body(&format!("消息{w}-{attempt}")))
+                    .await;
+                match r.status().as_u16() {
+                    409 => {}
+                    200 => {
+                        SseReader::new(r).collect().await;
+                        accepted.fetch_add(1, Ordering::SeqCst);
+                    }
+                    s => panic!("unexpected status {s}"),
+                }
+            }
+        }
+    });
+    futures_util::future::join_all(workers).await;
+    assert!(f.idle());
+
+    let nodes = f.app.store.nodes(&conv).unwrap();
+    let users = nodes.iter().filter(|n| n.role == NodeRole::User).count();
+    assert_eq!(users, accepted.load(Ordering::SeqCst));
+    let mut children: HashMap<Option<&str>, usize> = HashMap::new();
+    for n in &nodes {
+        *children.entry(n.parent_id.as_deref()).or_default() += 1;
+    }
+    let branched: Vec<_> = children.iter().filter(|(_, c)| **c > 1).collect();
+    assert!(
+        branched.is_empty(),
+        "nodes with several children: {branched:?}"
+    );
+    let root = nodes.iter().find(|n| n.parent_id.is_none()).unwrap();
+    assert_eq!(f.conversation(&conv).await["title"], root.content.as_str());
+}
+
+#[tokio::test]
+async fn metrics_measure_the_stream() {
+    let mut script = deepseek_reply("想", "喵~");
+    // 200 ms between the reasoning delta and the text delta.
+    script.chunks[1].0 = Duration::from_millis(200);
+    let f = fixture(script).await;
+    let conv = f.create_conv().await;
+    let events = f.send(&conv, "你好").await;
+    let m = &events[3].1["node"]["metrics"];
+    let total = m["total_ms"].as_u64().unwrap();
+    let ttft = m["ttft_ms"].as_u64().unwrap();
+    assert!(total >= 200, "{m}");
+    assert!(ttft <= total, "{m}");
+    let rate = m["tokens_per_sec"].as_f64().unwrap();
+    assert!(rate.is_finite() && rate > 0.0, "{m}");
 }
 
 #[tokio::test]

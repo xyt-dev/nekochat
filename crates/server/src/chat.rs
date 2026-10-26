@@ -87,6 +87,11 @@ pub async fn post_turn(
         Action::Send { .. } => None,
         Action::Edit { node_id, .. } | Action::Regenerate { node_id } => Some(node_id.clone()),
     };
+    // Claim first: the running turn saves its reply before releasing the claim, so the leaf and
+    // title read below are never older than that reply.
+    let (guard, cancel) = state
+        .begin_turn(&conv_id)
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"))?;
     let store = state.store.clone();
     let (conv, model, target) = blocking(move || {
         let target = match target_id {
@@ -102,9 +107,6 @@ pub async fn post_turn(
     .await?;
 
     let conv = conv.ok_or_else(ApiError::not_found)?;
-    let (guard, cancel) = state
-        .begin_turn(&conv.id)
-        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"))?;
     let model = model.ok_or_else(|| ApiError::bad_request("模型未上架"))?;
     let provider = state
         .provider(&model.spec.provider)
