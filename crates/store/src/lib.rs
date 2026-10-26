@@ -1,6 +1,8 @@
 //! SQLite persistence for nekochat.
 
 mod catalog;
+mod tree;
+mod usage;
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -9,6 +11,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::Connection;
 
 pub use catalog::{Character, ListedModel, ModelSpec, SettingKey};
+pub use tree::{Conversation, Node, NodeRole, NodeStatus};
+pub use usage::{UsagePurpose, UsageRecord};
 
 const SCHEMA: &str = include_str!("schema.sql");
 
