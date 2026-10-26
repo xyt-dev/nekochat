@@ -276,6 +276,50 @@ async fn early_close_is_transport_and_bad_json_is_protocol() {
 }
 
 #[tokio::test]
+async fn in_stream_error_object_ends_with_protocol_error() {
+    let app = Router::new()
+        .route(
+            "/a/v1/chat/completions",
+            post(|| async {
+                concat!(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n",
+                    "data: {\"error\":{\"message\":\"overloaded\",\"code\":529}}\n\n",
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"after\"}}]}\n\n",
+                    "data: [DONE]\n\n"
+                )
+            }),
+        )
+        .route(
+            "/b/v1/chat/completions",
+            post(|| async { "data: {\"error\":{\"code\":42}}\n\ndata: [DONE]\n\n" }),
+        );
+    let base = serve(app).await;
+    let http = reqwest::Client::new();
+    let r = req(ReasoningStyle::None, None);
+    let a: Vec<_> = stream_chat(&http, &provider(&format!("{base}/a")), &r)
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(a.len(), 2, "{a:?}");
+    assert_eq!(a[0].as_ref().unwrap(), &StreamEvent::Text("hi".into()));
+    assert!(
+        matches!(&a[1], Err(GatewayError::Protocol(m)) if m == "overloaded"),
+        "{a:?}"
+    );
+    let b: Vec<_> = stream_chat(&http, &provider(&format!("{base}/b")), &r)
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(b.len(), 1, "{b:?}");
+    assert!(
+        matches!(&b[0], Err(GatewayError::Protocol(m)) if m.contains("42")),
+        "{b:?}"
+    );
+}
+
+#[tokio::test]
 async fn http_error_carries_status_and_message() {
     let app = Router::new().route(
         "/v1/chat/completions",

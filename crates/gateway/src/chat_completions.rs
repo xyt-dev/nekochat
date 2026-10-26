@@ -174,7 +174,17 @@ pub async fn stream_chat(
                             return None;
                         }
                         match serde_json::from_str::<Value>(data) {
-                            Ok(v) => chunk_events(&v, &mut pending),
+                            Ok(v) => {
+                                if let Some(e) = v.get("error").filter(|e| e.is_object()) {
+                                    let message = e
+                                        .get("message")
+                                        .and_then(Value::as_str)
+                                        .map_or_else(|| e.to_string(), str::to_owned);
+                                    let err = GatewayError::Protocol(message);
+                                    return Some((Err(err), (events, pending, true)));
+                                }
+                                chunk_events(&v, &mut pending)
+                            }
                             Err(e) => {
                                 let err = GatewayError::Protocol(format!("invalid SSE JSON: {e}"));
                                 return Some((Err(err), (events, pending, true)));
