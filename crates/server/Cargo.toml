@@ -11,6 +11,7 @@ name = "nekochat"
 path = "src/main.rs"
 
 [dependencies]
+nekochat-core = { path = "../core" }
 nekochat-store = { path = "../store" }
 nekochat-gateway = { path = "../gateway" }
 anyhow.workspace = true
@@ -29,7 +30,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-nekochat-core = { path = "../core" }
 futures-util.workspace = true
 reqwest = { workspace = true, features = ["cookies"] }
 tempfile.workspace = true

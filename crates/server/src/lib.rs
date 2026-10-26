@@ -17,7 +17,20 @@ pub fn app(state: AppState) -> Router {
     let api = Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/session", post(auth::access_login))
-        .route("/api/conversations", get(user::list_conversations))
+        .route("/api/models", get(user::list_models))
+        .route(
+            "/api/conversations",
+            get(user::list_conversations).post(user::create_conversation),
+        )
+        .route(
+            "/api/conversations/{id}",
+            get(user::get_conversation).delete(user::delete_conversation),
+        )
+        .route(
+            "/api/conversations/{id}/clear",
+            post(user::clear_conversation),
+        )
+        .route("/api/conversations/{id}/leaf", put(user::set_leaf))
         .route("/api/admin/session", post(auth::admin_login))
         .route("/api/admin/providers", get(admin::list_providers))
         .route(
