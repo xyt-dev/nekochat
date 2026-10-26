@@ -1,0 +1,18 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/store", "crates/gateway", "crates/server"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+anyhow = "1"
+axum = "0.8.9"
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.54", features = ["full"] }
+toml = "1.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

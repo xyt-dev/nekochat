@@ -1,0 +1,6 @@
+[package]
+name = "nekochat-gateway"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

@@ -1,0 +1,19 @@
+listen = "127.0.0.1:8787"
+data_dir = "./data"
+access_password = ""
+admin_password = ""
+trusted_proxies = []
+
+[[providers]]
+key = "deepseek"
+label = "DeepSeek 官方"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+
+[[providers]]
+key = "opencode-go"
+label = "OpenCode Go"
+base_url = "https://opencode.ai/inference/go/openai/v1"
+models_url = "https://opencode.ai/inference/v1/models"
+api_key_env = "OPENCODE_API_KEY"
+session_header = "x-opencode-session"
