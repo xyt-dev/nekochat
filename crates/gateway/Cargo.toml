@@ -4,3 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+nekochat-core = { path = "../core" }
+serde_json.workspace = true
+thiserror.workspace = true
+futures-util = "0.3"
+eventsource-stream = "0.2"
+reqwest = { version = "0.12", default-features = false, features = ["stream", "json", "rustls-tls"] }
+
+[dev-dependencies]
+axum.workspace = true
+tokio.workspace = true
