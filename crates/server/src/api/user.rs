@@ -108,6 +108,39 @@ pub async fn create_conversation(
     .await?;
     Ok((StatusCode::CREATED, Json(conv.into())))
 }
+/// Token counts as the client sees them; cost fields stay admin-only.
+#[derive(Serialize)]
+pub struct UsageView {
+    cached_in: u64,
+    uncached_in: u64,
+    reasoning: u64,
+    output: u64,
+}
+
+/// Generation metrics without any cost data.
+#[derive(Serialize)]
+pub struct MetricsView {
+    ttft_ms: Option<u64>,
+    total_ms: u64,
+    tokens_per_sec: Option<f64>,
+    usage: UsageView,
+}
+
+impl From<Metrics> for MetricsView {
+    fn from(m: Metrics) -> MetricsView {
+        MetricsView {
+            ttft_ms: m.ttft_ms,
+            total_ms: m.total_ms,
+            tokens_per_sec: m.tokens_per_sec,
+            usage: UsageView {
+                cached_in: m.usage.cached_in,
+                uncached_in: m.usage.uncached_in,
+                reasoning: m.usage.reasoning,
+                output: m.usage.output,
+            },
+        }
+    }
+}
 
 /// A message node as the client sees it: no character data, no prices.
 #[derive(Serialize)]
@@ -120,7 +153,7 @@ pub struct NodeView {
     model_label: Option<String>,
     effort: Option<String>,
     status: NodeStatus,
-    metrics: Option<Metrics>,
+    metrics: Option<MetricsView>,
     created_at: i64,
 }
 
@@ -135,7 +168,7 @@ impl From<Node> for NodeView {
             model_label: n.model_label,
             effort: n.effort,
             status: n.status,
-            metrics: n.metrics,
+            metrics: n.metrics.map(Into::into),
             created_at: n.created_at,
         }
     }

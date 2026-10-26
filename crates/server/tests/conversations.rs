@@ -250,3 +250,47 @@ async fn delete_then_get_is_404() {
         .unwrap();
     assert_eq!(r.status(), 404);
 }
+
+#[tokio::test]
+async fn node_metrics_hide_cost_fields() {
+    let app = app().await;
+    let id = create_conv(&app).await;
+    let mut n = node(&id, "n", None, 1);
+    n.metrics = Some(nekochat_core::Metrics {
+        ttft_ms: Some(10),
+        total_ms: 100,
+        tokens_per_sec: Some(5.0),
+        usage: nekochat_core::Usage {
+            cached_in: 1,
+            uncached_in: 2,
+            reasoning: 3,
+            output: 4,
+            upstream_cost_usd: Some(0.5),
+            allowance_usd: Some(0.25),
+        },
+    });
+    app.store.insert_node(&n).unwrap();
+    let text = app
+        .client
+        .get(app.url(&format!("/api/conversations/{id}")))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!text.contains("cost"));
+    assert!(!text.contains("allowance"));
+    let v: Value = serde_json::from_str(&text).unwrap();
+    let m = &v["nodes"][0]["metrics"];
+    assert_eq!(
+        keys(m),
+        ["ttft_ms", "total_ms", "tokens_per_sec", "usage"]
+            .map(String::from)
+            .into()
+    );
+    assert_eq!(
+        m["usage"],
+        json!({"cached_in": 1, "uncached_in": 2, "reasoning": 3, "output": 4})
+    );
+}
