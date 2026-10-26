@@ -1,0 +1,204 @@
+//! Admin API: providers, listed models, characters and settings.
+
+use std::collections::HashMap;
+
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use nekochat_store::{Character, ListedModel, ModelSpec, SettingKey};
+use serde::{Deserialize, Serialize};
+
+use crate::api::{ApiError, blocking};
+use crate::state::AppState;
+
+#[derive(Serialize)]
+pub struct ProviderSummary {
+    key: String,
+    label: String,
+}
+
+pub async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderSummary>> {
+    Json(
+        state
+            .providers
+            .iter()
+            .map(|p| ProviderSummary {
+                key: p.key.clone(),
+                label: p.label.clone(),
+            })
+            .collect(),
+    )
+}
+
+#[derive(Serialize)]
+pub struct UpstreamModel {
+    upstream_id: String,
+    listed_model_id: Option<String>,
+}
+
+pub async fn provider_models(
+    State(state): State<AppState>,
+    Path(key): Path<String>,
+) -> Result<Json<Vec<UpstreamModel>>, ApiError> {
+    let provider = state.provider(&key).ok_or_else(ApiError::not_found)?;
+    let upstream = nekochat_gateway::list_models(&state.http, provider)
+        .await
+        .map_err(|e| {
+            tracing::warn!(provider = %key, error = %e, "listing upstream models failed");
+            ApiError::new(StatusCode::BAD_GATEWAY, "获取上游模型列表失败")
+        })?;
+    let store = state.store.clone();
+    let listed: HashMap<String, String> = blocking(move || store.list_models())
+        .await?
+        .into_iter()
+        .filter(|m| m.spec.provider == key)
+        .map(|m| (m.spec.upstream_id, m.id))
+        .collect();
+    Ok(Json(
+        upstream
+            .into_iter()
+            .map(|upstream_id| UpstreamModel {
+                listed_model_id: listed.get(&upstream_id).cloned(),
+                upstream_id,
+            })
+            .collect(),
+    ))
+}
+
+pub async fn list_models(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ListedModel>>, ApiError> {
+    let store = state.store.clone();
+    Ok(Json(blocking(move || store.list_models()).await?))
+}
+
+fn check_provider(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
+    match state.provider(&spec.provider) {
+        Some(_) => Ok(()),
+        None => Err(ApiError::bad_request("提供商不在配置中")),
+    }
+}
+
+pub async fn create_model(
+    State(state): State<AppState>,
+    Json(spec): Json<ModelSpec>,
+) -> Result<(StatusCode, Json<ListedModel>), ApiError> {
+    check_provider(&state, &spec)?;
+    let store = state.store.clone();
+    let model = blocking(move || store.insert_model(&spec)).await?;
+    Ok((StatusCode::CREATED, Json(model)))
+}
+
+pub async fn update_model(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(spec): Json<ModelSpec>,
+) -> Result<Json<ListedModel>, ApiError> {
+    check_provider(&state, &spec)?;
+    let store = state.store.clone();
+    Ok(Json(
+        blocking(move || store.update_model(&id, &spec)).await?,
+    ))
+}
+
+pub async fn delete_model(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let store = state.store.clone();
+    blocking(move || store.delete_model(&id)).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+pub struct CharacterBody {
+    name: String,
+    system_prompt: String,
+}
+
+pub async fn list_characters(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Character>>, ApiError> {
+    let store = state.store.clone();
+    Ok(Json(blocking(move || store.list_characters()).await?))
+}
+
+pub async fn create_character(
+    State(state): State<AppState>,
+    Json(body): Json<CharacterBody>,
+) -> Result<(StatusCode, Json<Character>), ApiError> {
+    let store = state.store.clone();
+    let c = blocking(move || store.create_character(&body.name, &body.system_prompt)).await?;
+    Ok((StatusCode::CREATED, Json(c)))
+}
+
+pub async fn update_character(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CharacterBody>,
+) -> Result<Json<Character>, ApiError> {
+    let store = state.store.clone();
+    Ok(Json(
+        blocking(move || store.update_character(&id, &body.name, &body.system_prompt)).await?,
+    ))
+}
+
+pub async fn delete_character(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let store = state.store.clone();
+    blocking(move || store.delete_character(&id)).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(default)]
+    default_model_id: Option<String>,
+    #[serde(default)]
+    default_character_id: Option<String>,
+}
+
+pub async fn get_settings(State(state): State<AppState>) -> Result<Json<Settings>, ApiError> {
+    let store = state.store.clone();
+    let settings = blocking(move || {
+        Ok(Settings {
+            default_model_id: store.get_setting(SettingKey::DefaultModel)?,
+            default_character_id: store.get_setting(SettingKey::DefaultCharacter)?,
+        })
+    })
+    .await?;
+    Ok(Json(settings))
+}
+
+pub async fn put_settings(
+    State(state): State<AppState>,
+    Json(body): Json<Settings>,
+) -> Result<Json<Settings>, ApiError> {
+    let store = state.store.clone();
+    let dangling = blocking(move || {
+        let model_ok = match &body.default_model_id {
+            Some(id) => store.get_model(id)?.is_some(),
+            None => true,
+        };
+        let character_ok = match &body.default_character_id {
+            Some(id) => store.get_character(id)?.is_some(),
+            None => true,
+        };
+        if !(model_ok && character_ok) {
+            return Ok(Err(body));
+        }
+        store.set_setting(SettingKey::DefaultModel, body.default_model_id.as_deref())?;
+        store.set_setting(
+            SettingKey::DefaultCharacter,
+            body.default_character_id.as_deref(),
+        )?;
+        Ok(Ok(body))
+    })
+    .await?;
+    match dangling {
+        Ok(settings) => Ok(Json(settings)),
+        Err(_) => Err(ApiError::bad_request("默认模型或默认角色不存在")),
+    }
+}

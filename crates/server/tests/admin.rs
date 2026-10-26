@@ -1,0 +1,247 @@
+mod common;
+
+use common::{MockScript, PROVIDER_KEY, TestApp, TestCfg, spawn_app, spawn_mock_upstream};
+use serde_json::{Value, json};
+
+async fn admin_app(upstream: Option<String>) -> TestApp {
+    let app = spawn_app(TestCfg {
+        admin_password: Some("ap".into()),
+        upstream,
+        ..Default::default()
+    })
+    .await;
+    app.login_admin("ap").await;
+    app
+}
+
+fn spec(provider: &str, upstream_id: &str) -> Value {
+    json!({
+        "provider": provider,
+        "upstream_id": upstream_id,
+        "display_name": upstream_id.to_uppercase(),
+        "sort": 0,
+        "protocol": "chat_completions",
+        "reasoning": {"style": "none", "levels": [], "default": null},
+        "vision": false,
+        "context_window": null,
+        "price": {"cached_in": null, "uncached_in": null, "output": null}
+    })
+}
+
+#[tokio::test]
+async fn provider_models_mark_listed() {
+    let up = spawn_mock_upstream(MockScript {
+        status: 200,
+        chunks: vec![],
+        models: vec!["m1".into(), "m2".into()],
+    })
+    .await;
+    let app = admin_app(Some(up.base_url.clone())).await;
+
+    let providers: Value = app
+        .client
+        .get(app.url("/api/admin/providers"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(providers, json!([{"key": PROVIDER_KEY, "label": "Mock"}]));
+
+    let r = app
+        .client
+        .post(app.url("/api/admin/models"))
+        .json(&spec(PROVIDER_KEY, "m2"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 201);
+    let listed: Value = r.json().await.unwrap();
+    let id = listed["id"].as_str().unwrap().to_owned();
+
+    let r = app
+        .client
+        .post(app.url("/api/admin/models"))
+        .json(&spec(PROVIDER_KEY, "m2"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 409);
+
+    let models: Value = app
+        .client
+        .get(app.url(&format!("/api/admin/providers/{PROVIDER_KEY}/models")))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        models,
+        json!([
+            {"upstream_id": "m1", "listed_model_id": null},
+            {"upstream_id": "m2", "listed_model_id": id},
+        ])
+    );
+
+    let all: Value = app
+        .client
+        .get(app.url("/api/admin/models"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(all.as_array().unwrap().len(), 1);
+
+    let mut updated = spec(PROVIDER_KEY, "m2");
+    updated["display_name"] = json!("Renamed");
+    let r = app
+        .client
+        .put(app.url(&format!("/api/admin/models/{id}")))
+        .json(&updated)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200);
+    let r = app
+        .client
+        .put(app.url("/api/admin/models/nope"))
+        .json(&updated)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 404);
+    let r = app
+        .client
+        .delete(app.url(&format!("/api/admin/models/{id}")))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 204);
+}
+
+#[tokio::test]
+async fn listing_unknown_provider_is_400() {
+    let app = admin_app(None).await;
+    let r = app
+        .client
+        .post(app.url("/api/admin/models"))
+        .json(&spec("ghost", "m1"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 400);
+    let body: Value = r.json().await.unwrap();
+    assert!(body["error"].is_string());
+}
+
+#[tokio::test]
+async fn settings_reject_dangling_ids() {
+    let app = admin_app(None).await;
+    let r = app
+        .client
+        .put(app.url("/api/admin/settings"))
+        .json(&json!({"default_model_id": "nope", "default_character_id": null}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 400);
+
+    let c: Value = app
+        .client
+        .post(app.url("/api/admin/characters"))
+        .json(&json!({"name": "Neko", "system_prompt": "meow"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let r = app
+        .client
+        .put(app.url("/api/admin/settings"))
+        .json(&json!({"default_model_id": null, "default_character_id": c["id"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200);
+    let s: Value = app
+        .client
+        .get(app.url("/api/admin/settings"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        s,
+        json!({"default_model_id": null, "default_character_id": c["id"]})
+    );
+}
+
+#[tokio::test]
+async fn character_crud_round_trip() {
+    let app = admin_app(None).await;
+    let r = app
+        .client
+        .post(app.url("/api/admin/characters"))
+        .json(&json!({"name": "Neko", "system_prompt": "meow"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 201);
+    let c: Value = r.json().await.unwrap();
+    let id = c["id"].as_str().unwrap();
+    assert_eq!(c["name"], "Neko");
+
+    let r = app
+        .client
+        .put(app.url(&format!("/api/admin/characters/{id}")))
+        .json(&json!({"name": "Tama", "system_prompt": "nya"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200);
+    let list: Value = app
+        .client
+        .get(app.url("/api/admin/characters"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["name"], "Tama");
+    assert_eq!(list[0]["system_prompt"], "nya");
+
+    let r = app
+        .client
+        .delete(app.url(&format!("/api/admin/characters/{id}")))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 204);
+    let list: Value = app
+        .client
+        .get(app.url("/api/admin/characters"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list, json!([]));
+    let r = app
+        .client
+        .delete(app.url(&format!("/api/admin/characters/{id}")))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 404);
+}
