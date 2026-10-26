@@ -1,0 +1,13 @@
+[package]
+name = "nekochat-mdwasm"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "nekochat_mdwasm"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+pulldown-cmark-escape = "0.11"
+wasm-bindgen = "=0.2.129"

@@ -1,0 +1,402 @@
+//! Markdown → safe HTML for the web frontend, compiled to WASM and run in a Web Worker.
+//!
+//! `split_blocks` cuts a document into top-level blocks so the frontend can freeze finished
+//! blocks while streaming; `render_html` renders one block with raw HTML escaped, unsafe link
+//! schemes dropped and math/code left as placeholders for KaTeX and highlight.js.
+
+use std::ops::Range;
+
+use pulldown_cmark::{CowStr, Event, LinkType, Options, Parser, Tag, TagEnd};
+use pulldown_cmark_escape::{escape_href, escape_html};
+use wasm_bindgen::prelude::wasm_bindgen;
+
+fn options() -> Options {
+    Options::ENABLE_TABLES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_MATH
+}
+
+/// Splits `md` into the source text of its top-level blocks, in order.
+#[wasm_bindgen]
+pub fn split_blocks(md: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut depth = 0usize;
+    for (event, range) in Parser::new_ext(md, options()).into_offset_iter() {
+        match event {
+            Event::Start(_) => {
+                if depth == 0 {
+                    blocks.push(md[range].to_string());
+                }
+                depth += 1;
+            }
+            Event::End(_) => depth -= 1,
+            _ if depth == 0 => blocks.push(md[range].to_string()),
+            _ => {}
+        }
+    }
+    blocks
+}
+
+/// Renders `md` to sanitized HTML (see the crate docs and the plan-2 contract).
+#[wasm_bindgen]
+pub fn render_html(md: &str) -> String {
+    let source = convert_tex_delimiters(md);
+    let events = sanitize(Parser::new_ext(&source, options()));
+    let events = unwrap_display_math_paragraphs(events);
+    let mut out = String::with_capacity(source.len() * 3 / 2);
+    pulldown_cmark::html::push_html(&mut out, events.into_iter());
+    out
+}
+
+/// Rewrites `\(…\)` to `$…$` and `\[…\]` to `$$…$$` outside code spans, code blocks and
+/// existing math. Only paired delimiters are rewritten.
+fn convert_tex_delimiters(md: &str) -> String {
+    if !md.contains("\\(") && !md.contains("\\[") {
+        return md.to_string();
+    }
+    let mut protected: Vec<Range<usize>> = Vec::new();
+    let mut code_block_start = None;
+    for (event, range) in Parser::new_ext(md, options()).into_offset_iter() {
+        match event {
+            Event::Start(Tag::CodeBlock(_)) => code_block_start = Some(range.start),
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some(start) = code_block_start.take() {
+                    protected.push(start..range.end);
+                }
+            }
+            Event::Code(_) | Event::InlineMath(_) | Event::DisplayMath(_) => protected.push(range),
+            _ => {}
+        }
+    }
+    // An unclosed fence still yields its End event, but be defensive anyway.
+    if let Some(start) = code_block_start {
+        protected.push(start..md.len());
+    }
+    protected.sort_by_key(|r| r.start);
+
+    // Candidate delimiters: (byte offset, kind) where kind is one of `(`, `)`, `[`, `]`.
+    let bytes = md.as_bytes();
+    let mut delims = Vec::new();
+    let mut p = 0;
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        while p < protected.len() && protected[p].end <= i {
+            p += 1;
+        }
+        if p < protected.len() && protected[p].start <= i {
+            i = protected[p].end;
+            continue;
+        }
+        if bytes[i] == b'\\' {
+            match bytes[i + 1] {
+                b'\\' => {
+                    i += 2;
+                    continue;
+                }
+                c @ (b'(' | b')' | b'[' | b']') => {
+                    delims.push((i, c));
+                    i += 2;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+
+    let mut replacements: Vec<(usize, &str)> = Vec::new();
+    let mut open: Option<(usize, u8)> = None;
+    for (pos, c) in delims {
+        match (open, c) {
+            (_, b'(' | b'[') => open = Some((pos, c)),
+            (Some((start, b'(')), b')') => {
+                replacements.push((start, "$"));
+                replacements.push((pos, "$"));
+                open = None;
+            }
+            (Some((start, b'[')), b']') => {
+                replacements.push((start, "$$"));
+                replacements.push((pos, "$$"));
+                open = None;
+            }
+            _ => {}
+        }
+    }
+
+    let mut out = String::with_capacity(md.len());
+    let mut last = 0;
+    for (pos, with) in replacements {
+        out.push_str(&md[last..pos]);
+        out.push_str(with);
+        last = pos + 2;
+    }
+    out.push_str(&md[last..]);
+    out
+}
+
+fn link_allowed(url: &str) -> bool {
+    let url = url.trim_start_matches(|c: char| c.is_whitespace() || c.is_control());
+    if url.starts_with('#') || url.starts_with('/') {
+        return true;
+    }
+    has_scheme(url, &["http:", "https:", "mailto:"])
+}
+
+fn image_allowed(url: &str) -> bool {
+    let url = url.trim_start_matches(|c: char| c.is_whitespace() || c.is_control());
+    has_scheme(url, &["http:", "https:"])
+}
+
+fn has_scheme(url: &str, schemes: &[&str]) -> bool {
+    schemes.iter().any(|s| {
+        url.get(..s.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(s))
+    })
+}
+
+fn escaped(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    escape_html(&mut out, s).expect("writing to a String cannot fail");
+    out
+}
+
+fn escaped_href(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    escape_href(&mut out, s).expect("writing to a String cannot fail");
+    out
+}
+
+/// Rewrites parser events so the stock HTML writer only ever emits safe markup.
+fn sanitize<'a>(events: impl Iterator<Item = Event<'a>>) -> Vec<Event<'a>> {
+    let mut out = Vec::new();
+    // For each open link: whether its <a> was emitted.
+    let mut links: Vec<bool> = Vec::new();
+    // Open image: (allowed src, title, collected alt text, nesting depth inside the image).
+    let mut image: Option<(Option<String>, String, String, usize)> = None;
+
+    for event in events {
+        if let Some((src, title, alt, depth)) = image.as_mut() {
+            match event {
+                Event::Start(_) => *depth += 1,
+                Event::End(TagEnd::Image) if *depth == 0 => {
+                    let html = match src {
+                        Some(src) => {
+                            let mut tag = format!(
+                                "<img src=\"{}\" alt=\"{}\"",
+                                escaped_href(src),
+                                escaped(alt)
+                            );
+                            if !title.is_empty() {
+                                tag.push_str(&format!(" title=\"{}\"", escaped(title)));
+                            }
+                            tag.push_str(" loading=\"lazy\" decoding=\"async\">");
+                            Event::InlineHtml(tag.into())
+                        }
+                        None => Event::Text(std::mem::take(alt).into()),
+                    };
+                    out.push(html);
+                    image = None;
+                }
+                Event::End(_) => *depth -= 1,
+                Event::Text(t)
+                | Event::Code(t)
+                | Event::InlineMath(t)
+                | Event::DisplayMath(t)
+                | Event::Html(t)
+                | Event::InlineHtml(t) => alt.push_str(&t),
+                Event::SoftBreak | Event::HardBreak => alt.push(' '),
+                _ => {}
+            }
+            continue;
+        }
+
+        match event {
+            Event::Html(t) | Event::InlineHtml(t) => out.push(Event::Text(t)),
+            Event::Start(Tag::HtmlBlock) => out.push(Event::Start(Tag::Paragraph)),
+            Event::End(TagEnd::HtmlBlock) => out.push(Event::End(TagEnd::Paragraph)),
+            Event::InlineMath(t) => out.push(Event::InlineHtml(
+                format!(
+                    "<span class=\"nk-math\" data-display=\"0\">{}</span>",
+                    escaped(&t)
+                )
+                .into(),
+            )),
+            Event::DisplayMath(t) => out.push(Event::InlineHtml(
+                format!(
+                    "<div class=\"nk-math\" data-display=\"1\">{}</div>",
+                    escaped(&t)
+                )
+                .into(),
+            )),
+            Event::Start(Tag::Link {
+                link_type,
+                dest_url,
+                title,
+                ..
+            }) => {
+                let href: CowStr = if link_type == LinkType::Email {
+                    format!("mailto:{dest_url}").into()
+                } else {
+                    dest_url
+                };
+                let allowed = link_allowed(&href);
+                if allowed {
+                    let mut tag = format!("<a href=\"{}\"", escaped_href(&href));
+                    if !title.is_empty() {
+                        tag.push_str(&format!(" title=\"{}\"", escaped(&title)));
+                    }
+                    tag.push_str(" target=\"_blank\" rel=\"noopener noreferrer nofollow\">");
+                    out.push(Event::InlineHtml(tag.into()));
+                }
+                links.push(allowed);
+            }
+            Event::End(TagEnd::Link) => {
+                if links.pop().unwrap_or(false) {
+                    out.push(Event::InlineHtml("</a>".into()));
+                }
+            }
+            Event::Start(Tag::Image {
+                dest_url, title, ..
+            }) => {
+                let src = image_allowed(&dest_url).then(|| dest_url.to_string());
+                image = Some((src, title.to_string(), String::new(), 0));
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// A paragraph holding nothing but display math would put a `<div>` inside a `<p>`; drop the
+/// paragraph wrapper in that case.
+fn unwrap_display_math_paragraphs(events: Vec<Event<'_>>) -> Vec<Event<'_>> {
+    let is_display = |e: &Event| matches!(e, Event::InlineHtml(h) if h.starts_with("<div class=\"nk-math\""));
+    let is_filler = |e: &Event| match e {
+        Event::SoftBreak | Event::HardBreak => true,
+        Event::Text(t) => t.trim().is_empty(),
+        _ => false,
+    };
+    let mut out = Vec::with_capacity(events.len());
+    let mut i = 0;
+    while i < events.len() {
+        if matches!(events[i], Event::Start(Tag::Paragraph)) {
+            let end = events[i..]
+                .iter()
+                .position(|e| matches!(e, Event::End(TagEnd::Paragraph)))
+                .map(|p| i + p);
+            if let Some(end) = end {
+                let inner = &events[i + 1..end];
+                if inner.iter().any(is_display)
+                    && inner.iter().all(|e| is_display(e) || is_filler(e))
+                {
+                    out.extend(inner.iter().filter(|e| is_display(e)).cloned());
+                    i = end + 1;
+                    continue;
+                }
+            }
+        }
+        out.push(events[i].clone());
+        i += 1;
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn script_injection_is_escaped() {
+        let html = render_html("<script>alert(1)</script>\n\nhi <script>x</script> <img src=x onerror=alert(1)>");
+        assert!(!html.contains("<script"), "{html}");
+        assert!(!html.contains("<img"), "{html}");
+        assert!(html.contains("&lt;script&gt;"), "{html}");
+    }
+
+    #[test]
+    fn javascript_links_are_rejected() {
+        for md in [
+            "[x](javascript:alert(1))",
+            "[x](JavaScript:alert(1))",
+            "[x]( data:text/html,hi)",
+            "<javascript:alert(1)>",
+            "[x](vbscript:msgbox)",
+        ] {
+            let html = render_html(md);
+            assert!(!html.contains("<a"), "{md} -> {html}");
+            assert!(!html.contains("href"), "{md} -> {html}");
+        }
+        let html = render_html("![a](javascript:alert(1))");
+        assert!(!html.contains("<img"), "{html}");
+        assert!(html.contains('a'), "{html}");
+    }
+
+    #[test]
+    fn safe_links_and_images() {
+        let html = render_html("[x](https://e.com/?a=1&b=2) [y](#top) [z](/p) <m@e.com>");
+        assert!(html.contains("<a href=\"https://e.com/?a=1&amp;b=2\" target=\"_blank\" rel=\"noopener noreferrer nofollow\">x</a>"), "{html}");
+        assert!(html.contains("href=\"#top\""), "{html}");
+        assert!(html.contains("href=\"/p\""), "{html}");
+        assert!(html.contains("href=\"mailto:m@e.com\""), "{html}");
+        let html = render_html("![a *b*](https://e.com/i.png)");
+        assert!(html.contains("<img src=\"https://e.com/i.png\" alt=\"a b\" loading=\"lazy\" decoding=\"async\">"), "{html}");
+    }
+
+    #[test]
+    fn math_placeholders() {
+        let html = render_html("a $x<y$ b");
+        assert!(html.contains("<span class=\"nk-math\" data-display=\"0\">x&lt;y</span>"), "{html}");
+        let html = render_html("$$\n\\sum_i a_i\n$$");
+        assert_eq!(html.trim(), "<div class=\"nk-math\" data-display=\"1\">\n\\sum_i a_i\n</div>");
+    }
+
+    #[test]
+    fn tex_delimiters_are_converted_outside_code() {
+        let html = render_html("\\[x^2\\] and \\(y\\)");
+        assert!(html.contains("<div class=\"nk-math\" data-display=\"1\">x^2</div>"), "{html}");
+        assert!(html.contains("<span class=\"nk-math\" data-display=\"0\">y</span>"), "{html}");
+
+        let html = render_html("```\n\\[x\\]\n```\n\n`\\(y\\)`");
+        assert!(!html.contains("nk-math"), "{html}");
+        assert!(html.contains("\\[x\\]"), "{html}");
+        assert!(html.contains("\\(y\\)"), "{html}");
+
+        assert_eq!(convert_tex_delimiters("\\[unpaired"), "\\[unpaired");
+        assert_eq!(convert_tex_delimiters("\\\\[x\\\\]"), "\\\\[x\\\\]");
+    }
+
+    #[test]
+    fn code_blocks() {
+        let html = render_html("```rust\nfn a() -> i32 { 1 < 2 }\n```");
+        assert_eq!(html, "<pre><code class=\"language-rust\">fn a() -&gt; i32 { 1 &lt; 2 }\n</code></pre>\n");
+        let html = render_html("```\nx\n```");
+        assert_eq!(html, "<pre><code>x\n</code></pre>\n");
+    }
+
+    #[test]
+    fn extensions() {
+        let html = render_html("| a |\n|---|\n| b |\n\n~~s~~\n\n- [x] done");
+        assert!(html.contains("<table>"), "{html}");
+        assert!(html.contains("<del>s</del>"), "{html}");
+        assert!(html.contains("checkbox"), "{html}");
+    }
+
+    #[test]
+    fn split_top_level_blocks() {
+        let md = "# T\n\npara\nline\n\n- a\n- b\n\n  c\n\n> q\n\n---\n\n$$\nx\n$$\n";
+        assert_eq!(
+            split_blocks(md),
+            ["# T\n", "para\nline\n", "- a\n- b\n\n  c\n\n", "> q\n", "---\n", "$$\nx\n$$\n"]
+        );
+    }
+
+    #[test]
+    fn unclosed_fence_is_one_trailing_block() {
+        let md = "intro\n\n```py\nprint(1)\n\nprint(2)\n";
+        let blocks = split_blocks(md);
+        assert_eq!(blocks, ["intro\n", "```py\nprint(1)\n\nprint(2)\n"]);
+        let html = render_html(&blocks[1]);
+        assert!(html.starts_with("<pre><code class=\"language-py\">"), "{html}");
+    }
+}
