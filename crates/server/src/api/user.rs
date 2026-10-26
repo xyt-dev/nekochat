@@ -133,6 +133,7 @@ pub struct MetricsView {
     ttft_ms: Option<u64>,
     total_ms: u64,
     tokens_per_sec: Option<f64>,
+    reasoning_ms: Option<u64>,
     usage: UsageView,
 }
 
@@ -142,6 +143,7 @@ impl From<Metrics> for MetricsView {
             ttft_ms: m.ttft_ms,
             total_ms: m.total_ms,
             tokens_per_sec: m.tokens_per_sec,
+            reasoning_ms: m.reasoning_ms,
             usage: UsageView {
                 cached_in: m.usage.cached_in,
                 uncached_in: m.usage.uncached_in,

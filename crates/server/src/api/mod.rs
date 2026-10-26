@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
-use axum::http::{StatusCode, Uri};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use nekochat_store::StoreError;
 use serde_json::json;
@@ -67,15 +67,6 @@ where
     async fn from_request(req: Request, state: &S) -> Result<Self, ApiError> {
         let Json(value) = Json::<T>::from_request(req, state).await?;
         Ok(JsonBody(value))
-    }
-}
-
-/// Fallback for unmatched paths: JSON 404 under `/api/`, a bare 404 elsewhere.
-pub async fn no_route(uri: Uri) -> Response {
-    if uri.path().starts_with("/api/") {
-        ApiError::new(StatusCode::NOT_FOUND, "接口不存在").into_response()
-    } else {
-        StatusCode::NOT_FOUND.into_response()
     }
 }
 

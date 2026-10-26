@@ -753,6 +753,8 @@ async fn metrics_measure_the_stream() {
     let ttft = m["ttft_ms"].as_u64().unwrap();
     assert!(total >= 200, "{m}");
     assert!(ttft <= total, "{m}");
+    let thinking = m["reasoning_ms"].as_u64().unwrap();
+    assert!((200..=total).contains(&thinking), "{m}");
     let rate = m["tokens_per_sec"].as_f64().unwrap();
     assert!(rate.is_finite() && rate > 0.0, "{m}");
 }

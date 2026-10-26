@@ -3,6 +3,9 @@ pub mod auth;
 pub mod chat;
 pub mod config;
 pub mod state;
+pub mod web;
+
+use std::sync::Arc;
 
 use anyhow::Context;
 use axum::routing::{get, post, put};
@@ -13,12 +16,21 @@ use nekochat_store::Store;
 use crate::api::{admin, user};
 use crate::config::{Config, resolve_api_keys, startup_warnings};
 use crate::state::AppState;
+use crate::web::{EmbeddedDist, WebAssets};
 
+/// The full application with the frontend embedded at compile time.
 pub fn app(state: AppState) -> Router {
+    app_with_assets(state, Arc::new(EmbeddedDist))
+}
+
+/// The full application serving the frontend from `assets`.
+pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
     let api = Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/session", post(auth::access_login))
         .route("/api/models", get(user::list_models))
+        .route("/api/themes", get(web::list_themes))
+        .route("/themes/{file}", get(web::theme_file))
         .route(
             "/api/conversations",
             get(user::list_conversations).post(user::create_conversation),
@@ -59,7 +71,7 @@ pub fn app(state: AppState) -> Router {
             "/api/admin/settings",
             get(admin::get_settings).put(admin::put_settings),
         )
-        .fallback(api::no_route)
+        .fallback(move |req| web::fallback(assets, req))
         .method_not_allowed_fallback(api::wrong_method);
     // The last layer runs first: the host check precedes the password gate.
     api.layer(middleware::from_fn_with_state(state.clone(), auth::gate))

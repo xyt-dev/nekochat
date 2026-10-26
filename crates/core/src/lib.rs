@@ -49,6 +49,10 @@ pub struct Metrics {
     pub total_ms: u64,
     pub tokens_per_sec: Option<f64>,
     pub usage: Usage,
+    /// Thinking time: first text delta (or, without text, the last delta) minus the first
+    /// reasoning delta. `None` when the model did not think.
+    #[serde(default)]
+    pub reasoning_ms: Option<u64>,
 }
 
 #[cfg(test)]

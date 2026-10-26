@@ -337,6 +337,9 @@ struct Progress {
     /// Arrival of the first and of the latest reasoning/text delta.
     first: Option<Instant>,
     last: Option<Instant>,
+    /// Arrival of the first reasoning delta and of the first text delta.
+    first_reasoning: Option<Instant>,
+    first_text: Option<Instant>,
 }
 
 impl Progress {
@@ -354,6 +357,11 @@ impl Progress {
             total_ms: millis(end - t0),
             tokens_per_sec,
             usage: self.usage.clone().unwrap_or_default(),
+            reasoning_ms: self.first_reasoning.and_then(|start| {
+                self.first_text
+                    .or(self.last)
+                    .map(|end| millis(end.saturating_duration_since(start)))
+            }),
         }
     }
 }
@@ -517,6 +525,7 @@ impl Turn {
                 end = out.stopped() => return end,
                 item = upstream.next() => item,
             };
+            let now = Instant::now();
             let delta = match item {
                 None => return End::Done,
                 Some(Err(e)) => return End::Failed(e),
@@ -525,15 +534,16 @@ impl Turn {
                     continue;
                 }
                 Some(Ok(StreamEvent::Reasoning(t))) => {
+                    progress.first_reasoning.get_or_insert(now);
                     progress.reasoning.push_str(&t);
                     event("reasoning", json!({ "t": t }))
                 }
                 Some(Ok(StreamEvent::Text(t))) => {
+                    progress.first_text.get_or_insert(now);
                     progress.content.push_str(&t);
                     event("text", json!({ "t": t }))
                 }
             };
-            let now = Instant::now();
             progress.first.get_or_insert(now);
             progress.last = Some(now);
             if let Err(end) = out.send(delta).await {

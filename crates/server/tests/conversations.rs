@@ -328,6 +328,7 @@ async fn node_metrics_hide_cost_fields() {
         ttft_ms: Some(10),
         total_ms: 100,
         tokens_per_sec: Some(5.0),
+        reasoning_ms: Some(7),
         usage: nekochat_core::Usage {
             cached_in: 1,
             uncached_in: 2,
@@ -348,14 +349,21 @@ async fn node_metrics_hide_cost_fields() {
         .await
         .unwrap();
     assert!(!text.contains("cost"));
+    assert!(text.contains("\"reasoning_ms\":7"));
     assert!(!text.contains("allowance"));
     let v: Value = serde_json::from_str(&text).unwrap();
     let m = &v["nodes"][0]["metrics"];
     assert_eq!(
         keys(m),
-        ["ttft_ms", "total_ms", "tokens_per_sec", "usage"]
-            .map(String::from)
-            .into()
+        [
+            "ttft_ms",
+            "total_ms",
+            "tokens_per_sec",
+            "reasoning_ms",
+            "usage"
+        ]
+        .map(String::from)
+        .into()
     );
     assert_eq!(
         m["usage"],

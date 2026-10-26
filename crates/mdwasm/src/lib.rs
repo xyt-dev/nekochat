@@ -271,7 +271,8 @@ fn sanitize<'a>(events: impl Iterator<Item = Event<'a>>) -> Vec<Event<'a>> {
 /// A paragraph holding nothing but display math would put a `<div>` inside a `<p>`; drop the
 /// paragraph wrapper in that case.
 fn unwrap_display_math_paragraphs(events: Vec<Event<'_>>) -> Vec<Event<'_>> {
-    let is_display = |e: &Event| matches!(e, Event::InlineHtml(h) if h.starts_with("<div class=\"nk-math\""));
+    let is_display =
+        |e: &Event| matches!(e, Event::InlineHtml(h) if h.starts_with("<div class=\"nk-math\""));
     let is_filler = |e: &Event| match e {
         Event::SoftBreak | Event::HardBreak => true,
         Event::Text(t) => t.trim().is_empty(),
@@ -308,7 +309,9 @@ mod tests {
 
     #[test]
     fn script_injection_is_escaped() {
-        let html = render_html("<script>alert(1)</script>\n\nhi <script>x</script> <img src=x onerror=alert(1)>");
+        let html = render_html(
+            "<script>alert(1)</script>\n\nhi <script>x</script> <img src=x onerror=alert(1)>",
+        );
         assert!(!html.contains("<script"), "{html}");
         assert!(!html.contains("<img"), "{html}");
         assert!(html.contains("&lt;script&gt;"), "{html}");
@@ -340,22 +343,39 @@ mod tests {
         assert!(html.contains("href=\"/p\""), "{html}");
         assert!(html.contains("href=\"mailto:m@e.com\""), "{html}");
         let html = render_html("![a *b*](https://e.com/i.png)");
-        assert!(html.contains("<img src=\"https://e.com/i.png\" alt=\"a b\" loading=\"lazy\" decoding=\"async\">"), "{html}");
+        assert!(
+            html.contains(
+                "<img src=\"https://e.com/i.png\" alt=\"a b\" loading=\"lazy\" decoding=\"async\">"
+            ),
+            "{html}"
+        );
     }
 
     #[test]
     fn math_placeholders() {
         let html = render_html("a $x<y$ b");
-        assert!(html.contains("<span class=\"nk-math\" data-display=\"0\">x&lt;y</span>"), "{html}");
+        assert!(
+            html.contains("<span class=\"nk-math\" data-display=\"0\">x&lt;y</span>"),
+            "{html}"
+        );
         let html = render_html("$$\n\\sum_i a_i\n$$");
-        assert_eq!(html.trim(), "<div class=\"nk-math\" data-display=\"1\">\n\\sum_i a_i\n</div>");
+        assert_eq!(
+            html.trim(),
+            "<div class=\"nk-math\" data-display=\"1\">\n\\sum_i a_i\n</div>"
+        );
     }
 
     #[test]
     fn tex_delimiters_are_converted_outside_code() {
         let html = render_html("\\[x^2\\] and \\(y\\)");
-        assert!(html.contains("<div class=\"nk-math\" data-display=\"1\">x^2</div>"), "{html}");
-        assert!(html.contains("<span class=\"nk-math\" data-display=\"0\">y</span>"), "{html}");
+        assert!(
+            html.contains("<div class=\"nk-math\" data-display=\"1\">x^2</div>"),
+            "{html}"
+        );
+        assert!(
+            html.contains("<span class=\"nk-math\" data-display=\"0\">y</span>"),
+            "{html}"
+        );
 
         let html = render_html("```\n\\[x\\]\n```\n\n`\\(y\\)`");
         assert!(!html.contains("nk-math"), "{html}");
@@ -369,7 +389,10 @@ mod tests {
     #[test]
     fn code_blocks() {
         let html = render_html("```rust\nfn a() -> i32 { 1 < 2 }\n```");
-        assert_eq!(html, "<pre><code class=\"language-rust\">fn a() -&gt; i32 { 1 &lt; 2 }\n</code></pre>\n");
+        assert_eq!(
+            html,
+            "<pre><code class=\"language-rust\">fn a() -&gt; i32 { 1 &lt; 2 }\n</code></pre>\n"
+        );
         let html = render_html("```\nx\n```");
         assert_eq!(html, "<pre><code>x\n</code></pre>\n");
     }
@@ -387,7 +410,14 @@ mod tests {
         let md = "# T\n\npara\nline\n\n- a\n- b\n\n  c\n\n> q\n\n---\n\n$$\nx\n$$\n";
         assert_eq!(
             split_blocks(md),
-            ["# T\n", "para\nline\n", "- a\n- b\n\n  c\n\n", "> q\n", "---\n", "$$\nx\n$$\n"]
+            [
+                "# T\n",
+                "para\nline\n",
+                "- a\n- b\n\n  c\n\n",
+                "> q\n",
+                "---\n",
+                "$$\nx\n$$\n"
+            ]
         );
     }
 
@@ -397,6 +427,9 @@ mod tests {
         let blocks = split_blocks(md);
         assert_eq!(blocks, ["intro\n", "```py\nprint(1)\n\nprint(2)\n"]);
         let html = render_html(&blocks[1]);
-        assert!(html.starts_with("<pre><code class=\"language-py\">"), "{html}");
+        assert!(
+            html.starts_with("<pre><code class=\"language-py\">"),
+            "{html}"
+        );
     }
 }

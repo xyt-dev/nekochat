@@ -15,6 +15,7 @@ use axum::routing::{get, post};
 use nekochat_gateway::Provider;
 use nekochat_server::config::Config;
 use nekochat_server::state::{AppState, CONNECT_TIMEOUT, RunningTurns};
+use nekochat_server::web::WebAssets;
 use nekochat_store::Store;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -123,6 +124,8 @@ pub struct TestCfg {
     pub allowed_hosts: Vec<String>,
     /// Overrides the upstream read timeout (connect timeout stays the default).
     pub read_timeout: Option<Duration>,
+    /// Frontend files to serve instead of the embedded `web/dist`.
+    pub web_assets: Option<Arc<dyn WebAssets>>,
 }
 
 pub struct TestApp {
@@ -180,7 +183,11 @@ pub async fn spawn_app(cfg: TestCfg) -> TestApp {
     };
     let store = state.store.clone();
     let running = state.running.clone();
-    let addr = serve_router(nekochat_server::app(state)).await;
+    let router = match cfg.web_assets {
+        Some(assets) => nekochat_server::app_with_assets(state, assets),
+        None => nekochat_server::app(state),
+    };
+    let addr = serve_router(router).await;
     TestApp {
         base: format!("http://{addr}"),
         client: reqwest::Client::builder()
