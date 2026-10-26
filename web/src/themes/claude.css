@@ -1,0 +1,23 @@
+/* Claude 娘 */
+:root[data-theme="claude"] {
+  color-scheme: light;
+  --nk-bg: #faf9f5;
+  --nk-bg-side: #f0eee6;
+  --nk-bg-deep: #e8e6dc;
+  --nk-surface: #ece9df;
+  --nk-surface-hover: #e3dfd2;
+  --nk-border: #dedbd0;
+  --nk-text: #141413;
+  --nk-text-muted: #5e5d59;
+  --nk-text-faint: #87867f;
+  --nk-accent: #d97757;
+  --nk-on-accent: #ffffff;
+  --nk-red: #bf4d43;
+  --nk-orange: #d97757;
+  --nk-yellow: #a8771f;
+  --nk-green: #5f7d3a;
+  --nk-teal: #3d7f78;
+  --nk-blue: #4a76a8;
+  --nk-purple: #8a63a8;
+  --nk-pink: #b05f86;
+}

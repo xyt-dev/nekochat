@@ -1,0 +1,22 @@
+{
+  "name": "nekochat-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "build": "bash scripts/build-wasm.sh && tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/solid-virtual": "3.13.50",
+    "highlight.js": "11.12.0",
+    "katex": "0.19.1",
+    "solid-js": "1.9.17"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "8.3.5",
+    "vite-plugin-solid": "2.11.14"
+  }
+}

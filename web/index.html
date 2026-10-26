@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>nekochat</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a flash of the default colors.
+      (function () {
+        try {
+          var id = localStorage.getItem("nk.theme");
+          var url = localStorage.getItem("nk.themeUrl");
+          if (!id) {
+            id = matchMedia("(prefers-color-scheme: light)").matches
+              ? "catppuccin-latte"
+              : "catppuccin-mocha";
+          }
+          document.documentElement.dataset.theme = id;
+          if (url) {
+            var link = document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = url;
+            link.id = "nk-custom-theme";
+            document.head.appendChild(link);
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

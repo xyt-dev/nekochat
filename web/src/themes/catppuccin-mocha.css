@@ -1,0 +1,23 @@
+/* Catppuccin Mocha */
+:root[data-theme="catppuccin-mocha"] {
+  color-scheme: dark;
+  --nk-bg: #1e1e2e;
+  --nk-bg-side: #181825;
+  --nk-bg-deep: #11111b;
+  --nk-surface: #313244;
+  --nk-surface-hover: #45475a;
+  --nk-border: #45475a;
+  --nk-text: #cdd6f4;
+  --nk-text-muted: #a6adc8;
+  --nk-text-faint: #6c7086;
+  --nk-accent: #cba6f7;
+  --nk-on-accent: #11111b;
+  --nk-red: #f38ba8;
+  --nk-orange: #fab387;
+  --nk-yellow: #f9e2af;
+  --nk-green: #a6e3a1;
+  --nk-teal: #94e2d5;
+  --nk-blue: #89b4fa;
+  --nk-purple: #cba6f7;
+  --nk-pink: #f5c2e7;
+}

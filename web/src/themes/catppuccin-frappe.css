@@ -1,0 +1,23 @@
+/* Catppuccin Frappé */
+:root[data-theme="catppuccin-frappe"] {
+  color-scheme: dark;
+  --nk-bg: #303446;
+  --nk-bg-side: #292c3c;
+  --nk-bg-deep: #232634;
+  --nk-surface: #414559;
+  --nk-surface-hover: #51576d;
+  --nk-border: #51576d;
+  --nk-text: #c6d0f5;
+  --nk-text-muted: #a5adce;
+  --nk-text-faint: #737994;
+  --nk-accent: #ca9ee6;
+  --nk-on-accent: #232634;
+  --nk-red: #e78284;
+  --nk-orange: #ef9f76;
+  --nk-yellow: #e5c890;
+  --nk-green: #a6d189;
+  --nk-teal: #81c8be;
+  --nk-blue: #8caaee;
+  --nk-purple: #ca9ee6;
+  --nk-pink: #f4b8e4;
+}
