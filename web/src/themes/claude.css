@@ -1,23 +1,24 @@
-/* Claude 娘 */
+/* Claude Light: claude.ai light-mode tokens (bg-000…400, text-100/200/400, border-300 @ 15%, brand clay). */
 :root[data-theme="claude"] {
   color-scheme: light;
   --nk-bg: #faf9f5;
-  --nk-bg-side: #f0eee6;
-  --nk-bg-deep: #e8e6dc;
-  --nk-surface: #ece9df;
-  --nk-surface-hover: #e3dfd2;
-  --nk-border: #dedbd0;
+  --nk-bg-side: #f5f4ed;
+  --nk-bg-raised: #ffffff;
+  --nk-bg-deep: #f5f4ed;
+  --nk-surface: #f0eee6;
+  --nk-surface-hover: #e8e6dc;
+  --nk-border: #1f1e1d26;
   --nk-text: #141413;
-  --nk-text-muted: #5e5d59;
-  --nk-text-faint: #87867f;
-  --nk-accent: #d97757;
+  --nk-text-muted: #3d3d3a;
+  --nk-text-faint: #73726c;
+  --nk-accent: #c6613f;
   --nk-on-accent: #ffffff;
-  --nk-red: #bf4d43;
+  --nk-red: #b53333;
   --nk-orange: #d97757;
-  --nk-yellow: #a8771f;
-  --nk-green: #5f7d3a;
-  --nk-teal: #3d7f78;
-  --nk-blue: #4a76a8;
-  --nk-purple: #8a63a8;
-  --nk-pink: #b05f86;
+  --nk-yellow: #875a08;
+  --nk-green: #2f7613;
+  --nk-teal: #28716a;
+  --nk-blue: #1b67b2;
+  --nk-purple: #5645a1;
+  --nk-pink: #a33e6d;
 }

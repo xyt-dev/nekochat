@@ -1,0 +1,24 @@
+/* Claude Dark: claude.ai dark-mode tokens (bg-000…300, text-100/200/400, border-300 @ 15%, brand clay). */
+:root[data-theme="claude-dark"] {
+  color-scheme: dark;
+  --nk-bg: #262624;
+  --nk-bg-side: #1f1e1d;
+  --nk-bg-raised: #30302e;
+  --nk-bg-deep: #1f1e1d;
+  --nk-surface: #141413;
+  --nk-surface-hover: #30302e;
+  --nk-border: #dedcd126;
+  --nk-text: #faf9f5;
+  --nk-text-muted: #c2c0b6;
+  --nk-text-faint: #9c9a92;
+  --nk-accent: #c6613f;
+  --nk-on-accent: #ffffff;
+  --nk-red: #dd5353;
+  --nk-orange: #d97757;
+  --nk-yellow: #da9e25;
+  --nk-green: #65bb30;
+  --nk-teal: #67c1af;
+  --nk-blue: #74abe2;
+  --nk-purple: #9b87f5;
+  --nk-pink: #e18eb5;
+}

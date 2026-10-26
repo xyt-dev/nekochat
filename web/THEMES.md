@@ -12,7 +12,8 @@
 | `catppuccin-mocha` | Mocha | Catppuccin |
 | `gruvbox-dark` | Dark | Gruvbox |
 | `gruvbox-light` | Light | Gruvbox |
-| `claude` | Claude 娘 | 其他 |
+| `claude` | Light | Claude |
+| `claude-dark` | Dark | Claude |
 
 文件在 `web/src/themes/`。没选过主题时按系统深浅色用 Mocha 或 Latte；选择记在 localStorage（`nk.theme`，自定义主题另记 `nk.themeUrl`）。
 
@@ -24,7 +25,8 @@
 |---|---|---|
 | `color-scheme` | `light` 或 `dark`（滚动条、表单控件的配色） | — |
 | `--nk-bg` | 页面与对话区底色 | base |
-| `--nk-bg-side` | 侧栏、输入框、弹出菜单底色 | mantle |
+| `--nk-bg-side` | 侧栏底色；没给 `--nk-bg-raised` 时也用于输入框与弹出菜单 | mantle |
+| `--nk-bg-raised` | 可选：输入框、弹出菜单、口令输入框底色 | — |
 | `--nk-bg-deep` | 代码块底色 | crust |
 | `--nk-surface` | 用户气泡、悬停与选中底色、行内代码 | surface0 |
 | `--nk-surface-hover` | 更强的高亮（对话树当前位置、提示条） | surface1 |
@@ -79,4 +81,4 @@
 }
 ```
 
-别和内置主题重名（例如不要叫 `claude.css`），否则两份规则会叠在一起。
+别和内置主题重名（例如不要叫 `claude.css` 或 `claude-dark.css`），否则两份规则会叠在一起。

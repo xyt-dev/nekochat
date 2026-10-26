@@ -595,7 +595,7 @@ div.nk-math {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  background: var(--nk-bg-side);
+  background: var(--nk-bg-raised, var(--nk-bg-side));
   border: 1px solid var(--nk-border);
   border-radius: 12px;
   padding: 8px 8px 8px 12px;
@@ -684,7 +684,7 @@ div.nk-math {
   min-width: 180px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--nk-bg-side);
+  background: var(--nk-bg-raised, var(--nk-bg-side));
   border: 1px solid var(--nk-border);
   border-radius: 10px;
   padding: 4px;
@@ -949,7 +949,7 @@ div.nk-math {
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--nk-border);
-  background: var(--nk-bg-side);
+  background: var(--nk-bg-raised, var(--nk-bg-side));
   color: var(--nk-text);
   outline: none;
 }

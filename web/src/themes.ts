@@ -8,6 +8,7 @@ import "./themes/catppuccin-mocha.css";
 import "./themes/gruvbox-dark.css";
 import "./themes/gruvbox-light.css";
 import "./themes/claude.css";
+import "./themes/claude-dark.css";
 
 export interface ThemeInfo {
   id: string;
@@ -26,7 +27,8 @@ export const BUILTIN_THEMES: ThemeInfo[] = [
   { id: "catppuccin-mocha", name: "Mocha", group: "Catppuccin", dots: ["#1e1e2e", "#cba6f7", "#cdd6f4"] },
   { id: "gruvbox-dark", name: "Dark", group: "Gruvbox", dots: ["#282828", "#fabd2f", "#ebdbb2"] },
   { id: "gruvbox-light", name: "Light", group: "Gruvbox", dots: ["#fbf1c7", "#af3a03", "#3c3836"] },
-  { id: "claude", name: "Claude 娘", group: "其他", dots: ["#faf9f5", "#d97757", "#141413"] },
+  { id: "claude", name: "Light", group: "Claude", dots: ["#faf9f5", "#c6613f", "#141413"] },
+  { id: "claude-dark", name: "Dark", group: "Claude", dots: ["#262624", "#c6613f", "#faf9f5"] },
 ];
 
 export const CUSTOM_GROUP = "自定义";
