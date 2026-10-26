@@ -5,10 +5,11 @@ use std::collections::HashMap;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use nekochat_core::{ReasoningSpec, ReasoningStyle};
 use nekochat_store::{Character, ListedModel, ModelSpec, SettingKey};
 use serde::{Deserialize, Serialize};
 
-use crate::api::{ApiError, blocking};
+use crate::api::{ApiError, JsonBody, blocking};
 use crate::state::AppState;
 
 #[derive(Serialize)]
@@ -72,18 +73,43 @@ pub async fn list_models(
     Ok(Json(blocking(move || store.list_models()).await?))
 }
 
-fn check_provider(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
-    match state.provider(&spec.provider) {
-        Some(_) => Ok(()),
-        None => Err(ApiError::bad_request("提供商不在配置中")),
+fn check_spec(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
+    if state.provider(&spec.provider).is_none() {
+        return Err(ApiError::bad_request("提供商不在配置中"));
     }
+    check_reasoning(&spec.reasoning)
+}
+
+/// A model without reasoning has no levels; one with reasoning has distinct levels and a default
+/// that is one of them (or none).
+fn check_reasoning(r: &ReasoningSpec) -> Result<(), ApiError> {
+    if r.style == ReasoningStyle::None {
+        if !r.levels.is_empty() || r.default.is_some() {
+            return Err(ApiError::bad_request("不支持思考的模型不能设置思考档位"));
+        }
+        return Ok(());
+    }
+    if r.levels.is_empty() {
+        return Err(ApiError::bad_request("思考档位不能为空"));
+    }
+    if r.levels
+        .iter()
+        .enumerate()
+        .any(|(i, l)| r.levels[..i].contains(l))
+    {
+        return Err(ApiError::bad_request("思考档位不能重复"));
+    }
+    if r.default.as_ref().is_some_and(|d| !r.levels.contains(d)) {
+        return Err(ApiError::bad_request("默认思考档位不在档位列表里"));
+    }
+    Ok(())
 }
 
 pub async fn create_model(
     State(state): State<AppState>,
-    Json(spec): Json<ModelSpec>,
+    JsonBody(spec): JsonBody<ModelSpec>,
 ) -> Result<(StatusCode, Json<ListedModel>), ApiError> {
-    check_provider(&state, &spec)?;
+    check_spec(&state, &spec)?;
     let store = state.store.clone();
     let model = blocking(move || store.insert_model(&spec)).await?;
     Ok((StatusCode::CREATED, Json(model)))
@@ -92,9 +118,9 @@ pub async fn create_model(
 pub async fn update_model(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Json(spec): Json<ModelSpec>,
+    JsonBody(spec): JsonBody<ModelSpec>,
 ) -> Result<Json<ListedModel>, ApiError> {
-    check_provider(&state, &spec)?;
+    check_spec(&state, &spec)?;
     let store = state.store.clone();
     Ok(Json(
         blocking(move || store.update_model(&id, &spec)).await?,
@@ -125,7 +151,7 @@ pub async fn list_characters(
 
 pub async fn create_character(
     State(state): State<AppState>,
-    Json(body): Json<CharacterBody>,
+    JsonBody(body): JsonBody<CharacterBody>,
 ) -> Result<(StatusCode, Json<Character>), ApiError> {
     let store = state.store.clone();
     let c = blocking(move || store.create_character(&body.name, &body.system_prompt)).await?;
@@ -135,7 +161,7 @@ pub async fn create_character(
 pub async fn update_character(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Json(body): Json<CharacterBody>,
+    JsonBody(body): JsonBody<CharacterBody>,
 ) -> Result<Json<Character>, ApiError> {
     let store = state.store.clone();
     Ok(Json(
@@ -174,7 +200,7 @@ pub async fn get_settings(State(state): State<AppState>) -> Result<Json<Settings
 
 pub async fn put_settings(
     State(state): State<AppState>,
-    Json(body): Json<Settings>,
+    JsonBody(body): JsonBody<Settings>,
 ) -> Result<Json<Settings>, ApiError> {
     let store = state.store.clone();
     let dangling = blocking(move || {

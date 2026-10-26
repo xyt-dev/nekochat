@@ -831,6 +831,101 @@ async fn unlisted_model_is_400() {
 }
 
 #[tokio::test]
+async fn malformed_turn_bodies_are_400_json() {
+    let f = fixture(deepseek_reply("想", "喵~")).await;
+    let conv = f.create_conv().await;
+    let unknown_action = json!({"action": "dance", "model_id": f.model_id, "effort": null});
+    let r = f.post(&conv, unknown_action).await;
+    assert_eq!(r.status(), 400);
+    let v: Value = r.json().await.unwrap();
+    assert!(
+        v["error"].as_str().unwrap().starts_with("请求格式错误"),
+        "{v}"
+    );
+    let r = f
+        .app
+        .client
+        .post(f.app.url(&format!("/api/conversations/{conv}/turns")))
+        .header("content-type", "application/json")
+        .body("{not json")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 400);
+    let v: Value = r.json().await.unwrap();
+    assert!(v["error"].is_string());
+    assert_eq!(f.requests().len(), 0);
+    assert!(f.idle());
+}
+
+#[tokio::test]
+async fn clear_resets_title_and_next_send_retitles() {
+    let f = fixture(deepseek_reply("想", "喵~")).await;
+    let conv = f.create_conv().await;
+    f.send(&conv, "第一个标题").await;
+    assert_eq!(f.conversation(&conv).await["title"], "第一个标题");
+    let r = f
+        .app
+        .client
+        .post(f.app.url(&format!("/api/conversations/{conv}/clear")))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 204);
+    assert_eq!(f.conversation(&conv).await["title"], DEFAULT_TITLE);
+    f.send(&conv, "第二个标题").await;
+    assert_eq!(f.conversation(&conv).await["title"], "第二个标题");
+}
+
+#[tokio::test]
+async fn switching_leaf_during_a_turn_is_conflict() {
+    let f = fixture(slow_script()).await;
+    let conv = f.create_conv().await;
+    let mut sse = SseReader::new(f.post(&conv, f.send_body("一")).await);
+    let (name, start) = sse.next().await.unwrap();
+    assert_eq!(name, "start");
+    let user_id = start["user_node"]["id"].as_str().unwrap().to_owned();
+    let r = f
+        .app
+        .client
+        .put(f.app.url(&format!("/api/conversations/{conv}/leaf")))
+        .json(&json!({"node_id": user_id, "descend": false}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 409);
+    let v: Value = r.json().await.unwrap();
+    assert!(v["error"].is_string());
+}
+
+#[tokio::test]
+async fn stalled_upstream_times_out_with_error_event() {
+    let mock = spawn_mock_upstream(slow_script()).await;
+    let app = spawn_app(TestCfg {
+        upstream: Some(mock.base_url.clone()),
+        read_timeout: Some(Duration::from_millis(300)),
+        ..Default::default()
+    })
+    .await;
+    let model_id = app
+        .store
+        .insert_model(&spec("up-model", ReasoningStyle::DeepSeek))
+        .unwrap()
+        .id;
+    let f = Fixture {
+        app,
+        mock,
+        model_id,
+    };
+    let conv = f.create_conv().await;
+    let events = tokio::time::timeout(Duration::from_secs(5), f.send(&conv, "在吗"))
+        .await
+        .expect("a stalled upstream must time out");
+    assert_eq!(names(&events), ["start", "text", "error"]);
+    assert!(f.idle());
+}
+
+#[tokio::test]
 async fn regenerate_and_edit_need_a_user_node() {
     let f = fixture(deepseek_reply("想", "喵~")).await;
     let conv = f.create_conv().await;

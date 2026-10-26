@@ -14,7 +14,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use nekochat_gateway::Provider;
 use nekochat_server::config::Config;
-use nekochat_server::state::{AppState, RunningTurns};
+use nekochat_server::state::{AppState, CONNECT_TIMEOUT, RunningTurns};
 use nekochat_store::Store;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -120,6 +120,9 @@ pub struct TestCfg {
     /// Base URL of a mock upstream registered as provider `mock`.
     pub upstream: Option<String>,
     pub session_header: Option<String>,
+    pub allowed_hosts: Vec<String>,
+    /// Overrides the upstream read timeout (connect timeout stays the default).
+    pub read_timeout: Option<Duration>,
 }
 
 pub struct TestApp {
@@ -168,9 +171,13 @@ pub async fn spawn_app(cfg: TestCfg) -> TestApp {
         access_password: cfg.access_password,
         admin_password: cfg.admin_password,
         trusted_proxies: Vec::new(),
+        allowed_hosts: cfg.allowed_hosts,
         providers: Vec::new(),
     };
-    let state = AppState::new(config, providers, store);
+    let state = match cfg.read_timeout {
+        Some(read) => AppState::with_timeouts(config, providers, store, CONNECT_TIMEOUT, read),
+        None => AppState::new(config, providers, store),
+    };
     let store = state.store.clone();
     let running = state.running.clone();
     let addr = serve_router(nekochat_server::app(state)).await;

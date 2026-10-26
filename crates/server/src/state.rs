@@ -3,6 +3,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use nekochat_gateway::Provider;
 use nekochat_store::Store;
@@ -75,11 +76,32 @@ pub struct AppState {
     pub running: RunningTurns,
 }
 
+/// Upper bound for establishing an upstream connection.
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Upper bound for silence on an upstream connection, between body chunks included.
+pub const READ_TIMEOUT: Duration = Duration::from_secs(120);
+
 impl AppState {
     pub fn new(config: Config, providers: Vec<Provider>, store: Store) -> AppState {
+        AppState::with_timeouts(config, providers, store, CONNECT_TIMEOUT, READ_TIMEOUT)
+    }
+
+    /// Like `new`, with explicit upstream timeouts. No overall timeout: replies stream for long.
+    pub fn with_timeouts(
+        config: Config,
+        providers: Vec<Provider>,
+        store: Store,
+        connect: Duration,
+        read: Duration,
+    ) -> AppState {
+        let http = reqwest::Client::builder()
+            .connect_timeout(connect)
+            .read_timeout(read)
+            .build()
+            .expect("HTTP client with timeouts only");
         AppState {
             store: Arc::new(store),
-            http: reqwest::Client::new(),
+            http,
             providers: Arc::new(providers),
             config: Arc::new(config),
             sessions: Sessions::default(),
@@ -110,5 +132,10 @@ impl AppState {
         if let Some(token) = lock(&self.running).get(conv_id) {
             token.cancel();
         }
+    }
+
+    /// Whether a turn is generating in the conversation right now.
+    pub fn turn_running(&self, conv_id: &str) -> bool {
+        lock(&self.running).contains_key(conv_id)
     }
 }

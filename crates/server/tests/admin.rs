@@ -140,6 +140,102 @@ async fn listing_unknown_provider_is_400() {
 }
 
 #[tokio::test]
+async fn inconsistent_reasoning_specs_are_400() {
+    let app = admin_app(Some("http://127.0.0.1:9".into())).await;
+    let bad = [
+        json!({"style": "none", "levels": [], "default": "high"}),
+        json!({"style": "none", "levels": ["high"], "default": null}),
+        json!({"style": "effort", "levels": ["low", "high"], "default": "max"}),
+        json!({"style": "effort", "levels": [], "default": null}),
+        json!({"style": "deepseek", "levels": ["high", "high"], "default": null}),
+    ];
+    let mut ok = spec(PROVIDER_KEY, "m1");
+    let r = app
+        .client
+        .post(app.url("/api/admin/models"))
+        .json(&ok)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 201);
+    let id = r.json::<Value>().await.unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    for reasoning in bad {
+        let mut s = spec(PROVIDER_KEY, "m2");
+        s["reasoning"] = reasoning.clone();
+        let r = app
+            .client
+            .post(app.url("/api/admin/models"))
+            .json(&s)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 400, "create {reasoning}");
+        assert!(r.json::<Value>().await.unwrap()["error"].is_string());
+        ok["reasoning"] = reasoning.clone();
+        let r = app
+            .client
+            .put(app.url(&format!("/api/admin/models/{id}")))
+            .json(&ok)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 400, "update {reasoning}");
+        assert!(r.json::<Value>().await.unwrap()["error"].is_string());
+    }
+    let mut s = spec(PROVIDER_KEY, "m3");
+    s["reasoning"] = json!({"style": "effort", "levels": ["low", "high"], "default": "high"});
+    let r = app
+        .client
+        .post(app.url("/api/admin/models"))
+        .json(&s)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 201);
+}
+
+#[tokio::test]
+async fn malformed_admin_bodies_are_400_json() {
+    let app = admin_app(None).await;
+    let r = app
+        .client
+        .post(app.url("/api/admin/characters"))
+        .header("content-type", "application/json")
+        .body("{\"name\": ")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 400);
+    let v: Value = r.json().await.unwrap();
+    assert!(
+        v["error"].as_str().unwrap().starts_with("请求格式错误"),
+        "{v}"
+    );
+    // Missing content type and a missing field are format errors too.
+    let r = app
+        .client
+        .post(app.url("/api/admin/characters"))
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 400);
+    assert!(r.json::<Value>().await.unwrap()["error"].is_string());
+    let r = app
+        .client
+        .post(app.url("/api/admin/characters"))
+        .json(&json!({"name": "Neko"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 400);
+    assert!(r.json::<Value>().await.unwrap()["error"].is_string());
+}
+
+#[tokio::test]
 async fn settings_reject_dangling_ids() {
     let app = admin_app(None).await;
     let r = app

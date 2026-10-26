@@ -7,7 +7,7 @@ use nekochat_core::{Metrics, ReasoningStyle};
 use nekochat_store::{Conversation, Node, NodeRole, NodeStatus, SettingKey, StoreError};
 use serde::{Deserialize, Serialize};
 
-use crate::api::{ApiError, blocking};
+use crate::api::{ApiError, JsonBody, blocking};
 use crate::state::AppState;
 
 #[derive(Serialize)]
@@ -64,28 +64,33 @@ pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsVie
         ))
     })
     .await?;
-    let models = listed
+    let models: Vec<PickerModel> = listed
         .into_iter()
         .filter_map(|m| {
             let provider_label = state.provider(&m.spec.provider)?.label.clone();
             let spec = m.spec;
-            let levels = match spec.reasoning.style {
-                ReasoningStyle::None => Vec::new(),
-                _ => spec.reasoning.levels,
+            let reasoning = match spec.reasoning.style {
+                ReasoningStyle::None => PickerReasoning {
+                    levels: Vec::new(),
+                    default: None,
+                },
+                _ => PickerReasoning {
+                    levels: spec.reasoning.levels,
+                    default: spec.reasoning.default,
+                },
             };
             Some(PickerModel {
                 id: m.id,
                 label: model_label(&spec.display_name, &provider_label),
                 display_name: spec.display_name,
                 provider_label,
-                reasoning: PickerReasoning {
-                    levels,
-                    default: spec.reasoning.default,
-                },
+                reasoning,
                 vision: spec.vision,
             })
         })
         .collect();
+    // The default is only offered when the picker can show it.
+    let default_model_id = default_model_id.filter(|id| models.iter().any(|m| &m.id == id));
     Ok(Json(ModelsView {
         default_model_id,
         models,
@@ -240,12 +245,16 @@ pub struct LeafView {
     leaf_id: String,
 }
 
-/// `PUT /api/conversations/{id}/leaf`; `descend` follows the newest children down.
+/// `PUT /api/conversations/{id}/leaf`; `descend` follows the newest children down. Refused while
+/// a turn runs there: the turn would move the leaf back when it saves its reply.
 pub async fn set_leaf(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Json(req): Json<LeafRequest>,
+    JsonBody(req): JsonBody<LeafRequest>,
 ) -> Result<Json<LeafView>, ApiError> {
+    if state.turn_running(&id) {
+        return Err(ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"));
+    }
     let store = state.store.clone();
     let leaf_id = blocking(move || {
         let leaf = if req.descend {

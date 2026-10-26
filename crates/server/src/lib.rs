@@ -58,8 +58,15 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/admin/settings",
             get(admin::get_settings).put(admin::put_settings),
-        );
+        )
+        .fallback(api::no_route)
+        .method_not_allowed_fallback(api::wrong_method);
+    // The last layer runs first: the host check precedes the password gate.
     api.layer(middleware::from_fn_with_state(state.clone(), auth::gate))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::check_host,
+        ))
         .with_state(state)
 }
 

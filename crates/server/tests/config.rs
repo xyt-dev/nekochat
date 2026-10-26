@@ -10,6 +10,7 @@ fn cfg(listen: &str, access_password: Option<&str>, trusted_proxies: Vec<IpAddr>
         access_password: access_password.map(str::to_owned),
         admin_password: None,
         trusted_proxies,
+        allowed_hosts: vec![],
         providers: vec![],
     }
 }
@@ -70,13 +71,22 @@ fn public_with_password_without_proxy_warns_plaintext() {
 }
 
 #[test]
-fn public_with_password_and_proxy_is_quiet() {
-    assert!(
-        startup_warnings(&cfg(
-            "0.0.0.0:8787",
-            Some("pw"),
-            vec!["127.0.0.1".parse().unwrap()]
-        ))
-        .is_empty()
+fn public_with_password_proxy_and_hosts_is_quiet() {
+    let mut c = cfg(
+        "0.0.0.0:8787",
+        Some("pw"),
+        vec!["127.0.0.1".parse().unwrap()],
     );
+    c.allowed_hosts = vec!["chat.example.com".into()];
+    assert!(startup_warnings(&c).is_empty());
+}
+
+#[test]
+fn unspecified_listen_without_allowed_hosts_warns() {
+    for listen in ["0.0.0.0:8787", "[::]:8787"] {
+        let w = startup_warnings(&cfg(listen, Some("pw"), vec!["127.0.0.1".parse().unwrap()]));
+        assert!(w.iter().any(|s| s.contains("allowed_hosts")), "{listen}");
+    }
+    let w = startup_warnings(&cfg("192.168.1.5:8787", Some("pw"), vec![]));
+    assert!(!w.iter().any(|s| s.contains("allowed_hosts")));
 }

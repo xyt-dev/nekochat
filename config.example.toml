@@ -3,6 +3,8 @@ data_dir = "./data"
 access_password = ""
 admin_password = ""
 trusted_proxies = []
+# 额外允许的 Host 主机名（反向代理 / Tailscale 主机名，不带端口）；localhost 与环回地址总是允许
+allowed_hosts = []
 
 [[providers]]
 key = "deepseek"

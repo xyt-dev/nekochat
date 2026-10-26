@@ -4,7 +4,6 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -22,7 +21,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::api::user::{NodeView, model_label};
-use crate::api::{ApiError, blocking};
+use crate::api::{ApiError, JsonBody, blocking};
 use crate::state::{AppState, TurnGuard};
 
 /// Idle interval between SSE comment lines; each write lets hyper notice a vanished client.
@@ -76,7 +75,7 @@ struct Prepared {
 pub async fn post_turn(
     State(state): State<AppState>,
     Path(conv_id): Path<String>,
-    Json(req): Json<TurnRequest>,
+    JsonBody(req): JsonBody<TurnRequest>,
 ) -> Result<Response, ApiError> {
     let TurnRequest {
         action,

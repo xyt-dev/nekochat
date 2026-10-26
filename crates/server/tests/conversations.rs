@@ -3,7 +3,7 @@ mod common;
 use std::collections::BTreeSet;
 
 use common::{PROVIDER_KEY, TestApp, TestCfg, spawn_app};
-use nekochat_store::{Node, NodeRole, NodeStatus};
+use nekochat_store::{Node, NodeRole, NodeStatus, SettingKey};
 use serde_json::{Value, json};
 
 async fn app() -> TestApp {
@@ -106,6 +106,74 @@ async fn models_endpoint_exposes_only_picker_fields() {
     );
     assert_eq!(m["label"], "DeepSeek V4 Pro · Mock");
     assert_eq!(m["reasoning"]["levels"], json!(["high"]));
+}
+
+fn model_spec(provider: &str, upstream_id: &str, reasoning: Value) -> nekochat_store::ModelSpec {
+    serde_json::from_value(json!({
+        "provider": provider,
+        "upstream_id": upstream_id,
+        "display_name": upstream_id,
+        "sort": 0,
+        "protocol": "chat_completions",
+        "reasoning": reasoning,
+        "vision": false,
+        "context_window": null,
+        "price": {"cached_in": null, "uncached_in": null, "output": null}
+    }))
+    .unwrap()
+}
+
+async fn picker(app: &TestApp) -> Value {
+    app.client
+        .get(app.url("/api/models"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn models_endpoint_drops_unavailable_default_model() {
+    let app = app().await;
+    let ghost = app
+        .store
+        .insert_model(&model_spec(
+            "ghost",
+            "g1",
+            json!({"style": "none", "levels": [], "default": null}),
+        ))
+        .unwrap();
+    app.store
+        .set_setting(SettingKey::DefaultModel, Some(&ghost.id))
+        .unwrap();
+    let v = picker(&app).await;
+    assert_eq!(v["default_model_id"], Value::Null);
+    assert_eq!(v["models"], json!([]));
+}
+
+#[tokio::test]
+async fn models_endpoint_hides_effort_of_non_reasoning_models() {
+    let app = app().await;
+    // Written straight to the store, bypassing the admin validation.
+    let plain = app
+        .store
+        .insert_model(&model_spec(
+            PROVIDER_KEY,
+            "plain",
+            json!({"style": "none", "levels": ["high"], "default": "high"}),
+        ))
+        .unwrap();
+    app.store
+        .set_setting(SettingKey::DefaultModel, Some(&plain.id))
+        .unwrap();
+    let v = picker(&app).await;
+    assert_eq!(v["default_model_id"], json!(plain.id));
+    assert_eq!(
+        v["models"][0]["reasoning"],
+        json!({"levels": [], "default": null})
+    );
 }
 
 #[tokio::test]

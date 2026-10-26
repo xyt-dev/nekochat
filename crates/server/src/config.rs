@@ -30,6 +30,9 @@ pub struct Config {
     pub admin_password: Option<String>,
     #[serde(default)]
     pub trusted_proxies: Vec<IpAddr>,
+    /// Extra hostnames accepted in the `Host` header (reverse proxy / Tailscale names).
+    #[serde(default)]
+    pub allowed_hosts: Vec<String>,
     #[serde(default)]
     pub providers: Vec<ProviderEntry>,
 }
@@ -83,6 +86,12 @@ pub fn startup_warnings(cfg: &Config) -> Vec<String> {
     } else if cfg.trusted_proxies.is_empty() {
         warnings.push(format!(
             "监听 {} 不是环回地址，且未配置 trusted_proxies：访问密码可能以明文 HTTP 传输，建议放在 HTTPS 反向代理之后",
+            cfg.listen
+        ));
+    }
+    if cfg.listen.ip().is_unspecified() && cfg.allowed_hosts.is_empty() {
+        warnings.push(format!(
+            "监听 {} 是通配地址，且未配置 allowed_hosts：只接受以 localhost / 127.0.0.1 / ::1 访问的请求，其他主机名（反向代理、Tailscale 等）会被拒绝（421）",
             cfg.listen
         ));
     }
