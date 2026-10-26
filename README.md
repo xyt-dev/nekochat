@@ -17,15 +17,27 @@
    export OPENCODE_API_KEY=...
    ```
 
-3. 启动：
+3. 构建网页前端（需要 bun、`wasm32-unknown-unknown` 目标和 0.2.129 版的 `wasm-bindgen` CLI）：
 
    ```sh
-   cargo run -p nekochat-server -- serve --config config.toml
+   cd web && bun install && bun run build && cd ..
+   ```
+
+   产物在 `web/dist`。release 构建会把它嵌进二进制；debug 构建运行时直接读磁盘上的 `web/dist`。
+
+4. 启动，然后用浏览器打开 `http://127.0.0.1:10000`：
+
+   ```sh
+   cargo run --release -p nekochat-server -- serve --config config.toml
    ```
 
 默认监听 `127.0.0.1:10000`。监听非环回地址时请设置 `access_password`，并放在 HTTPS 反向代理之后（配置 `trusted_proxies`）。
 
 为防 DNS 重绑定，服务只接受 `Host` 为 `localhost`、`127.0.0.1`、`::1` 或监听地址本身（监听具体 IP 时）的请求，其他一律返回 421。通过反向代理或 Tailscale 主机名访问时，把这些主机名（不带端口）写进 `allowed_hosts`，例如 `allowed_hosts = ["chat.example.com"]`。
+
+## 自定义主题
+
+把 CSS 文件放进 `<data_dir>/themes/<名字>.css`（名字只能用字母、数字、`_`、`-`），它会出现在右上角主题菜单的「自定义」分组里。变量清单与写法见 `web/THEMES.md`。
 
 ## curl 冒烟
 
