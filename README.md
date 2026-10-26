@@ -23,7 +23,7 @@
    cargo run -p nekochat-server -- serve --config config.toml
    ```
 
-默认监听 `127.0.0.1:8787`。监听非环回地址时请设置 `access_password`，并放在 HTTPS 反向代理之后（配置 `trusted_proxies`）。
+默认监听 `127.0.0.1:10000`。监听非环回地址时请设置 `access_password`，并放在 HTTPS 反向代理之后（配置 `trusted_proxies`）。
 
 为防 DNS 重绑定，服务只接受 `Host` 为 `localhost`、`127.0.0.1`、`::1` 或监听地址本身（监听具体 IP 时）的请求，其他一律返回 421。通过反向代理或 Tailscale 主机名访问时，把这些主机名（不带端口）写进 `allowed_hosts`，例如 `allowed_hosts = ["chat.example.com"]`。
 
@@ -32,7 +32,7 @@
 以下流程走一遍管理端与对话接口，需要 `curl` 与 `jq`，并在 `config.toml` 里设置了 `admin_password`（未设置时管理接口一律 404）。示例假定默认地址与上面配置里的 `deepseek` 提供商；请把 `你的管理密码` 换成实际值。
 
 ```sh
-BASE=http://127.0.0.1:8787
+BASE=http://127.0.0.1:10000
 JAR=$(mktemp)
 
 # 健康检查，输出 ok

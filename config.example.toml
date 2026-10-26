@@ -1,4 +1,4 @@
-listen = "127.0.0.1:8787"
+listen = "127.0.0.1:10000"
 data_dir = "./data"
 access_password = ""
 admin_password = ""

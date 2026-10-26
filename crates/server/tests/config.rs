@@ -31,7 +31,7 @@ fn cfg_with_one_provider() -> Config {
 #[test]
 fn example_config_parses() {
     let cfg = load(Path::new("../../config.example.toml")).unwrap();
-    assert_eq!(cfg.listen, "127.0.0.1:8787".parse().unwrap());
+    assert_eq!(cfg.listen, "127.0.0.1:10000".parse().unwrap());
     assert_eq!(
         cfg.providers
             .iter()

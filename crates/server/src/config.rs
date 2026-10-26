@@ -38,7 +38,7 @@ pub struct Config {
 }
 
 fn default_listen() -> SocketAddr {
-    SocketAddr::from(([127, 0, 0, 1], 8787))
+    SocketAddr::from(([127, 0, 0, 1], 10000))
 }
 
 fn default_data_dir() -> PathBuf {
