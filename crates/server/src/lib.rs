@@ -1,5 +1,6 @@
 pub mod api;
 pub mod auth;
+pub mod chat;
 pub mod config;
 pub mod state;
 
@@ -31,6 +32,7 @@ pub fn app(state: AppState) -> Router {
             post(user::clear_conversation),
         )
         .route("/api/conversations/{id}/leaf", put(user::set_leaf))
+        .route("/api/conversations/{id}/turns", post(chat::post_turn))
         .route("/api/admin/session", post(auth::admin_login))
         .route("/api/admin/providers", get(admin::list_providers))
         .route(

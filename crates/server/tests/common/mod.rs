@@ -14,7 +14,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use nekochat_gateway::Provider;
 use nekochat_server::config::Config;
-use nekochat_server::state::AppState;
+use nekochat_server::state::{AppState, RunningTurns};
 use nekochat_store::Store;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -126,6 +126,7 @@ pub struct TestApp {
     pub base: String,
     pub client: reqwest::Client,
     pub store: Arc<Store>,
+    pub running: RunningTurns,
     pub dir: TempDir,
 }
 
@@ -171,6 +172,7 @@ pub async fn spawn_app(cfg: TestCfg) -> TestApp {
     };
     let state = AppState::new(config, providers, store);
     let store = state.store.clone();
+    let running = state.running.clone();
     let addr = serve_router(nekochat_server::app(state)).await;
     TestApp {
         base: format!("http://{addr}"),
@@ -179,6 +181,7 @@ pub async fn spawn_app(cfg: TestCfg) -> TestApp {
             .build()
             .unwrap(),
         store,
+        running,
         dir,
     }
 }

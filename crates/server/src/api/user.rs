@@ -49,6 +49,11 @@ pub struct ModelsView {
     models: Vec<PickerModel>,
 }
 
+/// "显示名 · 提供商": how a listed model is named in the picker and above replies.
+pub fn model_label(display_name: &str, provider_label: &str) -> String {
+    format!("{display_name} · {provider_label}")
+}
+
 /// `GET /api/models`: listed models whose provider is configured; no prices or upstream ids.
 pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsView>, ApiError> {
     let store = state.store.clone();
@@ -70,7 +75,7 @@ pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsVie
             };
             Some(PickerModel {
                 id: m.id,
-                label: format!("{} · {}", spec.display_name, provider_label),
+                label: model_label(&spec.display_name, &provider_label),
                 display_name: spec.display_name,
                 provider_label,
                 reasoning: PickerReasoning {
@@ -202,21 +207,23 @@ pub async fn get_conversation(
     }))
 }
 
-/// `DELETE /api/conversations/{id}`.
+/// `DELETE /api/conversations/{id}`; a running turn is cancelled first.
 pub async fn delete_conversation(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    state.cancel_turn(&id);
     let store = state.store.clone();
     blocking(move || store.delete_conversation(&id)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `POST /api/conversations/{id}/clear`.
+/// `POST /api/conversations/{id}/clear`; a running turn is cancelled first.
 pub async fn clear_conversation(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    state.cancel_turn(&id);
     let store = state.store.clone();
     blocking(move || store.clear_conversation(&id)).await?;
     Ok(StatusCode::NO_CONTENT)

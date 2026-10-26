@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::Connection;
 
 pub use catalog::{Character, ListedModel, ModelSpec, SettingKey};
-pub use tree::{Conversation, Node, NodeRole, NodeStatus};
+pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
 
 const SCHEMA: &str = include_str!("schema.sql");
@@ -63,12 +63,14 @@ const _: () = {
     assert_send_sync::<Store>();
 };
 
-pub(crate) fn now_ms() -> i64 {
+/// Current Unix time in milliseconds.
+pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as i64)
 }
 
-pub(crate) fn new_id() -> String {
+/// A fresh UUIDv7 id string.
+pub fn new_id() -> String {
     uuid::Uuid::now_v7().to_string()
 }

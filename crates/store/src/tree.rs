@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Result, Store, StoreError, new_id, now_ms};
 
+/// Title of a conversation that has not been named from its first message yet.
+pub const DEFAULT_TITLE: &str = "新对话";
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Conversation {
     pub id: String,
@@ -163,7 +166,7 @@ impl Store {
         let now = now_ms();
         let conv = Conversation {
             id: new_id(),
-            title: "新对话".into(),
+            title: DEFAULT_TITLE.into(),
             character_id: character_id.map(Into::into),
             leaf_id: None,
             session_key: uuid::Uuid::new_v4().to_string(),

@@ -1,7 +1,8 @@
 //! Shared application state.
 
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use nekochat_gateway::Provider;
 use nekochat_store::Store;
@@ -11,6 +12,23 @@ use crate::config::Config;
 
 /// Conversation id → cancellation token of its in-flight turn.
 pub type RunningTurns = Arc<Mutex<HashMap<String, CancellationToken>>>;
+
+fn lock(running: &RunningTurns) -> MutexGuard<'_, HashMap<String, CancellationToken>> {
+    // The map stays consistent even if a holder panicked.
+    running.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Marks a conversation as generating; dropping it (any exit path, panics included) unmarks it.
+pub struct TurnGuard {
+    running: RunningTurns,
+    conv_id: String,
+}
+
+impl Drop for TurnGuard {
+    fn drop(&mut self) {
+        lock(&self.running).remove(&self.conv_id);
+    }
+}
 
 /// In-memory session tokens (hex of 32 random bytes) for the two password scopes.
 #[derive(Clone, Default)]
@@ -71,5 +89,26 @@ impl AppState {
 
     pub fn provider(&self, key: &str) -> Option<&Provider> {
         self.providers.iter().find(|p| p.key == key)
+    }
+
+    /// Claims `conv_id` for a new turn; `None` while another turn there is running.
+    pub fn begin_turn(&self, conv_id: &str) -> Option<(TurnGuard, CancellationToken)> {
+        let mut running = lock(&self.running);
+        let Entry::Vacant(slot) = running.entry(conv_id.to_owned()) else {
+            return None;
+        };
+        let token = slot.insert(CancellationToken::new()).clone();
+        let guard = TurnGuard {
+            running: self.running.clone(),
+            conv_id: conv_id.to_owned(),
+        };
+        Some((guard, token))
+    }
+
+    /// Stops the conversation's running turn, if any; a cancelled turn persists nothing.
+    pub fn cancel_turn(&self, conv_id: &str) {
+        if let Some(token) = lock(&self.running).get(conv_id) {
+            token.cancel();
+        }
     }
 }
