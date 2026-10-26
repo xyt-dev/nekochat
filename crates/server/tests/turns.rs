@@ -12,7 +12,9 @@ use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
 use nekochat_core::{Price, Protocol, ReasoningSpec, ReasoningStyle, Usage};
 use nekochat_server::chat::cost_usd;
-use nekochat_store::{ModelSpec, NodeRole, NodeStatus, SettingKey, UsagePurpose};
+use nekochat_store::{
+    DEFAULT_TITLE, ModelSpec, Node, NodeRole, NodeStatus, SettingKey, UsagePurpose, new_id, now_ms,
+};
 use serde_json::{Value, json};
 
 const MODEL_LABEL: &str = "Test Model · Mock";
@@ -484,6 +486,71 @@ async fn midstream_error_keeps_partial_and_is_skipped_in_context() {
     );
 }
 
+/// Inserts a node under `parent` (which becomes the leaf) and returns its id.
+fn store_node(
+    f: &Fixture,
+    conv: &str,
+    parent: Option<&str>,
+    role: NodeRole,
+    content: &str,
+    reasoning: Option<&str>,
+    status: NodeStatus,
+) -> String {
+    let node = Node {
+        id: new_id(),
+        conversation_id: conv.into(),
+        parent_id: parent.map(Into::into),
+        role,
+        content: content.into(),
+        reasoning: reasoning.map(Into::into),
+        model_id: None,
+        model_label: None,
+        effort: None,
+        status,
+        metrics: None,
+        created_at: now_ms(),
+    };
+    f.app.store.insert_node(&node).unwrap();
+    node.id
+}
+
+#[tokio::test]
+async fn empty_assistant_replies_are_skipped_in_context() {
+    use NodeRole::{Assistant, User};
+    use NodeStatus::{Complete, Interrupted};
+    let f = fixture(deepseek_reply("想", "喵~")).await;
+    let conv = f.create_conv().await;
+    let u1 = store_node(&f, &conv, None, User, "一", None, Complete);
+    // Client left during the thinking phase: reasoning only.
+    let a1 = store_node(
+        &f,
+        &conv,
+        Some(&u1),
+        Assistant,
+        "",
+        Some("THOUGHT-ONLY"),
+        Interrupted,
+    );
+    let u2 = store_node(&f, &conv, Some(&a1), User, "二", None, Complete);
+    let a2 = store_node(&f, &conv, Some(&u2), Assistant, "回答", None, Complete);
+    let u3 = store_node(&f, &conv, Some(&a2), User, "三", None, Complete);
+    store_node(&f, &conv, Some(&u3), Assistant, "", None, Complete);
+
+    assert_eq!(names(&f.send(&conv, "四").await).last(), Some(&"done"));
+    let body = &f.requests()[0].body;
+    assert_eq!(
+        body["messages"],
+        json!([
+            {"role": "user", "content": "一"},
+            {"role": "user", "content": "二"},
+            {"role": "assistant", "content": "回答"},
+            {"role": "user", "content": "三"},
+            {"role": "user", "content": "四"},
+        ])
+    );
+    assert!(!body.to_string().contains("THOUGHT-ONLY"));
+}
+
 #[tokio::test]
 async fn client_disconnect_persists_interrupted_partial() {
     let f = fixture(MockScript {
@@ -609,6 +676,36 @@ async fn double_submit_is_conflict() {
     assert!(v["error"].is_string());
     assert_eq!(f.requests().len(), 1);
     assert_eq!(f.app.store.nodes(&conv).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn empty_input_is_400_and_no_upstream_call() {
+    let f = fixture(deepseek_reply("想", "喵~")).await;
+    let conv = f.create_conv().await;
+    let user = store_node(
+        &f,
+        &conv,
+        None,
+        NodeRole::User,
+        "原话",
+        None,
+        NodeStatus::Complete,
+    );
+    for content in ["", " \n\t　"] {
+        for body in [
+            json!({"action": "send", "content": content, "model_id": f.model_id, "effort": null}),
+            json!({"action": "edit", "node_id": user, "content": content, "model_id": f.model_id, "effort": null}),
+        ] {
+            let r = f.post(&conv, body.clone()).await;
+            assert_eq!(r.status(), 400, "{body}");
+            let v: Value = r.json().await.unwrap();
+            assert!(v["error"].is_string());
+        }
+    }
+    assert_eq!(f.requests().len(), 0);
+    assert_eq!(f.app.store.nodes(&conv).unwrap().len(), 1);
+    assert_eq!(f.conversation(&conv).await["title"], DEFAULT_TITLE);
+    assert!(f.idle());
 }
 
 #[tokio::test]

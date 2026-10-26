@@ -114,12 +114,12 @@ pub async fn post_turn(
     let anchor = match action {
         Action::Send { content } => Anchor {
             parent: conv.leaf_id.clone(),
-            content,
+            content: non_empty(content)?,
             existing: None,
         },
         Action::Edit { content, .. } => Anchor {
             parent: user_node(target)?.parent_id,
-            content,
+            content: non_empty(content)?,
             existing: None,
         },
         Action::Regenerate { .. } => {
@@ -174,6 +174,13 @@ fn user_node(node: Option<Node>) -> Result<Node, ApiError> {
         .ok_or_else(|| ApiError::bad_request("节点不存在或不是用户消息"))
 }
 
+fn non_empty(content: String) -> Result<String, ApiError> {
+    if content.trim().is_empty() {
+        return Err(ApiError::bad_request("消息内容不能为空"));
+    }
+    Ok(content)
+}
+
 /// Builds the upstream context, stores the new user message and titles a fresh conversation.
 fn prepare(store: &Store, conv: Conversation, anchor: Anchor) -> Result<Prepared, StoreError> {
     let messages = context(store, &conv, anchor.parent.as_deref(), &anchor.content)?;
@@ -215,8 +222,8 @@ fn prepare(store: &Store, conv: Conversation, anchor: Anchor) -> Result<Prepared
 }
 
 /// Upstream context: the character prompt (if any), the path from the root down to `parent`,
-/// then `user_text`. Content only: reasoning is never sent back, and failed replies without
-/// text are skipped.
+/// then `user_text`. Content only: reasoning is never sent back, and replies without text
+/// (failed, or interrupted while thinking) are skipped.
 fn context(
     store: &Store,
     conv: &Conversation,
@@ -235,9 +242,7 @@ fn context(
     for node in store.path_to(&conv.id, parent)? {
         let role = match node.role {
             NodeRole::User => ChatRole::User,
-            NodeRole::Assistant if node.status == NodeStatus::Error && node.content.is_empty() => {
-                continue;
-            }
+            NodeRole::Assistant if node.content.is_empty() => continue,
             NodeRole::Assistant => ChatRole::Assistant,
         };
         messages.push(ChatMessage {
