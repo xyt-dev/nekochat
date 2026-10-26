@@ -31,13 +31,24 @@ fn cfg_with_one_provider() -> Config {
 fn example_config_parses() {
     let cfg = load(Path::new("../../config.example.toml")).unwrap();
     assert_eq!(cfg.listen, "127.0.0.1:8787".parse().unwrap());
-    assert_eq!(cfg.providers.iter().map(|p| p.key.as_str()).collect::<Vec<_>>(), ["deepseek", "opencode-go"]);
-    assert_eq!(cfg.providers[1].session_header.as_deref(), Some("x-opencode-session"));
+    assert_eq!(
+        cfg.providers
+            .iter()
+            .map(|p| p.key.as_str())
+            .collect::<Vec<_>>(),
+        ["deepseek", "opencode-go"]
+    );
+    assert_eq!(
+        cfg.providers[1].session_header.as_deref(),
+        Some("x-opencode-session")
+    );
 }
 
 #[test]
 fn missing_api_key_names_provider_and_var() {
-    let err = resolve_api_keys(&cfg_with_one_provider(), |_| None).unwrap_err().to_string();
+    let err = resolve_api_keys(&cfg_with_one_provider(), |_| None)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("deepseek") && err.contains("DEEPSEEK_API_KEY"));
 }
 
@@ -60,5 +71,12 @@ fn public_with_password_without_proxy_warns_plaintext() {
 
 #[test]
 fn public_with_password_and_proxy_is_quiet() {
-    assert!(startup_warnings(&cfg("0.0.0.0:8787", Some("pw"), vec!["127.0.0.1".parse().unwrap()])).is_empty());
+    assert!(
+        startup_warnings(&cfg(
+            "0.0.0.0:8787",
+            Some("pw"),
+            vec!["127.0.0.1".parse().unwrap()]
+        ))
+        .is_empty()
+    );
 }

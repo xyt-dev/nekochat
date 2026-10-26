@@ -61,7 +61,11 @@ pub fn resolve_api_keys(
         .iter()
         .map(|p| match env(&p.api_key_env).filter(|k| !k.is_empty()) {
             Some(key) => Ok((p.clone(), key)),
-            None => bail!("提供商 {} 缺少 API 密钥：环境变量 {} 未设置", p.key, p.api_key_env),
+            None => bail!(
+                "提供商 {} 缺少 API 密钥：环境变量 {} 未设置",
+                p.key,
+                p.api_key_env
+            ),
         })
         .collect()
 }

@@ -4,3 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+nekochat-core = { path = "../core" }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

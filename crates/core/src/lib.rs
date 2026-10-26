@@ -57,8 +57,16 @@ mod tests {
 
     #[test]
     fn reasoning_style_wire_names() {
-        let s = serde_json::to_string(&[ReasoningStyle::None, ReasoningStyle::Effort, ReasoningStyle::DeepSeek]).unwrap();
+        let s = serde_json::to_string(&[
+            ReasoningStyle::None,
+            ReasoningStyle::Effort,
+            ReasoningStyle::DeepSeek,
+        ])
+        .unwrap();
         assert_eq!(s, r#"["none","effort","deepseek"]"#);
-        assert_eq!(serde_json::to_string(&Protocol::ChatCompletions).unwrap(), r#""chat_completions""#);
+        assert_eq!(
+            serde_json::to_string(&Protocol::ChatCompletions).unwrap(),
+            r#""chat_completions""#
+        );
     }
 }
