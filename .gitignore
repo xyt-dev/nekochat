@@ -2,3 +2,6 @@ target/
 data/
 config.toml
 cookies.txt
+web/node_modules/
+web/dist/
+web/src/wasm/
