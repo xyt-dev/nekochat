@@ -159,7 +159,7 @@ fn clear_keeps_conversation_and_removes_nodes() {
     store.clear_conversation(&c).unwrap();
     let conv = store.get_conversation(&c).unwrap().unwrap();
     assert_eq!(conv.leaf_id, None);
-    assert_eq!(conv.title, "保留");
+    assert_eq!(conv.title, nekochat_store::DEFAULT_TITLE);
     assert!(store.nodes(&c).unwrap().is_empty());
 }
 
@@ -185,6 +185,138 @@ fn delete_leaves_no_content_bytes() {
             );
         }
     }
+}
+
+/// Inserts a single chain of `len` nodes and returns the conversation id.
+fn deep_chain(store: &Store, len: usize) -> String {
+    let c = store.create_conversation(None).unwrap().id;
+    let mut parent: Option<String> = None;
+    for i in 0..len {
+        let id = format!("n{i}");
+        let role = if i % 2 == 0 {
+            NodeRole::User
+        } else {
+            NodeRole::Assistant
+        };
+        store
+            .insert_node(&node(&c, &id, parent.as_deref(), role, i as i64))
+            .unwrap();
+        parent = Some(id);
+    }
+    c
+}
+
+fn foreign_key_violations(dir: &tempfile::TempDir) -> usize {
+    let conn = rusqlite::Connection::open(dir.path().join("nekochat.db")).unwrap();
+    let mut stmt = conn.prepare("PRAGMA foreign_key_check").unwrap();
+    stmt.query_map([], |_| Ok(())).unwrap().count()
+}
+
+#[test]
+fn delete_handles_deep_chain() {
+    let (dir, store) = fresh();
+    let c = deep_chain(&store, 1100);
+    store.delete_conversation(&c).unwrap();
+    assert_eq!(store.get_conversation(&c).unwrap(), None);
+    assert!(store.nodes(&c).unwrap().is_empty());
+    assert_eq!(foreign_key_violations(&dir), 0);
+}
+
+#[test]
+fn clear_handles_deep_chain() {
+    let (dir, store) = fresh();
+    let c = deep_chain(&store, 1100);
+    store.clear_conversation(&c).unwrap();
+    assert!(store.get_conversation(&c).unwrap().is_some());
+    assert!(store.nodes(&c).unwrap().is_empty());
+    assert_eq!(foreign_key_violations(&dir), 0);
+}
+
+/// Two chained conversations whose padded nodes are inserted alternately (a pattern that left
+/// deleted text in a live page before VACUUM); returns (kept, doomed).
+fn interleaved(store: &Store, keep_tag: &str, mul: usize, modulo: usize) -> (String, String) {
+    let keep = store.create_conversation(None).unwrap().id;
+    let doomed = store.create_conversation(None).unwrap().id;
+    let mut parents: [Option<String>; 2] = [None, None];
+    for i in 0..200usize {
+        let pad = "x".repeat((i * mul) % modulo);
+        for (k, (conv, tag)) in [(&keep, keep_tag), (&doomed, "DELME")]
+            .into_iter()
+            .enumerate()
+        {
+            let id = nekochat_store::new_id();
+            let mut n = node(conv, &id, parents[k].as_deref(), NodeRole::User, 0);
+            n.content = format!("{tag}{i:04}{pad}");
+            n.created_at = nekochat_store::now_ms();
+            store.insert_node(&n).unwrap();
+            parents[k] = Some(id);
+        }
+    }
+    (keep, doomed)
+}
+
+fn assert_no_doomed_bytes(dir: &tempfile::TempDir) {
+    for f in ["nekochat.db", "nekochat.db-wal"] {
+        let p = dir.path().join(f);
+        if p.exists() {
+            assert!(!contains(&std::fs::read(&p).unwrap(), b"DELME"), "{f}");
+        }
+    }
+}
+
+#[test]
+fn delete_leaves_no_bytes_in_live_pages() {
+    for (keep_tag, mul, modulo) in [("KEEPME", 1700, 6000), ("KEEPS", 997, 4500)] {
+        let (dir, store) = fresh();
+        let (keep, doomed) = interleaved(&store, keep_tag, mul, modulo);
+        store.delete_conversation(&doomed).unwrap();
+        assert_eq!(store.nodes(&keep).unwrap().len(), 200);
+        drop(store);
+        assert_no_doomed_bytes(&dir);
+    }
+}
+
+#[test]
+fn clear_leaves_no_content_bytes() {
+    for (keep_tag, mul, modulo) in [("KEEPME", 1700, 6000), ("KEEPS", 997, 4500)] {
+        let (dir, store) = fresh();
+        let (keep, doomed) = interleaved(&store, keep_tag, mul, modulo);
+        store.clear_conversation(&doomed).unwrap();
+        assert_eq!(store.nodes(&keep).unwrap().len(), 200);
+        assert!(store.nodes(&doomed).unwrap().is_empty());
+        drop(store);
+        assert_no_doomed_bytes(&dir);
+    }
+}
+
+#[test]
+fn newer_schema_version_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("nekochat.db");
+    drop(Store::open(&path).unwrap());
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .pragma_update(None, "user_version", 99)
+        .unwrap();
+    let err = Store::open(&path).err().expect("must refuse");
+    let msg = err.to_string();
+    assert!(msg.contains("99") && msg.contains('1'), "{msg}");
+    let version: i64 = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 99);
+}
+
+#[test]
+fn fresh_database_gets_schema_version() {
+    let (dir, store) = fresh();
+    drop(store);
+    let version: i64 = rusqlite::Connection::open(dir.path().join("nekochat.db"))
+        .unwrap()
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, 1);
 }
 
 #[test]

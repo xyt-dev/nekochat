@@ -49,7 +49,10 @@ impl From<StoreError> for ApiError {
         match e {
             StoreError::NotFound => ApiError::not_found(),
             StoreError::Conflict(_) => ApiError::new(StatusCode::CONFLICT, "与已有记录冲突"),
-            StoreError::Sqlite(_) | StoreError::Json(_) => {
+            StoreError::Sqlite(_)
+            | StoreError::Json(_)
+            | StoreError::CheckpointBusy
+            | StoreError::UnsupportedSchema { .. } => {
                 tracing::error!(error = %e, "store error");
                 ApiError::internal()
             }

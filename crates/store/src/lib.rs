@@ -15,6 +15,8 @@ pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
 
 const SCHEMA: &str = include_str!("schema.sql");
+/// The schema version this code writes and understands.
+const SCHEMA_VERSION: i64 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -26,6 +28,10 @@ pub enum StoreError {
     Sqlite(#[from] rusqlite::Error),
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("WAL checkpoint could not complete (database busy)")]
+    CheckpointBusy,
+    #[error("database schema version {found} is newer than supported version {supported}")]
+    UnsupportedSchema { found: i64, supported: i64 },
 }
 
 pub type Result<T, E = StoreError> = std::result::Result<T, E>;
@@ -43,10 +49,21 @@ impl Store {
             })?;
         }
         let conn = Connection::open(path)?;
+        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        if version > SCHEMA_VERSION {
+            return Err(StoreError::UnsupportedSchema {
+                found: version,
+                supported: SCHEMA_VERSION,
+            });
+        }
         conn.pragma_update(None, "secure_delete", "ON")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        // Version 0 is a fresh file; the schema is idempotent for version 1.
         conn.execute_batch(SCHEMA)?;
+        if version == 0 {
+            conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+        }
         Ok(Store {
             conn: Mutex::new(conn),
         })

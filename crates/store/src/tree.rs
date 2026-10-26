@@ -156,8 +156,13 @@ fn node_in(conn: &Connection, conv_id: &str, node_id: &str) -> Result<bool> {
         .is_some())
 }
 
-fn checkpoint(conn: &Connection) -> Result<()> {
-    conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
+/// Rewrites the database so no freed or stale bytes survive, then empties the WAL.
+fn scrub(conn: &Connection) -> Result<()> {
+    conn.execute_batch("VACUUM")?;
+    let busy: i64 = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |r| r.get(0))?;
+    if busy != 0 {
+        return Err(StoreError::CheckpointBusy);
+    }
     Ok(())
 }
 
@@ -360,27 +365,38 @@ impl Store {
     }
 
     pub fn delete_conversation(&self, id: &str) -> Result<()> {
-        let conn = self.conn();
-        let n = conn.execute("DELETE FROM conversations WHERE id = ?1", [id])?;
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        // Detach parents first: a deep cascade through `parent_id` exceeds SQLite's trigger depth.
+        tx.execute(
+            "UPDATE nodes SET parent_id = NULL WHERE conversation_id = ?1",
+            [id],
+        )?;
+        let n = tx.execute("DELETE FROM conversations WHERE id = ?1", [id])?;
         if n == 0 {
             return Err(StoreError::NotFound);
         }
-        checkpoint(&conn)
+        tx.commit()?;
+        scrub(&conn)
     }
 
-    /// Removes every node but keeps the conversation and its title.
+    /// Removes every node and resets the title, keeping the conversation itself.
     pub fn clear_conversation(&self, id: &str) -> Result<()> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let n = tx.execute(
-            "UPDATE conversations SET leaf_id = NULL, updated_at = ?2 WHERE id = ?1",
-            params![id, now_ms()],
+            "UPDATE conversations SET leaf_id = NULL, title = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, DEFAULT_TITLE, now_ms()],
         )?;
         if n == 0 {
             return Err(StoreError::NotFound);
         }
+        tx.execute(
+            "UPDATE nodes SET parent_id = NULL WHERE conversation_id = ?1",
+            [id],
+        )?;
         tx.execute("DELETE FROM nodes WHERE conversation_id = ?1", [id])?;
         tx.commit()?;
-        checkpoint(&conn)
+        scrub(&conn)
     }
 }
