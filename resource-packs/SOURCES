@@ -1,0 +1,7 @@
+Imported by scripts/import-nekowhale.py; all 322 GIFs verified using manifest SHA-1 prefixes.
+Original annotations are unmodified in upstream/nekowhale.json and retained per sticker.
+Per-pack SKILL.md is adapted for static local-only use: no tools, rendering or random selection.
+Upstream SKILL.md retained for provenance only; never loaded as runtime instructions.
+Manifest: https://kiriyuki.com/api/kit/nekowhale
+URL formula and SHA-1 validation: https://raw.githubusercontent.com/Loping151/dsh-nekowhale-stickers/main/src/core/sync.ts
+来源 https://github.com/Loping151/dsh-nekowhale-stickers；表情作者：B站 可以叫我云大人 / 雾雪 (https://space.bilibili.com/103739)，https://kiriyuki.com。大肥鱼形象基于 ZipZipPipe (https://space.bilibili.com/4168597) 与 上善无形 (https://space.bilibili.com/4456176)；GPT娘形象基于 ZipZipPipe。知识标注 CC BY-NC 4.0；图片保留作者所有权，仅限保留署名的非商业分享，禁止收费及其他商业用途。

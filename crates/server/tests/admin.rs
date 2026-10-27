@@ -250,7 +250,7 @@ async fn settings_reject_dangling_ids() {
     let c: Value = app
         .client
         .post(app.url("/api/admin/characters"))
-        .json(&json!({"name": "Neko", "system_prompt": "meow"}))
+        .json(&json!({"name": "Neko", "display_name":"Neko", "system_prompt": "meow"}))
         .send()
         .await
         .unwrap()
@@ -286,7 +286,7 @@ async fn character_crud_round_trip() {
     let r = app
         .client
         .post(app.url("/api/admin/characters"))
-        .json(&json!({"name": "Neko", "system_prompt": "meow"}))
+        .json(&json!({"name": "Neko", "display_name":"Neko", "system_prompt": "meow"}))
         .send()
         .await
         .unwrap();
@@ -298,7 +298,7 @@ async fn character_crud_round_trip() {
     let r = app
         .client
         .put(app.url(&format!("/api/admin/characters/{id}")))
-        .json(&json!({"name": "Tama", "system_prompt": "nya"}))
+        .json(&json!({"name": "Tama", "display_name":"Tama", "system_prompt": "nya"}))
         .send()
         .await
         .unwrap();

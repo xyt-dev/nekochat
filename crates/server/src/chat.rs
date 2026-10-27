@@ -11,16 +11,17 @@ use axum::response::{IntoResponse, Response};
 use futures_util::{StreamExt, stream};
 use nekochat_core::{Metrics, Price, ReasoningSpec, ReasoningStyle, Usage};
 use nekochat_gateway::{ChatMessage, ChatRequest, ChatRole, GatewayError, Provider, StreamEvent};
+use nekochat_resources::{ResourceCatalog, ResourceChunk, ResourceRef};
 use nekochat_store::{
-    Conversation, DEFAULT_TITLE, ListedModel, Node, NodeRole, NodeStatus, Store, StoreError,
-    UsagePurpose, UsageRecord, new_id, now_ms,
+    Character, Conversation, DEFAULT_TITLE, ListedModel, Node, NodeRole, NodeStatus, Store,
+    StoreError, UsagePurpose, UsageRecord, new_id, now_ms,
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::api::user::{NodeView, model_label};
+use crate::api::user::NodeView;
 use crate::api::{ApiError, JsonBody, blocking};
 use crate::state::{AppState, TurnGuard};
 
@@ -31,25 +32,46 @@ const EVENT_BUFFER: usize = 64;
 /// A fresh conversation is titled with this many leading characters of its first message.
 const TITLE_CHARS: usize = 30;
 
+fn model_label(display_name: &str, provider_label: &str) -> String {
+    format!("{display_name} · {provider_label}")
+}
+
 /// Body of `POST /api/conversations/{id}/turns`.
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TurnRequest {
-    #[serde(flatten)]
-    action: Action,
-    model_id: String,
-    effort: Option<String>,
+    pub action: Action,
+    pub character_id: String,
+    pub content: Option<String>,
+    pub node_id: Option<String>,
 }
 
 #[derive(Deserialize)]
-#[serde(tag = "action", rename_all = "snake_case")]
-enum Action {
-    /// A new user message under the current leaf.
-    Send { content: String },
-    /// A replacement for user message `node_id`: a sibling under the same parent.
-    Edit { node_id: String, content: String },
-    /// Another reply to user message `node_id`.
-    Regenerate { node_id: String },
+#[serde(rename_all = "snake_case")]
+pub enum Action {
+    Send,
+    Edit,
+    Regenerate,
 }
+
+/// Transport-neutral events; future adapters receive the actual resource reference.
+pub enum TurnEvent {
+    Start {
+        user_node: Option<Node>,
+        assistant_node_id: String,
+        character_id: String,
+        character_name: String,
+    },
+    Reasoning(String),
+    Chunk(ResourceChunk),
+    Done(Node),
+    Error {
+        message: String,
+        node: Option<Node>,
+    },
+}
+
+pub type TurnStream = futures_util::stream::BoxStream<'static, TurnEvent>;
 
 /// The turn's user message.
 struct Anchor {
@@ -68,6 +90,7 @@ struct Prepared {
     user_node: Option<Node>,
     /// The turn's user message, parent of the reply.
     reply_parent: String,
+    recent_resources: Vec<String>,
 }
 
 /// `POST /api/conversations/{id}/turns`: validates, stores the user message, then streams the
@@ -77,14 +100,31 @@ pub async fn post_turn(
     Path(conv_id): Path<String>,
     JsonBody(req): JsonBody<TurnRequest>,
 ) -> Result<Response, ApiError> {
+    let events = start_turn(state, conv_id, req)
+        .await?
+        .map(|event| Ok::<_, Infallible>(http_event(event)));
+    Ok(Sse::new(events)
+        .keep_alive(KeepAlive::new().interval(KEEP_ALIVE))
+        .into_response())
+}
+
+/// Starts one guarded turn without an HTTP request or SSE dependency.
+pub async fn start_turn(
+    state: AppState,
+    conv_id: String,
+    req: TurnRequest,
+) -> Result<TurnStream, ApiError> {
     let TurnRequest {
         action,
-        model_id,
-        effort,
+        character_id,
+        content,
+        node_id,
     } = req;
-    let target_id = match &action {
-        Action::Send { .. } => None,
-        Action::Edit { node_id, .. } | Action::Regenerate { node_id } => Some(node_id.clone()),
+    let target_id = match action {
+        Action::Send => None,
+        Action::Edit | Action::Regenerate => {
+            Some(node_id.ok_or_else(|| ApiError::bad_request("缺少消息节点"))?)
+        }
     };
     // Claim first: the running turn saves its reply before releasing the claim, so the leaf and
     // title read below are never older than that reply.
@@ -92,38 +132,57 @@ pub async fn post_turn(
         .begin_turn(&conv_id)
         .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"))?;
     let store = state.store.clone();
-    let (conv, model, target) = blocking(move || {
+    let (conv, character, target) = blocking(move || {
         let target = match target_id {
             Some(node_id) => store.get_node(&conv_id, &node_id)?,
             None => None,
         };
         Ok((
             store.get_conversation(&conv_id)?,
-            store.get_model(&model_id)?,
+            store.get_character(&character_id)?,
             target,
         ))
     })
     .await?;
 
     let conv = conv.ok_or_else(ApiError::not_found)?;
-    let model = model.ok_or_else(|| ApiError::bad_request("模型未上架"))?;
+    let character = character
+        .filter(|c| c.spec.enabled)
+        .ok_or_else(|| ApiError::bad_request("角色不可用"))?;
+    character
+        .spec
+        .parameters
+        .validate()
+        .map_err(ApiError::bad_request)?;
+    let model_id = character
+        .spec
+        .model_id
+        .clone()
+        .ok_or_else(|| ApiError::bad_request("角色未绑定模型"))?;
+    let store = state.store.clone();
+    let model = blocking(move || store.get_model(&model_id))
+        .await?
+        .ok_or_else(|| ApiError::bad_request("角色绑定模型未上架"))?;
     let provider = state
         .provider(&model.spec.provider)
         .ok_or_else(|| ApiError::bad_request("模型的提供商不在配置中"))?
         .clone();
-    let effort = resolve_effort(&model.spec.reasoning, effort)?;
+    let effort = resolve_effort(
+        &model.spec.reasoning,
+        character.spec.parameters.effort.clone(),
+    )?;
     let anchor = match action {
-        Action::Send { content } => Anchor {
+        Action::Send => Anchor {
             parent: conv.leaf_id.clone(),
-            content: non_empty(content)?,
+            content: non_empty(content.ok_or_else(|| ApiError::bad_request("缺少消息内容"))?)?,
             existing: None,
         },
-        Action::Edit { content, .. } => Anchor {
+        Action::Edit => Anchor {
             parent: user_node(target)?.parent_id,
-            content: non_empty(content)?,
+            content: non_empty(content.ok_or_else(|| ApiError::bad_request("缺少消息内容"))?)?,
             existing: None,
         },
-        Action::Regenerate { .. } => {
+        Action::Regenerate => {
             let node = user_node(target)?;
             Anchor {
                 parent: node.parent_id,
@@ -133,8 +192,17 @@ pub async fn post_turn(
         }
     };
 
+    let prompt = state
+        .resources
+        .prompt(
+            &character.spec.resource_packs,
+            &character.spec.sticker_identity,
+            &character.spec.sticker_frequency,
+        )
+        .map_err(|_| ApiError::bad_request("角色资源包不可用"))?;
     let store = state.store.clone();
-    let prepared = blocking(move || prepare(&store, conv, anchor)).await?;
+    let selected = character.clone();
+    let prepared = blocking(move || prepare(&store, conv, anchor, &selected, &prompt)).await?;
     let turn = Turn {
         label: model_label(&model.spec.display_name, &provider.label),
         store: state.store,
@@ -144,20 +212,21 @@ pub async fn post_turn(
         effort,
         prepared,
         assistant_id: new_id(),
+        character,
+        resources: state.resources,
     };
     let (tx, rx) = mpsc::channel(EVENT_BUFFER);
     tokio::spawn(turn.run(Outbox { tx, cancel }, guard));
-    let events = stream::unfold(rx, |mut rx| async move {
-        rx.recv().await.map(|ev| (Ok::<_, Infallible>(ev), rx))
-    });
-    Ok(Sse::new(events)
-        .keep_alive(KeepAlive::new().interval(KEEP_ALIVE))
-        .into_response())
+    Ok(stream::unfold(
+        rx,
+        |mut rx| async move { rx.recv().await.map(|ev| (ev, rx)) },
+    )
+    .boxed())
 }
 
 /// The effort to request: a listed level, the model's default for `null`, none for models
 /// without reasoning.
-fn resolve_effort(
+pub(crate) fn resolve_effort(
     spec: &ReasoningSpec,
     effort: Option<String>,
 ) -> Result<Option<String>, ApiError> {
@@ -183,8 +252,37 @@ fn non_empty(content: String) -> Result<String, ApiError> {
 }
 
 /// Builds the upstream context, stores the new user message and titles a fresh conversation.
-fn prepare(store: &Store, conv: Conversation, anchor: Anchor) -> Result<Prepared, StoreError> {
-    let messages = context(store, &conv, anchor.parent.as_deref(), &anchor.content)?;
+fn prepare(
+    store: &Store,
+    conv: Conversation,
+    anchor: Anchor,
+    character: &Character,
+    resource_prompt: &str,
+) -> Result<Prepared, StoreError> {
+    let mut messages = context(store, &conv, anchor.parent.as_deref(), &anchor.content)?;
+    let prompt = [character.spec.system_prompt.as_str(), resource_prompt]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if !prompt.is_empty() {
+        messages.insert(
+            0,
+            ChatMessage {
+                role: ChatRole::System,
+                content: prompt,
+            },
+        );
+    }
+    store.set_character(&conv.id, &character.id)?;
+    let recent_resources = store
+        .path_to(&conv.id, anchor.parent.as_deref())?
+        .iter()
+        .rev()
+        .filter(|node| node.role == NodeRole::Assistant)
+        .take(6)
+        .flat_map(|node| recent_refs(&node.content))
+        .collect();
     let title: Option<String> = (conv.title == DEFAULT_TITLE)
         .then(|| anchor.content.chars().take(TITLE_CHARS).collect::<String>())
         .filter(|t| !t.is_empty());
@@ -201,6 +299,8 @@ fn prepare(store: &Store, conv: Conversation, anchor: Anchor) -> Result<Prepared
                 model_id: None,
                 model_label: None,
                 effort: None,
+                character_id: None,
+                character_name: None,
                 status: NodeStatus::Complete,
                 metrics: None,
                 created_at: now_ms(),
@@ -219,6 +319,7 @@ fn prepare(store: &Store, conv: Conversation, anchor: Anchor) -> Result<Prepared
         messages,
         user_node,
         reply_parent,
+        recent_resources,
     })
 }
 
@@ -232,14 +333,6 @@ fn context(
     user_text: &str,
 ) -> Result<Vec<ChatMessage>, StoreError> {
     let mut messages = Vec::new();
-    if let Some(id) = &conv.character_id
-        && let Some(character) = store.get_character(id)?
-    {
-        messages.push(ChatMessage {
-            role: ChatRole::System,
-            content: character.system_prompt,
-        });
-    }
     for node in store.path_to(&conv.id, parent)? {
         let role = match node.role {
             NodeRole::User => ChatRole::User,
@@ -268,15 +361,55 @@ pub fn cost_usd(price: &Price, u: &Usage) -> Option<f64> {
     )
 }
 
-fn event(name: &'static str, data: Value) -> Event {
-    Event::default().event(name).data(data.to_string())
+fn sticker_markdown(resource: &ResourceRef) -> String {
+    let Some(url) = crate::assets::resource_url(&resource.pack_id, &resource.asset_id) else {
+        return String::new();
+    };
+    let alt = resource
+        .name
+        .replace('\\', "\\\\")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
+        .replace(['\r', '\n'], " ");
+    format!("![{alt}]({url})")
 }
 
-fn error_event(message: String, node: Option<Node>) -> Event {
-    event(
-        "error",
-        json!({"message": message, "node": node.map(NodeView::from)}),
-    )
+fn recent_refs(content: &str) -> Vec<String> {
+    content
+        .split("](/api/resources/")
+        .skip(1)
+        .filter_map(|tail| {
+            let path = tail.split_once(')')?.0;
+            let (pack, asset) = path.split_once('/')?;
+            crate::assets::resource_url(pack, asset)?;
+            Some(format!("{pack}/{asset}"))
+        })
+        .collect()
+}
+
+fn http_event(value: TurnEvent) -> Event {
+    let (name, data) = match value {
+        TurnEvent::Start {
+            user_node,
+            assistant_node_id,
+            character_id,
+            character_name,
+        } => (
+            "start",
+            json!({"user_node": user_node.map(NodeView::from), "assistant_node_id":assistant_node_id, "character_id":character_id,"character_name":character_name}),
+        ),
+        TurnEvent::Reasoning(t) => ("reasoning", json!({"t":t})),
+        TurnEvent::Chunk(ResourceChunk::Text(t)) => ("text", json!({"t":t})),
+        TurnEvent::Chunk(ResourceChunk::Sticker(resource)) => {
+            ("text", json!({"t":sticker_markdown(&resource)}))
+        }
+        TurnEvent::Done(node) => ("done", json!({"node":NodeView::from(node)})),
+        TurnEvent::Error { message, node } => (
+            "error",
+            json!({"message":message,"node":node.map(NodeView::from)}),
+        ),
+    };
+    Event::default().event(name).data(data.to_string())
 }
 
 /// How a generation ended.
@@ -305,12 +438,12 @@ impl End {
 
 /// The turn's SSE side and its cancellation.
 struct Outbox {
-    tx: mpsc::Sender<Event>,
+    tx: mpsc::Sender<TurnEvent>,
     cancel: CancellationToken,
 }
 
 impl Outbox {
-    async fn send(&self, event: Event) -> Result<(), End> {
+    async fn send(&self, event: TurnEvent) -> Result<(), End> {
         tokio::select! {
             biased;
             () = self.cancel.cancelled() => Err(End::Cancelled),
@@ -380,6 +513,8 @@ struct Turn {
     effort: Option<String>,
     prepared: Prepared,
     assistant_id: String,
+    character: Character,
+    resources: Arc<ResourceCatalog>,
 }
 
 impl Turn {
@@ -389,14 +524,12 @@ impl Turn {
     }
 
     async fn drive(mut self, out: &Outbox, guard: TurnGuard) {
-        let start = event(
-            "start",
-            json!({
-                "user_node": self.prepared.user_node.take().map(NodeView::from),
-                "assistant_node_id": self.assistant_id,
-                "model_label": self.label,
-            }),
-        );
+        let start = TurnEvent::Start {
+            user_node: self.prepared.user_node.take(),
+            assistant_node_id: self.assistant_id.clone(),
+            character_id: self.character.id.clone(),
+            character_name: self.character.spec.display_name.clone(),
+        };
         if out.send(start).await.is_err() {
             // Nothing generated yet, so nothing to keep.
             return;
@@ -446,6 +579,7 @@ impl Turn {
             effort,
             prepared,
             assistant_id,
+            character,
             ..
         } = self;
         let has_output = !progress.content.is_empty() || !progress.reasoning.is_empty();
@@ -459,6 +593,8 @@ impl Turn {
             model_id: Some(model.id),
             model_label: Some(label.clone()),
             effort,
+            character_id: Some(character.id),
+            character_name: Some(character.spec.display_name),
             status,
             metrics: Some(metrics),
             created_at: now_ms(),
@@ -489,10 +625,16 @@ impl Turn {
 
         let last = match end {
             End::Done => match saved {
-                Ok(Some(node)) => event("done", json!({ "node": NodeView::from(node) })),
-                _ => error_event("保存回复失败".into(), None),
+                Ok(Some(node)) => TurnEvent::Done(node),
+                _ => TurnEvent::Error {
+                    message: "保存回复失败".into(),
+                    node: None,
+                },
             },
-            End::Failed(e) => error_event(e.to_string(), saved.ok().flatten()),
+            End::Failed(e) => TurnEvent::Error {
+                message: e.to_string(),
+                node: saved.ok().flatten(),
+            },
             End::Disconnected | End::Cancelled => return,
         };
         // A client that left meanwhile simply misses it.
@@ -508,6 +650,7 @@ impl Turn {
             reasoning: self.model.spec.reasoning.style.clone(),
             effort: self.effort.as_deref(),
             session_id: &self.prepared.session_key,
+            parameters: &self.character.spec.parameters,
         };
         let mut upstream = tokio::select! {
             biased;
@@ -519,6 +662,13 @@ impl Turn {
                 }
             }
         };
+        let mut filter = match self.resources.filter(
+            &self.character.spec.resource_packs,
+            &self.prepared.recent_resources,
+        ) {
+            Ok(filter) => filter,
+            Err(e) => return End::Failed(GatewayError::Protocol(e.to_string())),
+        };
         loop {
             let item = tokio::select! {
                 biased;
@@ -526,9 +676,19 @@ impl Turn {
                 item = upstream.next() => item,
             };
             let now = Instant::now();
-            let delta = match item {
-                None => return End::Done,
-                Some(Err(e)) => return End::Failed(e),
+            let chunks = match item {
+                None => {
+                    if let Err(end) = emit_chunks(out, progress, filter.finish()).await {
+                        return end;
+                    }
+                    return End::Done;
+                }
+                Some(Err(e)) => {
+                    if let Err(end) = emit_chunks(out, progress, filter.finish()).await {
+                        return end;
+                    }
+                    return End::Failed(e);
+                }
                 Some(Ok(StreamEvent::Usage(u))) => {
                     progress.usage = Some(u);
                     continue;
@@ -536,19 +696,38 @@ impl Turn {
                 Some(Ok(StreamEvent::Reasoning(t))) => {
                     progress.first_reasoning.get_or_insert(now);
                     progress.reasoning.push_str(&t);
-                    event("reasoning", json!({ "t": t }))
+                    if let Err(end) = out.send(TurnEvent::Reasoning(t)).await {
+                        return end;
+                    }
+                    Vec::new()
                 }
                 Some(Ok(StreamEvent::Text(t))) => {
                     progress.first_text.get_or_insert(now);
-                    progress.content.push_str(&t);
-                    event("text", json!({ "t": t }))
+                    filter.push(&t)
                 }
             };
             progress.first.get_or_insert(now);
             progress.last = Some(now);
-            if let Err(end) = out.send(delta).await {
+            if let Err(end) = emit_chunks(out, progress, chunks).await {
                 return end;
             }
         }
     }
+}
+
+async fn emit_chunks(
+    out: &Outbox,
+    progress: &mut Progress,
+    chunks: Vec<ResourceChunk>,
+) -> Result<(), End> {
+    for chunk in chunks {
+        match &chunk {
+            ResourceChunk::Text(t) => progress.content.push_str(t),
+            ResourceChunk::Sticker(resource) => {
+                progress.content.push_str(&sticker_markdown(resource))
+            }
+        }
+        out.send(TurnEvent::Chunk(chunk)).await?;
+    }
+    Ok(())
 }

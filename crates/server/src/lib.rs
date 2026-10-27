@@ -1,4 +1,5 @@
 pub mod api;
+pub mod assets;
 pub mod auth;
 pub mod chat;
 pub mod config;
@@ -29,7 +30,16 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
     let api = Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/session", post(auth::access_login))
-        .route("/api/models", get(user::list_models))
+        .route("/api/characters", get(user::list_characters))
+        .route("/api/resources/{pack}/{id}", get(crate::assets::resource))
+        .route("/api/backgrounds/{file}", get(crate::assets::background))
+        .route("/api/admin/resource-packs", get(crate::assets::packs))
+        .route(
+            "/api/admin/backgrounds",
+            post(crate::assets::upload).layer(axum::extract::DefaultBodyLimit::max(
+                crate::assets::MAX_BACKGROUND,
+            )),
+        )
         .route("/api/themes", get(web::list_themes))
         .route("/themes/{file}", get(web::theme_file))
         .route(

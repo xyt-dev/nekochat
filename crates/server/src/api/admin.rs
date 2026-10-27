@@ -6,7 +6,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use nekochat_core::{ReasoningSpec, ReasoningStyle};
-use nekochat_store::{Character, ListedModel, ModelSpec, SettingKey};
+use nekochat_store::{Character, CharacterSpec, ListedModel, ModelSpec, SettingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::api::{ApiError, JsonBody, blocking};
@@ -164,12 +164,6 @@ pub async fn delete_model(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Deserialize)]
-pub struct CharacterBody {
-    name: String,
-    system_prompt: String,
-}
-
 pub async fn list_characters(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Character>>, ApiError> {
@@ -179,21 +173,23 @@ pub async fn list_characters(
 
 pub async fn create_character(
     State(state): State<AppState>,
-    JsonBody(body): JsonBody<CharacterBody>,
+    JsonBody(body): JsonBody<CharacterSpec>,
 ) -> Result<(StatusCode, Json<Character>), ApiError> {
+    check_character(&state, &body).await?;
     let store = state.store.clone();
-    let c = blocking(move || store.create_character(&body.name, &body.system_prompt)).await?;
+    let c = blocking(move || store.create_character(&body)).await?;
     Ok((StatusCode::CREATED, Json(c)))
 }
 
 pub async fn update_character(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    JsonBody(body): JsonBody<CharacterBody>,
+    JsonBody(body): JsonBody<CharacterSpec>,
 ) -> Result<Json<Character>, ApiError> {
+    check_character(&state, &body).await?;
     let store = state.store.clone();
     Ok(Json(
-        blocking(move || store.update_character(&id, &body.name, &body.system_prompt)).await?,
+        blocking(move || store.update_character(&id, &body)).await?,
     ))
 }
 
@@ -204,6 +200,49 @@ pub async fn delete_character(
     let store = state.store.clone();
     blocking(move || store.delete_character(&id)).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn check_character(state: &AppState, body: &CharacterSpec) -> Result<(), ApiError> {
+    if body.name.trim().is_empty() || body.display_name.trim().is_empty() {
+        return Err(ApiError::bad_request("内部名称和公开名称不能为空"));
+    }
+    body.parameters.validate().map_err(ApiError::bad_request)?;
+    if !["self", "neutral"].contains(&body.sticker_identity.as_str())
+        || !["rare", "normal", "often"].contains(&body.sticker_frequency.as_str())
+    {
+        return Err(ApiError::bad_request("资源身份或频率无效"));
+    }
+    if body
+        .resource_packs
+        .iter()
+        .any(|id| !state.resources.contains_pack(id))
+    {
+        return Err(ApiError::bad_request("资源包不存在"));
+    }
+    if let Some(background) = &body.background {
+        if !background.opacity.is_finite()
+            || !(0.0..=1.0).contains(&background.opacity)
+            || !crate::assets::background_url_allowed(state, &background.url).await
+        {
+            return Err(ApiError::bad_request(
+                "背景必须是存在的本站图片，透明度为 0..1",
+            ));
+        }
+    }
+    if let Some(id) = &body.model_id {
+        let store = state.store.clone();
+        let id = id.clone();
+        let model = blocking(move || store.get_model(&id))
+            .await?
+            .ok_or_else(|| ApiError::bad_request("角色绑定模型未上架"))?;
+        if state.provider(&model.spec.provider).is_none() {
+            return Err(ApiError::bad_request("模型的提供商不在配置中"));
+        }
+        crate::chat::resolve_effort(&model.spec.reasoning, body.parameters.effort.clone())?;
+    } else if body.parameters.effort.is_some() {
+        return Err(ApiError::bad_request("设置思考参数前请先绑定模型"));
+    }
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize)]

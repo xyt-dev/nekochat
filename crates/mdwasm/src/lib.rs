@@ -144,8 +144,32 @@ fn link_allowed(url: &str) -> bool {
 }
 
 fn image_allowed(url: &str) -> bool {
-    let url = url.trim_start_matches(|c: char| c.is_whitespace() || c.is_control());
-    has_scheme(url, &["http:", "https:"])
+    fn component(s: &str) -> bool {
+        !s.is_empty()
+            && s != "."
+            && s != ".."
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+    }
+    if let Some(path) = url.strip_prefix("/api/resources/") {
+        return path
+            .split_once('/')
+            .is_some_and(|(pack, asset)| component(pack) && component(asset));
+    }
+    if let Some(file) = url.strip_prefix("/api/backgrounds/") {
+        return file.rsplit_once('.').is_some_and(|(id, ext)| {
+            id.len() == 36
+                && id.bytes().enumerate().all(|(i, b)| {
+                    if [8, 13, 18, 23].contains(&i) {
+                        b == b'-'
+                    } else {
+                        b.is_ascii_hexdigit()
+                    }
+                })
+                && ["png", "jpg", "webp", "gif"].contains(&ext)
+        });
+    }
+    false
 }
 
 fn has_scheme(url: &str, schemes: &[&str]) -> bool {
@@ -190,7 +214,7 @@ fn sanitize<'a>(events: impl Iterator<Item = Event<'a>>) -> Vec<Event<'a>> {
                             if !title.is_empty() {
                                 tag.push_str(&format!(" title=\"{}\"", escaped(title)));
                             }
-                            tag.push_str(" loading=\"lazy\" decoding=\"async\">");
+                            tag.push_str(" loading=\"lazy\" decoding=\"async\" style=\"max-width:100%;max-height:24rem\">");
                             Event::InlineHtml(tag.into())
                         }
                         None => Event::Text(std::mem::take(alt).into()),
@@ -342,13 +366,27 @@ mod tests {
         assert!(html.contains("href=\"#top\""), "{html}");
         assert!(html.contains("href=\"/p\""), "{html}");
         assert!(html.contains("href=\"mailto:m@e.com\""), "{html}");
-        let html = render_html("![a *b*](https://e.com/i.png)");
+        let html = render_html("![a *b*](/api/resources/nekowhale/abc.gif)");
         assert!(
-            html.contains(
-                "<img src=\"https://e.com/i.png\" alt=\"a b\" loading=\"lazy\" decoding=\"async\">"
-            ),
+            html.contains("<img src=\"/api/resources/nekowhale/abc.gif\" alt=\"a b\""),
             "{html}"
         );
+        assert!(
+            html.contains("loading=\"lazy\" decoding=\"async\""),
+            "{html}"
+        );
+        for url in [
+            "https://e.com/i.png",
+            "//e.com/i.png",
+            "/api/resources/a/../b",
+            "/api/resources/a/%2e%2e",
+            "/other/a.png",
+            "data:image/png,hi",
+        ] {
+            let html = render_html(&format!("![alt]({url})"));
+            assert!(!html.contains("<img"), "{url}: {html}");
+            assert!(html.contains("alt"), "{html}");
+        }
     }
 
     #[test]

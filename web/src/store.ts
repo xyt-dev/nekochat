@@ -1,13 +1,13 @@
-// App state: conversations, the open conversation tree, model choice and live (streaming) turns.
-import { type Accessor, createMemo, createRoot, createSignal, type Setter } from "solid-js";
+// App state: conversations, the open conversation tree, role choice and live (streaming) turns.
+import { type Accessor, batch, createMemo, createRoot, createSignal, type Setter } from "solid-js";
 import {
   ApiError,
   api,
   type ConversationSummary,
   type ConversationView,
-  type ModelsView,
+  type CharactersView,
   type NodeView,
-  type PickerModel,
+  type PickerCharacter,
   postTurn,
   type TurnAction,
   type TurnEvent,
@@ -23,7 +23,8 @@ export interface LiveTurn {
   assistantId: Accessor<string>;
   /** User message the reply answers. */
   parentId: Accessor<string | null>;
-  modelLabel: Accessor<string>;
+  characterId: Accessor<string>;
+  characterName: Accessor<string>;
   content: Accessor<string>;
   reasoning: Accessor<string>;
   /** `performance.now()` of the first reasoning delta / first text delta after it. */
@@ -38,7 +39,8 @@ export interface LiveTurn {
     started: Setter<boolean>;
     assistantId: Setter<string>;
     parentId: Setter<string | null>;
-    modelLabel: Setter<string>;
+    characterId: Setter<string>;
+    characterName: Setter<string>;
     content: Setter<string>;
     reasoning: Setter<string>;
     reasoningStart: Setter<number | null>;
@@ -55,7 +57,8 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
   const [started, setStarted] = createSignal(false);
   const [assistantId, setAssistantId] = createSignal("");
   const [parent, setParent] = createSignal(parentId);
-  const [modelLabel, setModelLabel] = createSignal("");
+  const [characterId, setCharacterId] = createSignal("");
+  const [characterName, setCharacterName] = createSignal("");
   const [content, setContent] = createSignal("");
   const [reasoning, setReasoning] = createSignal("");
   const [reasoningStart, setReasoningStart] = createSignal<number | null>(null);
@@ -66,7 +69,8 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
     started,
     assistantId,
     parentId: parent,
-    modelLabel,
+    characterId,
+    characterName,
     content,
     reasoning,
     reasoningStart,
@@ -78,7 +82,8 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
       started: setStarted,
       assistantId: setAssistantId,
       parentId: setParent,
-      modelLabel: setModelLabel,
+      characterId: setCharacterId,
+      characterName: setCharacterName,
       content: setContent,
       reasoning: setReasoning,
       reasoningStart: setReasoningStart,
@@ -88,18 +93,14 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
   };
 }
 
-const MODEL_KEY = "nk.model";
-const EFFORT_KEY = "nk.effort";
-
 function createAppStore() {
   const [conversations, setConversations] = createSignal<ConversationSummary[]>([]);
   const [conv, setConv] = createSignal<ConversationView | null>(null, { equals: false });
   const [loadingConv, setLoadingConv] = createSignal(false);
   const [live, setLive] = createSignal<Record<string, LiveTurn>>({});
   const [nodeErrors, setNodeErrors] = createSignal<Record<string, string>>({});
-  const [models, setModels] = createSignal<ModelsView>({ default_model_id: null, models: [] });
-  const [modelId, setModelIdRaw] = createSignal<string | null>(localStorage.getItem(MODEL_KEY));
-  const [effort, setEffortRaw] = createSignal<string | null>(localStorage.getItem(EFFORT_KEY));
+  const [characters, setCharacters] = createSignal<CharactersView>({ default_character_id: null, characters: [] });
+  const [characterId, setCharacterId] = createSignal<string | null>(null);
   const [composerText, setComposerText] = createSignal("");
   const [editing, setEditing] = createSignal<Editing | null>(null);
   const [treeOpen, setTreeOpen] = createSignal(false);
@@ -112,40 +113,22 @@ function createAppStore() {
     return c ? live()[c.id] : undefined;
   });
 
-  /** The model the next turn uses: the saved choice if still listed, else the default. */
-  const model = createMemo<PickerModel | undefined>(() => {
-    const list = models().models;
-    return (
-      list.find((m) => m.id === modelId()) ??
-      list.find((m) => m.id === models().default_model_id) ??
-      list[0]
-    );
-  });
-  const effectiveEffort = createMemo<string | null>(() => {
-    const m = model();
-    if (!m || m.reasoning.levels.length === 0) return null;
-    const e = effort();
-    return e && m.reasoning.levels.includes(e) ? e : (m.reasoning.default ?? m.reasoning.levels[0]);
+  /** A role switch only affects subsequent turns; the message tree stays untouched. */
+  const character = createMemo<PickerCharacter | undefined>(() => {
+    const list = characters().characters;
+    return list.find((item) => item.id === characterId()) ??
+      list.find((item) => item.id === characters().default_character_id) ?? list[0];
   });
 
-  function chooseModel(m: PickerModel) {
-    setModelIdRaw(m.id);
-    localStorage.setItem(MODEL_KEY, m.id);
-    // A new model starts at its own default level.
-    chooseEffort(m.reasoning.default);
+  function chooseCharacter(item: PickerCharacter) {
+    setCharacterId(item.id);
   }
 
-  function chooseEffort(e: string | null) {
-    setEffortRaw(e);
-    if (e === null) localStorage.removeItem(EFFORT_KEY);
-    else localStorage.setItem(EFFORT_KEY, e);
-  }
-
-  async function loadModels() {
+  async function loadCharacters() {
     try {
-      setModels(await api.models());
+      setCharacters(await api.characters());
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : "加载模型列表失败");
+      toast(e instanceof ApiError ? e.message : "加载角色列表失败");
     }
   }
 
@@ -176,7 +159,10 @@ function createAppStore() {
     setLoadingConv(true);
     try {
       const view = await api.conversation(id);
-      if (seq === loadSeq) setConv(view);
+      if (seq === loadSeq) {
+        setConv(view);
+        setCharacterId(view.character_id);
+      }
     } catch (e) {
       if (seq !== loadSeq) return;
       setConv(null);
@@ -213,16 +199,23 @@ function createAppStore() {
     else c.nodes = [...c.nodes, node];
   }
 
-  async function newConversation(): Promise<string | null> {
-    try {
-      const summary = await api.createConversation();
-      setConversations((list) => [summary, ...list.filter((c) => c.id !== summary.id)]);
-      await openConversation(summary.id);
-      return summary.id;
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : "新建对话失败");
-      return null;
-    }
+  let creatingConversation: Promise<string | null> | null = null;
+  function newConversation(): Promise<string | null> {
+    if (creatingConversation) return creatingConversation;
+    // Detach from the old chat before the request; immediate sends await this same creation.
+    void openConversation(null);
+    creatingConversation = (async () => {
+      try {
+        const summary = await api.createConversation(character()?.id);
+        setConversations((list) => [summary, ...list.filter((c) => c.id !== summary.id)]);
+        await openConversation(summary.id);
+        return summary.id;
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : "新建对话失败");
+        return null;
+      }
+    })().finally(() => { creatingConversation = null; });
+    return creatingConversation;
   }
 
   async function deleteConversation(id: string) {
@@ -288,14 +281,16 @@ function createAppStore() {
   function handleTurnEvent(turn: LiveTurn, ev: TurnEvent) {
     switch (ev.type) {
       case "start": {
-        const { user_node, assistant_node_id, model_label } = ev.data;
+        const { user_node, assistant_node_id, character_id, character_name } = ev.data;
         turn.set.assistantId(assistant_node_id);
-        turn.set.modelLabel(model_label);
+        turn.set.characterId(character_id);
+        turn.set.characterName(character_name);
         if (user_node) turn.set.parentId(user_node.id);
         const parent = turn.parentId();
         updateConv(turn.convId, (c) => {
           if (user_node) addNode(c, user_node);
           c.leaf_id = parent;
+          c.character_id = character_id;
         });
         turn.set.started(true);
         break;
@@ -324,17 +319,19 @@ function createAppStore() {
   }
 
   function finishTurn(turn: LiveTurn, node: NodeView | null, error: string | null) {
-    flushLive(turn);
-    if (node) {
-      if (error) setNodeErrors((m) => ({ ...m, [node.id]: error }));
-      updateConv(turn.convId, (c) => {
-        addNode(c, node);
-        c.leaf_id = node.id;
-      });
-      dropLive(turn);
-    } else {
-      turn.set.error(error ?? "回复中断");
-    }
+    batch(() => {
+      flushLive(turn);
+      if (node) {
+        if (error) setNodeErrors((m) => ({ ...m, [node.id]: error }));
+        updateConv(turn.convId, (c) => {
+          addNode(c, node);
+          c.leaf_id = node.id;
+        });
+        dropLive(turn);
+      } else {
+        turn.set.error(error ?? "回复中断");
+      }
+    });
   }
 
   function dropLive(turn: LiveTurn) {
@@ -347,9 +344,9 @@ function createAppStore() {
 
   /** Starts a turn; returns `false` when it was refused before streaming began. */
   async function runTurn(action: TurnAction): Promise<boolean> {
-    const m = model();
-    if (!m) {
-      toast("还没有可用的模型，请先在管理端上架");
+    const selected = character();
+    if (!selected) {
+      toast("还没有可用的角色，请先在管理端配置并启用");
       return false;
     }
     let c = conv();
@@ -369,7 +366,7 @@ function createAppStore() {
     setEditing(null);
     let settled = false;
     try {
-      await postTurn(convId, { ...action, model_id: m.id, effort: effectiveEffort() }, turn.abort.signal, (ev) => {
+      await postTurn(convId, { ...action, character_id: selected.id }, turn.abort.signal, (ev) => {
         if (ev.type === "done" || ev.type === "error") settled = true;
         handleTurnEvent(turn, ev);
       });
@@ -404,18 +401,22 @@ function createAppStore() {
         role: "assistant",
         content: turn.buf.content,
         reasoning: turn.buf.reasoning || null,
-        model_label: turn.modelLabel(),
-        effort: null,
+        character_id: turn.characterId(),
+        character_name: turn.characterName(),
         status: "interrupted",
         metrics: null,
         created_at: Date.now(),
       };
-      updateConv(turn.convId, (c) => {
-        addNode(c, node);
-        c.leaf_id = node.id;
+      batch(() => {
+        updateConv(turn.convId, (c) => {
+          addNode(c, node);
+          c.leaf_id = node.id;
+        });
+        dropLive(turn);
       });
+    } else {
+      dropLive(turn);
     }
-    dropLive(turn);
     // Pick up the stored version (with metrics) once the server has saved it.
     setTimeout(() => {
       if (!live()[turn.convId]) void reloadConversation(turn.convId);
@@ -431,11 +432,9 @@ function createAppStore() {
     setLive,
     currentLive,
     nodeErrors,
-    models,
-    model,
-    effort: effectiveEffort,
-    chooseModel,
-    chooseEffort,
+    characters,
+    character,
+    chooseCharacter,
     composerText,
     setComposerText,
     editing,
@@ -446,7 +445,7 @@ function createAppStore() {
     setSidebarOpen,
     index,
     path,
-    loadModels,
+    loadCharacters,
     loadConversations,
     openConversation,
     newConversation,

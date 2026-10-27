@@ -1,22 +1,19 @@
 import { createMemo, createSignal, For, onMount, Show } from "solid-js";
-import { emptyModel, errorMessage, type AdminApi, type Character, type ListedModel, type ModelSpec, type Provider, type Settings, type UpstreamModel } from "./api";
+import { emptyModel, errorMessage, type AdminApi, type Character, type ListedModel, type ModelSpec, type Provider, type ResourcePack, type Settings, type UpstreamModel } from "./api";
 import { ModelEditor } from "./ModelEditor";
+import { CharacterEditor } from "./CharacterEditor";
 
 export interface CatalogProps {
-  api: AdminApi; providers: Provider[]; models: ListedModel[]; characters: Character[];
+  api: AdminApi; providers: Provider[]; models: ListedModel[]; characters: Character[]; packs: ResourcePack[];
   settings: Settings; reload: () => Promise<void>;
 }
 
 export function Roles(props: CatalogProps) {
-  const [editing, setEditing] = createSignal<string | null | undefined>(undefined);
-  const [name, setName] = createSignal("");
-  const [prompt, setPrompt] = createSignal("");
+  const [editing, setEditing] = createSignal<{ initial: Character | null } | null>(null);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   const [notice, setNotice] = createSignal("");
-  function edit(character?: Character) {
-    setEditing(character?.id ?? null); setName(character?.name ?? ""); setPrompt(character?.system_prompt ?? ""); setError(""); setNotice("");
-  }
+  const available = (character: Character) => character.enabled && props.models.some((model) => model.id === character.model_id);
   async function mutate(action: () => Promise<unknown>, message: string) {
     setBusy(true); setError(""); setNotice("");
     try { await action(); await props.reload(); setNotice(message); }
@@ -24,17 +21,19 @@ export function Roles(props: CatalogProps) {
     finally { setBusy(false); }
   }
   return <section aria-labelledby="roles-title">
-    <div class="admin-section-heading"><div><h2 id="roles-title">角色</h2><p class="admin-note">角色提示词仅管理员可见。新对话使用默认角色。</p></div><button type="button" class="primary" disabled={busy()} onClick={() => edit()}>新增角色</button></div>
+    <div class="admin-section-heading"><div><h2 id="roles-title">角色卡片</h2><p class="admin-note">模型、生成参数与系统提示词仅管理员可见。公开显示名、背景与授权资源组成完整角色；修改从下一轮生效。</p></div><button type="button" class="primary" disabled={busy()} onClick={() => { setEditing({ initial: null }); setNotice(""); }}>新增角色</button></div>
     <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show><Show when={notice()}><p role="status">{notice()}</p></Show>
-    <label class="admin-default">默认角色<select name="default-character" disabled={busy()} value={props.settings.default_character_id ?? ""} onChange={(event) => { const value = event.currentTarget.value || null; void mutate(() => props.api.saveSettings({ ...props.settings, default_character_id: value }), "默认角色已更新"); }}><option value="">无默认角色</option><For each={props.characters}>{(character) => <option value={character.id}>{character.name}</option>}</For></select></label>
-    <Show when={editing() !== undefined}>
-      <form class="admin-card admin-editor" onSubmit={(event) => { event.preventDefault(); void mutate(async () => { await props.api.saveCharacter(editing() ?? null, { name: name().trim(), system_prompt: prompt() }); setEditing(undefined); }, "角色已保存"); }}>
-        <h3>{editing() ? "编辑角色" : "新增角色"}</h3>
-        <fieldset disabled={busy()}><label>名称<input name="character-name" required value={name()} onInput={(event) => setName(event.currentTarget.value)} /></label><label>系统提示词<textarea name="system-prompt" rows="9" value={prompt()} onInput={(event) => setPrompt(event.currentTarget.value)} /></label></fieldset>
-        <div class="admin-actions"><button type="submit" class="primary" disabled={busy()}>{busy() ? "保存中…" : "保存角色"}</button><button type="button" disabled={busy()} onClick={() => setEditing(undefined)}>取消</button></div>
-      </form>
-    </Show>
-    <div class="admin-card-list"><For each={props.characters} fallback={<p class="admin-empty">还没有角色，点击「新增角色」开始。</p>}>{(character) => <article class="admin-card"><div class="admin-section-heading"><h3>{character.name} <Show when={props.settings.default_character_id === character.id}><small class="admin-badge">默认</small></Show></h3><div class="admin-actions"><button type="button" disabled={busy()} onClick={() => edit(character)}>编辑</button><button type="button" class="danger" disabled={busy()} onClick={() => { if (confirm(`确定删除角色「${character.name}」？此操作不可撤销。${props.settings.default_character_id === character.id ? "默认角色将被清除。" : ""}`)) void mutate(async () => { await props.api.deleteCharacter(character.id); if (editing() === character.id) setEditing(undefined); }, "角色已删除"); }}>删除</button></div></div><pre class="admin-prompt">{character.system_prompt || "（空提示词）"}</pre></article>}</For></div>
+    <label class="admin-default">默认角色<select name="default-character" disabled={busy()} value={props.settings.default_character_id ?? ""} onChange={(event) => { const value = event.currentTarget.value || null; void mutate(() => props.api.saveSettings({ ...props.settings, default_character_id: value }), "默认角色已更新"); }}><option value="">无默认角色（使用第一个可用角色）</option><For each={props.characters}>{(character) => <option value={character.id} disabled={!available(character)}>{character.display_name} · {character.name}{available(character) ? "" : "（不可用于聊天）"}</option>}</For></select></label>
+    <Show when={editing()} keyed>{(draft) => <CharacterEditor api={props.api} initial={draft.initial} models={props.models} providers={props.providers} packs={props.packs} onCancel={() => setEditing(null)} onSaved={async () => { await props.reload(); setEditing(null); setNotice("角色已保存，从下一轮开始生效"); }} />}</Show>
+    <div class="admin-card-list"><For each={props.characters} fallback={<p class="admin-empty">还没有角色，点击「新增角色」配置完整角色卡。</p>}>{(character) => <article class="admin-card" data-character-id={character.id}>
+      <div class="admin-section-heading"><div><h3>{character.display_name} <Show when={props.settings.default_character_id === character.id}><small class="admin-badge">默认</small></Show></h3><p class="admin-note">内部名称：{character.name} · {character.enabled ? "已启用" : "已停用"} · 排序 {character.sort}</p></div><div class="admin-actions">
+        <button type="button" disabled={busy()} onClick={() => { setEditing({ initial: character }); setNotice(""); }}>编辑</button>
+        <button type="button" class="danger" disabled={busy()} onClick={() => { if (confirm(`确定删除角色「${character.display_name}」？此操作不可撤销。历史回复保留原显示名。`)) void mutate(async () => { await props.api.deleteCharacter(character.id); if (editing()?.initial?.id === character.id) setEditing(null); }, "角色已删除"); }}>删除</button>
+      </div></div>
+      <p class="admin-note">绑定模型：{props.models.find((model) => model.id === character.model_id)?.display_name ?? "未绑定可用模型"} · {available(character) ? "聊天可选" : "聊天不可选"}</p>
+      <p class="admin-note">授权资源包：{character.resource_packs.map((id) => props.packs.find((pack) => pack.id === id)?.name ?? id).join("、") || "无"} · 背景：{character.background ? `${Math.round(character.background.opacity * 100)}%` : "无"}</p>
+      <details><summary>系统提示词（仅管理员）</summary><pre class="admin-prompt">{character.system_prompt || "（空提示词）"}</pre></details>
+    </article>}</For></div>
   </section>;
 }
 

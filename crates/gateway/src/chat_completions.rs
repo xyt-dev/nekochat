@@ -48,6 +48,29 @@ pub fn build_body(req: &ChatRequest) -> Value {
         }
         _ => {}
     }
+    let p = req.parameters;
+    for (key, value) in [
+        ("temperature", p.temperature.map(|v| json!(v))),
+        ("top_p", p.top_p.map(|v| json!(v))),
+        (
+            if req.reasoning == ReasoningStyle::DeepSeek {
+                "max_tokens"
+            } else {
+                "max_completion_tokens"
+            },
+            p.max_output_tokens.map(|v| json!(v)),
+        ),
+        ("seed", p.seed.map(|v| json!(v))),
+        ("frequency_penalty", p.frequency_penalty.map(|v| json!(v))),
+        ("presence_penalty", p.presence_penalty.map(|v| json!(v))),
+    ] {
+        if let Some(value) = value {
+            b[key] = value;
+        }
+    }
+    if !p.stop.is_empty() {
+        b["stop"] = json!(p.stop);
+    }
     b
 }
 

@@ -12,6 +12,8 @@ use nekochat_gateway::*;
 use serde_json::json;
 
 const MSGS: &[ChatMessage] = &[];
+static DEFAULT_PARAMETERS: std::sync::LazyLock<nekochat_core::GenerationParameters> =
+    std::sync::LazyLock::new(Default::default);
 
 fn req(style: ReasoningStyle, effort: Option<&'static str>) -> ChatRequest<'static> {
     ChatRequest {
@@ -20,6 +22,40 @@ fn req(style: ReasoningStyle, effort: Option<&'static str>) -> ChatRequest<'stat
         reasoning: style,
         effort,
         session_id: "sess-1",
+        parameters: &DEFAULT_PARAMETERS,
+    }
+}
+
+#[test]
+fn typed_native_parameters_do_not_override_model_messages_or_streaming() {
+    let parameters: nekochat_core::GenerationParameters = serde_json::from_value(json!({
+        "temperature":0.4,"top_p":0.8,"max_output_tokens":1234,"seed":7,
+        "frequency_penalty":0.2,"presence_penalty":-0.2,"stop":["END"]
+    }))
+    .unwrap();
+    for style in [ReasoningStyle::DeepSeek, ReasoningStyle::Effort] {
+        let request = ChatRequest {
+            parameters: &parameters,
+            ..req(style.clone(), Some("high"))
+        };
+        let body = build_body(&request);
+        assert_eq!(body["model"], "m");
+        assert_eq!(body["messages"], json!([]));
+        assert_eq!(body["stream"], true);
+        assert_eq!(body["temperature"], 0.4);
+        assert_eq!(body["top_p"], 0.8);
+        assert_eq!(body["seed"], 7);
+        assert_eq!(body["frequency_penalty"], 0.2);
+        assert_eq!(body["presence_penalty"], -0.2);
+        assert_eq!(body["stop"], json!(["END"]));
+        let key = if style == ReasoningStyle::DeepSeek {
+            "max_tokens"
+        } else {
+            "max_completion_tokens"
+        };
+        assert_eq!(body[key], 1234);
+        assert_eq!(body["reasoning_effort"], "high");
+        assert!(body.get("tools").is_none());
     }
 }
 

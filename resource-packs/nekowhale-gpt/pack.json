@@ -1,0 +1,23 @@
+{
+  "id": "nekowhale-gpt",
+  "name": "大肥鱼和GPT娘",
+  "description": "大肥鱼与 GPT娘的双人互动表情，有方向：dir 字段写明谁对谁做。",
+  "attribution": "来源 https://github.com/Loping151/dsh-nekowhale-stickers；表情作者：B站 可以叫我云大人 / 雾雪 (https://space.bilibili.com/103739)，https://kiriyuki.com。大肥鱼形象基于 ZipZipPipe (https://space.bilibili.com/4168597) 与 上善无形 (https://space.bilibili.com/4456176)；GPT娘形象基于 ZipZipPipe。知识标注 CC BY-NC 4.0；图片保留作者所有权，仅限保留署名的非商业分享，禁止收费及其他商业用途。",
+  "upstream": {
+    "key": "大肥鱼和GPT娘",
+    "title": "大肥鱼和GPT娘",
+    "desc": "大肥鱼与 GPT娘的双人互动表情，有方向：dir 字段写明谁对谁做。",
+    "showcase": "https://kiriyuki.com/showcase?p=%E5%A4%A7%E8%82%A5%E9%B1%BC%E5%92%8CGPT%E5%A8%98",
+    "characters": [
+      {
+        "name": "大肥鱼",
+        "look": "深蓝长发、女仆头饰（DeepSeek）"
+      },
+      {
+        "name": "GPT娘",
+        "look": "白色角色：白发龙娘：龙角、OpenAI 标志发饰（ChatGPT）"
+      }
+    ]
+  },
+  "metadata_version": "2026-10-23T10:02Z"
+}

@@ -134,6 +134,7 @@ pub struct TestApp {
     pub store: Arc<Store>,
     pub running: RunningTurns,
     pub dir: TempDir,
+    pub state: AppState,
 }
 
 impl TestApp {
@@ -183,6 +184,7 @@ pub async fn spawn_app(cfg: TestCfg) -> TestApp {
     };
     let store = state.store.clone();
     let running = state.running.clone();
+    let service_state = state.clone();
     let router = match cfg.web_assets {
         Some(assets) => nekochat_server::app_with_assets(state, assets),
         None => nekochat_server::app(state),
@@ -197,5 +199,6 @@ pub async fn spawn_app(cfg: TestCfg) -> TestApp {
         store,
         running,
         dir,
+        state: service_state,
     }
 }

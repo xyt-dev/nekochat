@@ -1138,6 +1138,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekochat-resources"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "rust-embed",
+ "rustix",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "nekochat-server"
 version = "0.1.0"
 dependencies = [
@@ -1150,9 +1163,11 @@ dependencies = [
  "mime_guess",
  "nekochat-core",
  "nekochat-gateway",
+ "nekochat-resources",
  "nekochat-store",
  "reqwest",
  "rust-embed",
+ "rustix",
  "serde",
  "serde_json",
  "subtle",
@@ -1162,6 +1177,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

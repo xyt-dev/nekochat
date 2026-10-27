@@ -150,9 +150,7 @@ export function AssistantMessage(props: { node: NodeView }) {
   };
   return (
     <MessageShell class="msg-assistant">
-      <Show when={n().model_label}>
-        <div class="model-label">{n().model_label}</div>
-      </Show>
+      <div class="character-label">{n().character_name ?? "助手"}</div>
       <Show when={n().reasoning || reasoningMs() !== null}>
         <Reasoning text={() => n().reasoning ?? ""} label={label} />
       </Show>
@@ -186,9 +184,7 @@ export function LiveMessage(props: { turn: LiveTurn }) {
   const generating = () => t.error() === null;
   return (
     <MessageShell class="msg-assistant">
-      <Show when={t.modelLabel()}>
-        <div class="model-label">{t.modelLabel()}</div>
-      </Show>
+      <div class="character-label">{t.characterName() || "助手"}</div>
       <Show when={t.reasoningStart() !== null}>
         <Reasoning text={t.reasoning} label={label} />
       </Show>

@@ -32,7 +32,7 @@ button:disabled {
 code,
 pre,
 .mono,
-.model-label,
+.character-label,
 .debug,
 .tree-list {
   font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
@@ -109,6 +109,12 @@ pre,
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 
 .conv-delete {
@@ -125,6 +131,8 @@ pre,
   }
 }
 
+.conv-item:focus-within .conv-delete { visibility: visible; }
+
 @media (hover: none) {
   .conv-item.active .conv-delete {
     visibility: visible;
@@ -133,6 +141,8 @@ pre,
 
 .backdrop {
   display: none;
+  border: 0;
+  padding: 0;
 }
 
 /* ---- main column ---- */
@@ -142,6 +152,19 @@ pre,
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+  isolation: isolate;
+}
+
+/* One independent decoration: role changes only, never streaming-token work. */
+.character-background {
+  position: absolute;
+  inset: 40px 0 0;
+  z-index: -1;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .topbar {
@@ -171,6 +194,8 @@ pre,
   font-size: 18px;
   padding: 0 4px;
 }
+
+.sidebar-close { display: none; }
 
 /* ---- messages ---- */
 
@@ -220,7 +245,7 @@ pre,
   overflow-wrap: anywhere;
 }
 
-.model-label {
+.character-label {
   font-size: 11px;
   color: var(--nk-text-faint);
   margin-bottom: 4px;
@@ -436,7 +461,9 @@ pre,
 }
 
 .md img {
-  max-width: 100%;
+  max-width: min(100%, 320px);
+  max-height: 320px;
+  object-fit: contain;
 }
 
 .md :not(pre) > code {
@@ -707,7 +734,7 @@ div.nk-math {
   min-width: 260px;
 }
 
-.model-popup {
+.character-popup {
   min-width: 260px;
 }
 
@@ -970,6 +997,9 @@ div.nk-math {
     display: block;
   }
 
+  .sidebar-close { display: block; }
+  .sidebar-open .conv-delete { visibility: visible; }
+
   .sidebar {
     position: fixed;
     z-index: 40;
@@ -979,10 +1009,12 @@ div.nk-math {
     width: 240px;
     transform: translateX(-100%);
     transition: transform 0.15s ease-out;
+    visibility: hidden;
   }
 
   .sidebar-open .sidebar {
     transform: none;
+    visibility: visible;
   }
 
   .sidebar-open .backdrop {

@@ -11,14 +11,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
-pub use catalog::{Character, ListedModel, ModelSpec, SettingKey};
+pub use catalog::{Character, CharacterSpec, ListedModel, ModelSpec, SettingKey};
 pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
 pub use usage_stats::{AllowanceWindow, ModelAllowance, ModelUsageStats, UsagePoint, UsageTotals};
 
 const SCHEMA: &str = include_str!("schema.sql");
 /// The schema version this code writes and understands.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -61,10 +61,28 @@ impl Store {
         conn.pragma_update(None, "secure_delete", "ON")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
-        // Version 0 is a fresh file; the schema is idempotent for version 1.
+        // Keep the schema-1 bootstrap so migration also covers unversioned legacy files.
         conn.execute_batch(SCHEMA)?;
-        if version == 0 {
-            conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+        if version < 2 {
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 ALTER TABLE characters ADD COLUMN display_name TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE characters ADD COLUMN model_id TEXT;
+                 ALTER TABLE characters ADD COLUMN parameters TEXT NOT NULL DEFAULT '{}';
+                 ALTER TABLE characters ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+                 ALTER TABLE characters ADD COLUMN sort INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE characters ADD COLUMN background TEXT;
+                 ALTER TABLE characters ADD COLUMN resource_packs TEXT NOT NULL DEFAULT '[]';
+                 ALTER TABLE characters ADD COLUMN sticker_identity TEXT NOT NULL DEFAULT 'neutral';
+                 ALTER TABLE characters ADD COLUMN sticker_frequency TEXT NOT NULL DEFAULT 'often';
+                 UPDATE characters SET display_name = name, model_id =
+                   (SELECT value FROM settings WHERE key = 'default_model_id'
+                    AND value IN (SELECT id FROM models));
+                 ALTER TABLE nodes ADD COLUMN character_id TEXT;
+                 ALTER TABLE nodes ADD COLUMN character_name TEXT;
+                 PRAGMA user_version = 2;
+                 COMMIT;",
+            )?;
         }
         Ok(Store {
             conn: Mutex::new(conn),

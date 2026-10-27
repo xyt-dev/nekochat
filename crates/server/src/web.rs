@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use axum::Json;
+use axum::body::Bytes;
 use axum::extract::{Path, Request, State};
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -27,7 +28,21 @@ pub struct EmbeddedDist;
 
 impl WebAssets for EmbeddedDist {
     fn get(&self, path: &str) -> Option<Cow<'static, [u8]>> {
-        <EmbeddedDist as rust_embed::RustEmbed>::get(path).map(|f| f.data)
+        // The resources crate enables rust-embed's debug-embed feature workspace-wide.
+        // Keep web development disk-backed independently of that unified Cargo feature.
+        #[cfg(debug_assertions)]
+        {
+            std::fs::read(
+                std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/dist"))
+                    .join(path),
+            )
+            .ok()
+            .map(Cow::Owned)
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            <EmbeddedDist as rust_embed::RustEmbed>::get(path).map(|f| f.data)
+        }
     }
 }
 
@@ -68,7 +83,11 @@ pub async fn fallback(assets: Arc<dyn WebAssets>, req: Request) -> Response {
 
 fn file_response(path: &str, data: Cow<'static, [u8]>, cache: &'static str) -> Response {
     let mime = mime_guess::from_path(path).first_or_octet_stream();
-    let mut res = data.into_owned().into_response();
+    let bytes = match data {
+        Cow::Borrowed(bytes) => Bytes::from_static(bytes),
+        Cow::Owned(bytes) => Bytes::from(bytes),
+    };
+    let mut res = bytes.into_response();
     let headers = res.headers_mut();
     if let Ok(v) = HeaderValue::from_str(mime.as_ref()) {
         headers.insert(header::CONTENT_TYPE, v);

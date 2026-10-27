@@ -34,7 +34,7 @@ fn reopen_keeps_data() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("nekochat.db");
     let store = Store::open(&path).unwrap();
-    store.create_character("Neko", "You are a cat.").unwrap();
+    store.create_character(&serde_json::from_value(serde_json::json!({"name":"Neko","display_name":"Neko","system_prompt":"You are a cat."})).unwrap()).unwrap();
     drop(store);
     let store = Store::open(&path).unwrap();
     assert_eq!(store.list_characters().unwrap().len(), 1);
@@ -96,7 +96,13 @@ fn deleting_default_model_clears_setting() {
 fn update_missing_character_is_not_found() {
     let (_d, store) = fresh();
     assert!(matches!(
-        store.update_character("nope", "n", "p"),
+        store.update_character(
+            "nope",
+            &serde_json::from_value(
+                serde_json::json!({"name":"n","display_name":"n","system_prompt":"p"})
+            )
+            .unwrap()
+        ),
         Err(StoreError::NotFound)
     ));
 }

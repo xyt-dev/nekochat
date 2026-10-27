@@ -53,10 +53,10 @@ function fakeConversation(): { nodes: NodeView[]; leaf: string } {
       id,
       parent_id: parent,
       role: user ? "user" : "assistant",
-      content: user ? `第 ${i / 2 + 1} 个问题：求根公式怎么推？顺便给段代码。` : REPLY,
+      content: user ? `第 ${i / 2 + 1} 个问题：求根公式怎么推？顺便给段代码。` : REPLY + (i % 10 === 1 ? "\n![猫猫搓手](/api/resources/nekowhale/4a44767ab58b.gif)\n" : i % 10 === 3 ? "\n![喝药](/api/resources/nekowhale-gpt/222876e49285.gif)\n" : ""),
       reasoning: user ? null : "先配方，再讨论判别式。",
-      model_label: user ? null : "Bench · 本地",
-      effort: null,
+      character_id: user ? null : "bench-character",
+      character_name: user ? null : "本地角色",
       status: "complete",
       metrics: user
         ? null
@@ -135,7 +135,7 @@ function nextFrame(): Promise<number> {
 export async function runBench(): Promise<void> {
   const { nodes, leaf } = fakeConversation();
   const convId = "bench";
-  store.setConv({ id: convId, title: "压测：500 条消息", leaf_id: leaf, nodes });
+  store.setConv({ id: convId, title: "压测：500 条消息", character_id: "bench-character", leaf_id: leaf, nodes });
   report("预热中…");
   await sleep(2500);
 
@@ -157,9 +157,9 @@ export async function runBench(): Promise<void> {
   store.setLive((l) => ({ ...l, [convId]: turn }));
   store.handleTurnEvent(turn, {
     type: "start",
-    data: { user_node: userNode, assistant_node_id: "bench-live", model_label: "Bench · 本地" },
+    data: { user_node: userNode, assistant_node_id: "bench-live", character_id: "bench-character", character_name: "本地角色" },
   });
-  const source = REPLY.repeat(40);
+  const source = "![猫猫搓手](/api/resources/nekowhale/4a44767ab58b.gif)\n\n" + REPLY.repeat(40);
   let pos = 0;
   const streaming = (async () => {
     const end = performance.now() + STREAM_SECONDS * 1000;

@@ -2,6 +2,55 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Administrator-controlled, typed generation settings. Never a raw upstream-body override.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct GenerationParameters {
+    pub effort: Option<String>,
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    pub max_output_tokens: Option<u32>,
+    pub seed: Option<i64>,
+    pub frequency_penalty: Option<f64>,
+    pub presence_penalty: Option<f64>,
+    #[serde(default)]
+    pub stop: Vec<String>,
+}
+
+impl GenerationParameters {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        for (value, min, max) in [
+            (self.temperature, 0.0, 2.0),
+            (self.top_p, 0.0, 1.0),
+            (self.frequency_penalty, -2.0, 2.0),
+            (self.presence_penalty, -2.0, 2.0),
+        ] {
+            if value.is_some_and(|v| !v.is_finite() || v < min || v > max) {
+                return Err("生成参数超出有效范围");
+            }
+        }
+        if self.max_output_tokens == Some(0) {
+            return Err("最大输出 token 必须大于零");
+        }
+        if self.stop.len() > 4 || self.stop.iter().any(|s| s.is_empty()) {
+            return Err("停止序列必须为至多四个非空字符串");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Background {
+    pub url: String,
+    #[serde(default = "default_background_opacity")]
+    pub opacity: f64,
+}
+
+fn default_background_opacity() -> f64 {
+    0.15
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {

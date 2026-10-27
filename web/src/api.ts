@@ -25,8 +25,8 @@ export interface NodeView {
   role: Role;
   content: string;
   reasoning: string | null;
-  model_label: string | null;
-  effort: string | null;
+  character_id: string | null;
+  character_name: string | null;
   status: NodeStatus;
   metrics: Metrics | null;
   created_at: number;
@@ -35,28 +35,32 @@ export interface NodeView {
 export interface ConversationSummary {
   id: string;
   title: string;
+  character_id: string | null;
   updated_at: number;
 }
 
 export interface ConversationView {
   id: string;
   title: string;
+  character_id: string | null;
   leaf_id: string | null;
   nodes: NodeView[];
 }
 
-export interface PickerModel {
-  id: string;
-  display_name: string;
-  provider_label: string;
-  label: string;
-  reasoning: { levels: string[]; default: string | null };
-  vision: boolean;
+export interface CharacterBackground {
+  url: string;
+  opacity: number;
 }
 
-export interface ModelsView {
-  default_model_id: string | null;
-  models: PickerModel[];
+export interface PickerCharacter {
+  id: string;
+  display_name: string;
+  background: CharacterBackground | null;
+}
+
+export interface CharactersView {
+  default_character_id: string | null;
+  characters: PickerCharacter[];
 }
 
 export interface CustomTheme {
@@ -70,12 +74,13 @@ export type TurnAction =
   | { action: "edit"; node_id: string; content: string }
   | { action: "regenerate"; node_id: string };
 
-export type TurnRequest = TurnAction & { model_id: string; effort: string | null };
+export type TurnRequest = TurnAction & { character_id: string };
 
 export interface StartEvent {
   user_node: NodeView | null;
   assistant_node_id: string;
-  model_label: string;
+  character_id: string;
+  character_name: string;
 }
 
 export type TurnEvent =
@@ -166,9 +171,10 @@ async function json<T>(path: string, method = "GET", body?: unknown): Promise<T>
 const conv = (id: string) => `/api/conversations/${encodeURIComponent(id)}`;
 
 export const api = {
-  models: () => json<ModelsView>("/api/models"),
+  characters: () => json<CharactersView>("/api/characters"),
   conversations: () => json<ConversationSummary[]>("/api/conversations"),
-  createConversation: () => json<ConversationSummary>("/api/conversations", "POST"),
+  createConversation: (character_id?: string) =>
+    json<ConversationSummary>("/api/conversations", "POST", character_id ? { character_id } : {}),
   conversation: (id: string) => json<ConversationView>(conv(id)),
   deleteConversation: (id: string) => json<void>(conv(id), "DELETE"),
   clearConversation: (id: string) => json<void>(`${conv(id)}/clear`, "POST"),

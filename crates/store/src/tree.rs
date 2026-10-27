@@ -47,6 +47,8 @@ pub struct Node {
     pub model_id: Option<String>,
     pub model_label: Option<String>,
     pub effort: Option<String>,
+    pub character_id: Option<String>,
+    pub character_name: Option<String>,
     pub status: NodeStatus,
     pub metrics: Option<Metrics>,
     pub created_at: i64,
@@ -105,7 +107,7 @@ impl FromSql for NodeStatus {
 }
 
 const CONV_COLS: &str = "id, title, character_id, leaf_id, session_key, created_at, updated_at";
-const NODE_COLS: &str = "id, conversation_id, parent_id, role, content, reasoning, model_id, model_label, effort, status, metrics, created_at";
+const NODE_COLS: &str = "id, conversation_id, parent_id, role, content, reasoning, model_id, model_label, effort, status, metrics, created_at, character_id, character_name";
 
 fn conversation_from_row(r: &Row) -> rusqlite::Result<Conversation> {
     Ok(Conversation {
@@ -135,6 +137,8 @@ fn node_from_row(r: &Row) -> rusqlite::Result<(Node, Option<String>)> {
             status: r.get(9)?,
             metrics: None,
             created_at: r.get(11)?,
+            character_id: r.get(12)?,
+            character_name: r.get(13)?,
         },
         r.get(10)?,
     ))
@@ -224,6 +228,17 @@ impl Store {
         Ok(())
     }
 
+    pub fn set_character(&self, id: &str, character_id: &str) -> Result<()> {
+        if self.conn().execute(
+            "UPDATE conversations SET character_id=?2, updated_at=?3 WHERE id=?1",
+            params![id, character_id, now_ms()],
+        )? == 0
+        {
+            return Err(StoreError::NotFound);
+        }
+        Ok(())
+    }
+
     /// Inserts `node` and makes it the conversation's leaf, atomically.
     pub fn insert_node(&self, node: &Node) -> Result<()> {
         let metrics = node
@@ -253,7 +268,7 @@ impl Store {
         }
         tx.execute(
             &format!(
-                "INSERT INTO nodes ({NODE_COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
+                "INSERT INTO nodes ({NODE_COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"
             ),
             params![
                 node.id,
@@ -267,7 +282,9 @@ impl Store {
                 node.effort,
                 node.status,
                 metrics,
-                node.created_at
+                node.created_at,
+                node.character_id,
+                node.character_name
             ],
         )?;
         tx.execute(

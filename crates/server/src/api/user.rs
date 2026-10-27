@@ -3,7 +3,7 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use nekochat_core::{Metrics, ReasoningStyle};
+use nekochat_core::{Background, Metrics};
 use nekochat_store::{Conversation, Node, NodeRole, NodeStatus, SettingKey, StoreError};
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +15,7 @@ pub struct ConversationSummary {
     id: String,
     title: String,
     updated_at: i64,
+    character_id: Option<String>,
 }
 
 impl From<Conversation> for ConversationSummary {
@@ -23,78 +24,63 @@ impl From<Conversation> for ConversationSummary {
             id: c.id,
             title: c.title,
             updated_at: c.updated_at,
+            character_id: c.character_id,
         }
     }
 }
 
 #[derive(Serialize)]
-pub struct PickerReasoning {
-    levels: Vec<String>,
-    default: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct PickerModel {
+pub struct PickerCharacter {
     id: String,
     display_name: String,
-    provider_label: String,
-    label: String,
-    reasoning: PickerReasoning,
-    vision: bool,
+    background: Option<Background>,
 }
 
 #[derive(Serialize)]
-pub struct ModelsView {
-    default_model_id: Option<String>,
-    models: Vec<PickerModel>,
+pub struct CharactersView {
+    default_character_id: Option<String>,
+    characters: Vec<PickerCharacter>,
 }
 
-/// "显示名 · 提供商": how a listed model is named in the picker and above replies.
-pub fn model_label(display_name: &str, provider_label: &str) -> String {
-    format!("{display_name} · {provider_label}")
-}
-
-/// `GET /api/models`: listed models whose provider is configured; no prices or upstream ids.
-pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsView>, ApiError> {
+pub async fn available_characters(state: &AppState) -> Result<CharactersView, ApiError> {
     let store = state.store.clone();
-    let (default_model_id, listed) = blocking(move || {
+    let (default_id, listed, models) = blocking(move || {
         Ok((
-            store.get_setting(SettingKey::DefaultModel)?,
+            store.get_setting(SettingKey::DefaultCharacter)?,
+            store.list_characters()?,
             store.list_models()?,
         ))
     })
     .await?;
-    let models: Vec<PickerModel> = listed
+    let characters: Vec<_> = listed
         .into_iter()
-        .filter_map(|m| {
-            let provider_label = state.provider(&m.spec.provider)?.label.clone();
-            let spec = m.spec;
-            let reasoning = match spec.reasoning.style {
-                ReasoningStyle::None => PickerReasoning {
-                    levels: Vec::new(),
-                    default: None,
-                },
-                _ => PickerReasoning {
-                    levels: spec.reasoning.levels,
-                    default: spec.reasoning.default,
-                },
-            };
-            Some(PickerModel {
-                id: m.id,
-                label: model_label(&spec.display_name, &provider_label),
-                display_name: spec.display_name,
-                provider_label,
-                reasoning,
-                vision: spec.vision,
-            })
+        .filter(|c| {
+            c.spec.enabled
+                && c.spec.model_id.as_ref().is_some_and(|id| {
+                    models
+                        .iter()
+                        .any(|m| &m.id == id && state.provider(&m.spec.provider).is_some())
+                })
+        })
+        .map(|c| PickerCharacter {
+            id: c.id,
+            display_name: c.spec.display_name,
+            background: c.spec.background,
         })
         .collect();
-    // The default is only offered when the picker can show it.
-    let default_model_id = default_model_id.filter(|id| models.iter().any(|m| &m.id == id));
-    Ok(Json(ModelsView {
-        default_model_id,
-        models,
-    }))
+    let default_character_id = default_id
+        .filter(|id| characters.iter().any(|c| &c.id == id))
+        .or_else(|| characters.first().map(|c| c.id.clone()));
+    Ok(CharactersView {
+        default_character_id,
+        characters,
+    })
+}
+
+pub async fn list_characters(
+    State(state): State<AppState>,
+) -> Result<Json<CharactersView>, ApiError> {
+    Ok(Json(available_characters(&state).await?))
 }
 
 /// `GET /api/conversations`, newest first.
@@ -106,16 +92,24 @@ pub async fn list_conversations(
     Ok(Json(convs.into_iter().map(Into::into).collect()))
 }
 
-/// `POST /api/conversations` with the default character, if any.
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct CreateConversation {
+    character_id: Option<String>,
+}
+
 pub async fn create_conversation(
     State(state): State<AppState>,
+    JsonBody(body): JsonBody<CreateConversation>,
 ) -> Result<(StatusCode, Json<ConversationSummary>), ApiError> {
+    let available = available_characters(&state).await?;
+    let id = body
+        .character_id
+        .or(available.default_character_id)
+        .filter(|id| available.characters.iter().any(|c| &c.id == id))
+        .ok_or_else(|| ApiError::bad_request("没有可用角色，请管理员配置并绑定已上架模型"))?;
     let store = state.store.clone();
-    let conv = blocking(move || {
-        let character = store.get_setting(SettingKey::DefaultCharacter)?;
-        store.create_conversation(character.as_deref())
-    })
-    .await?;
+    let conv = blocking(move || store.create_conversation(Some(&id))).await?;
     Ok((StatusCode::CREATED, Json(conv.into())))
 }
 /// Token counts as the client sees them; cost fields stay admin-only.
@@ -154,7 +148,7 @@ impl From<Metrics> for MetricsView {
     }
 }
 
-/// A message node as the client sees it: no character data, no prices.
+/// A message node exposes only the public role snapshot and token/time metrics.
 #[derive(Serialize)]
 pub struct NodeView {
     id: String,
@@ -162,8 +156,8 @@ pub struct NodeView {
     role: NodeRole,
     content: String,
     reasoning: Option<String>,
-    model_label: Option<String>,
-    effort: Option<String>,
+    character_id: Option<String>,
+    character_name: Option<String>,
     status: NodeStatus,
     metrics: Option<MetricsView>,
     created_at: i64,
@@ -177,8 +171,8 @@ impl From<Node> for NodeView {
             role: n.role,
             content: n.content,
             reasoning: n.reasoning,
-            model_label: n.model_label,
-            effort: n.effort,
+            character_id: n.character_id,
+            character_name: n.character_name,
             status: n.status,
             metrics: n.metrics.map(Into::into),
             created_at: n.created_at,
@@ -190,6 +184,7 @@ impl From<Node> for NodeView {
 pub struct ConversationView {
     id: String,
     title: String,
+    character_id: Option<String>,
     leaf_id: Option<String>,
     nodes: Vec<NodeView>,
 }
@@ -209,6 +204,7 @@ pub async fn get_conversation(
     Ok(Json(ConversationView {
         id: conv.id,
         title: conv.title,
+        character_id: conv.character_id,
         leaf_id: conv.leaf_id,
         nodes: nodes.into_iter().map(Into::into).collect(),
     }))

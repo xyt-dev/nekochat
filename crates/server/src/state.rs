@@ -74,6 +74,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub sessions: Sessions,
     pub running: RunningTurns,
+    pub resources: Arc<nekochat_resources::ResourceCatalog>,
 }
 
 /// Upper bound for establishing an upstream connection.
@@ -99,6 +100,8 @@ impl AppState {
             .read_timeout(read)
             .build()
             .expect("HTTP client with timeouts only");
+        let resources = nekochat_resources::ResourceCatalog::load(&config.data_dir.join("skills"))
+            .expect("loading validated local resource packs");
         AppState {
             store: Arc::new(store),
             http,
@@ -106,6 +109,7 @@ impl AppState {
             config: Arc::new(config),
             sessions: Sessions::default(),
             running: RunningTurns::default(),
+            resources: Arc::new(resources),
         }
     }
 

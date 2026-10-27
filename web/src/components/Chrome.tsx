@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import { ApiError, login } from "../api";
 import { store } from "../store";
 import { allThemes, applyTheme, BUILTIN_THEMES, CUSTOM_GROUP, customThemes, type ThemeInfo, themeId } from "../themes";
@@ -8,13 +8,28 @@ import { createPopover } from "./Popover";
 const DELETE_WARNING = "聊天记录、上传的图片和文件会从服务器上一起删掉，无法恢复。";
 
 export function Sidebar() {
+  createEffect(() => {
+    if (store.sidebarOpen()) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("#conversation-sidebar button")?.focus());
+  });
   const remove = async (id: string, title: string) => {
     if (await confirmAction(`彻底删除「${title}」？`, DELETE_WARNING, "彻底删除")) {
       await store.deleteConversation(id);
     }
   };
   return (
-    <aside class="sidebar">
+    <aside id="conversation-sidebar" class="sidebar" aria-label="对话列表" onKeyDown={(event) => {
+      if (!store.sidebarOpen() || !matchMedia("(max-width: 760px)").matches) return;
+      if (event.key === "Escape") {
+        store.setSidebarOpen(false);
+        document.querySelector<HTMLButtonElement>(".menu-button")?.focus();
+      } else if (event.key === "Tab") {
+        const controls = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    }}>
+      <button type="button" class="sidebar-close" onClick={() => { store.setSidebarOpen(false); document.querySelector<HTMLButtonElement>(".menu-button")?.focus(); }}>关闭对话列表</button>
       <button type="button" class="new-chat" onClick={() => void store.newConversation()}>
         ＋ 新对话
       </button>
@@ -24,17 +39,14 @@ export function Sidebar() {
             <div
               class="conv-item"
               classList={{ active: store.conv()?.id === c.id, generating: !!store.live()[c.id] }}
-              onClick={() => void store.openConversation(c.id)}
             >
-              <span class="conv-title">{c.title}</span>
+              <button type="button" class="conv-title" aria-current={store.conv()?.id === c.id ? "page" : undefined} onClick={() => void store.openConversation(c.id)}>{c.title}</button>
               <button
                 type="button"
                 class="conv-delete"
                 title="彻底删除"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void remove(c.id, c.title);
-                }}
+                aria-label={`彻底删除 ${c.title}`}
+                onClick={() => void remove(c.id, c.title)}
               >
                 🗑
               </button>
@@ -103,7 +115,7 @@ function ThemePicker() {
 export function TopBar() {
   return (
     <header class="topbar">
-      <button type="button" class="menu-button" title="对话列表" onClick={() => store.setSidebarOpen((o) => !o)}>
+      <button type="button" class="menu-button" title="对话列表" aria-label="打开对话列表" aria-expanded={store.sidebarOpen()} aria-controls="conversation-sidebar" onClick={() => store.setSidebarOpen((o) => !o)}>
         ☰
       </button>
       <div class="topbar-title">{store.conv()?.title ?? "nekochat"}</div>

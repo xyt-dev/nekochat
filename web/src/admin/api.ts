@@ -1,5 +1,20 @@
 export interface Provider { key: string; label: string }
-export interface Character { id: string; name: string; system_prompt: string; created_at: number; updated_at: number }
+export interface CharacterParameters {
+  effort?: string | null; temperature?: number | null; top_p?: number | null;
+  max_output_tokens?: number | null; seed?: number | null;
+  frequency_penalty?: number | null; presence_penalty?: number | null; stop?: string[];
+}
+export interface CharacterRecipe {
+  name: string; display_name: string; system_prompt: string; model_id: string | null;
+  parameters: CharacterParameters; enabled: boolean; sort: number;
+  background: { url: string; opacity: number } | null; resource_packs: string[];
+  sticker_identity: "self" | "neutral"; sticker_frequency: "rare" | "normal" | "often";
+}
+export interface Character extends CharacterRecipe { id: string; created_at: number; updated_at: number }
+export interface ResourcePack {
+  id: string; name: string; description: string; sticker_count: number; skill: string;
+  attribution: string; assets: { id: string; name: string; url: string }[];
+}
 export interface Settings { default_model_id: string | null; default_character_id: string | null }
 export interface ModelDefaults {
   display_name: string;
@@ -46,8 +61,10 @@ export interface AdminApi {
   saveModel(modelId: string | null, spec: ModelSpec): Promise<ListedModel>;
   deleteModel(modelId: string): Promise<void>;
   characters(): Promise<Character[]>;
-  saveCharacter(characterId: string | null, body: { name: string; system_prompt: string }): Promise<Character>;
+  saveCharacter(characterId: string | null, body: CharacterRecipe): Promise<Character>;
   deleteCharacter(characterId: string): Promise<void>;
+  resourcePacks(): Promise<ResourcePack[]>;
+  uploadBackground(file: File): Promise<{ url: string }>;
   settings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<Settings>;
   stats(from: number, to: number, bucket: number): Promise<Stats>;
@@ -61,7 +78,9 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     try {
       response = await fetch(`/api/admin${path}`, {
         method, credentials: "same-origin", cache: "no-store",
-        ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+        ...(body === undefined ? {} : body instanceof Blob
+          ? { headers: { "content-type": body.type }, body }
+          : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
       });
     } catch { throw new AdminError(0, "网络连接失败，请检查连接后重试"); }
     if (!response.ok) {
@@ -82,8 +101,10 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     saveModel: (modelId: string | null, spec: ModelSpec) => request<ListedModel>(`/models${modelId ? `/${id(modelId)}` : ""}`, modelId ? "PUT" : "POST", spec),
     deleteModel: (modelId: string) => request<void>(`/models/${id(modelId)}`, "DELETE"),
     characters: () => request<Character[]>("/characters"),
-    saveCharacter: (characterId: string | null, body: { name: string; system_prompt: string }) => request<Character>(`/characters${characterId ? `/${id(characterId)}` : ""}`, characterId ? "PUT" : "POST", body),
+    saveCharacter: (characterId: string | null, body: CharacterRecipe) => request<Character>(`/characters${characterId ? `/${id(characterId)}` : ""}`, characterId ? "PUT" : "POST", body),
     deleteCharacter: (characterId: string) => request<void>(`/characters/${id(characterId)}`, "DELETE"),
+    resourcePacks: () => request<ResourcePack[]>("/resource-packs"),
+    uploadBackground: (file: File) => request<{ url: string }>("/backgrounds", "POST", file),
     settings: () => request<Settings>("/settings"),
     saveSettings: (settings: Settings) => request<Settings>("/settings", "PUT", settings),
     stats: (from: number, to: number, bucket: number) => request<Stats>(`/stats?${new URLSearchParams({ from_ms: String(from), to_ms: String(to), bucket_ms: String(bucket) })}`),

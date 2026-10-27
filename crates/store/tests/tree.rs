@@ -17,6 +17,8 @@ fn node(conv: &str, id: &str, parent: Option<&str>, role: NodeRole, at: i64) -> 
         model_id: None,
         model_label: None,
         effort: None,
+        character_id: None,
+        character_name: None,
         status: NodeStatus::Complete,
         metrics: None,
         created_at: at,
@@ -300,7 +302,7 @@ fn newer_schema_version_is_refused() {
         .unwrap();
     let err = Store::open(&path).err().expect("must refuse");
     let msg = err.to_string();
-    assert!(msg.contains("99") && msg.contains('1'), "{msg}");
+    assert!(msg.contains("99") && msg.contains('2'), "{msg}");
     let version: i64 = rusqlite::Connection::open(&path)
         .unwrap()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -316,13 +318,13 @@ fn fresh_database_gets_schema_version() {
         .unwrap()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
 }
 
 #[test]
 fn deleting_character_detaches_conversations() {
     let (_d, store) = fresh();
-    let ch = store.create_character("Neko", "You are a cat.").unwrap();
+    let ch = store.create_character(&serde_json::from_value(serde_json::json!({"name":"Neko","display_name":"Neko","system_prompt":"You are a cat."})).unwrap()).unwrap();
     let c = store.create_conversation(Some(&ch.id)).unwrap();
     assert_eq!(c.character_id.as_deref(), Some(ch.id.as_str()));
     store.delete_character(&ch.id).unwrap();

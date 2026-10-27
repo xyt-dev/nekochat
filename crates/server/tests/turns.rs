@@ -14,7 +14,7 @@ use futures_util::stream::BoxStream;
 use nekochat_core::{Price, Protocol, ReasoningSpec, ReasoningStyle, Usage};
 use nekochat_server::chat::cost_usd;
 use nekochat_store::{
-    DEFAULT_TITLE, ModelSpec, Node, NodeRole, NodeStatus, SettingKey, UsagePurpose, new_id, now_ms,
+    DEFAULT_TITLE, ModelSpec, Node, NodeRole, NodeStatus, UsagePurpose, new_id, now_ms,
 };
 use serde_json::{Value, json};
 
@@ -151,6 +151,7 @@ struct Fixture {
     app: TestApp,
     mock: MockUpstream,
     model_id: String,
+    character_id: String,
 }
 
 async fn fixture(script: MockScript) -> Fixture {
@@ -170,10 +171,21 @@ async fn fixture_with(script: MockScript, session_header: Option<&str>) -> Fixtu
         .insert_model(&spec("up-model", ReasoningStyle::DeepSeek))
         .unwrap()
         .id;
+    let character_id = app
+        .store
+        .create_character(
+            &serde_json::from_value(json!({
+                "name":"Test role", "display_name":"Test role", "model_id":model_id
+            }))
+            .unwrap(),
+        )
+        .unwrap()
+        .id;
     Fixture {
         app,
         mock,
         model_id,
+        character_id,
     }
 }
 
@@ -183,6 +195,7 @@ impl Fixture {
             .app
             .client
             .post(self.app.url("/api/conversations"))
+            .json(&json!({}))
             .send()
             .await
             .unwrap();
@@ -202,7 +215,7 @@ impl Fixture {
     }
 
     fn send_body(&self, content: &str) -> Value {
-        json!({"action": "send", "content": content, "model_id": self.model_id, "effort": null})
+        json!({"action": "send", "content": content, "character_id": self.character_id})
     }
 
     async fn turn(&self, conv: &str, body: Value) -> Vec<(String, Value)> {
@@ -247,7 +260,7 @@ async fn send_streams_and_persists() {
     assert_eq!(user["role"], "user");
     assert_eq!(user["content"], content.as_str());
     assert_eq!(user["parent_id"], Value::Null);
-    assert_eq!(start["model_label"], MODEL_LABEL);
+    assert_eq!(start["character_name"], "Test role");
     assert_eq!(events[1].1, json!({"t": "想"}));
     assert_eq!(events[2].1, json!({"t": "喵~"}));
 
@@ -258,8 +271,9 @@ async fn send_streams_and_persists() {
     assert_eq!(node["status"], "complete");
     assert_eq!(node["content"], "喵~");
     assert_eq!(node["reasoning"], "想");
-    assert_eq!(node["model_label"], MODEL_LABEL);
-    assert_eq!(node["effort"], "high");
+    assert_eq!(node["character_name"], "Test role");
+    assert!(node.get("effort").is_none());
+    assert!(node.get("model_label").is_none());
     let metrics = &node["metrics"];
     assert_eq!(
         metrics["usage"],
@@ -307,14 +321,17 @@ async fn upstream_request_carries_system_prompt_and_history_without_reasoning() 
         Some("x-session-affinity"),
     )
     .await;
-    let ch = f
+    let mut role = f
         .app
         .store
-        .create_character("Neko", "你是一只猫娘。")
-        .unwrap();
+        .get_character(&f.character_id)
+        .unwrap()
+        .unwrap()
+        .spec;
+    role.system_prompt = "你是一只猫娘。".into();
     f.app
         .store
-        .set_setting(SettingKey::DefaultCharacter, Some(&ch.id))
+        .update_character(&f.character_id, &role)
         .unwrap();
     let conv = f.create_conv().await;
     assert_eq!(names(&f.send(&conv, "第一句").await).last(), Some(&"done"));
@@ -360,7 +377,7 @@ async fn regenerate_adds_sibling_reply() {
     let events = f
         .turn(
             &conv,
-            json!({"action": "regenerate", "node_id": user_id, "model_id": f.model_id, "effort": null}),
+            json!({"action": "regenerate", "node_id": user_id, "character_id": f.character_id}),
         )
         .await;
     assert_eq!(names(&events), ["start", "reasoning", "text", "done"]);
@@ -399,7 +416,7 @@ async fn edit_adds_sibling_user_message() {
     let events = f
         .turn(
             &conv,
-            json!({"action": "edit", "node_id": original["id"], "content": "二改", "model_id": f.model_id, "effort": "high"}),
+            json!({"action": "edit", "node_id": original["id"], "content": "二改", "character_id": f.character_id}),
         )
         .await;
     assert_eq!(names(&events), ["start", "reasoning", "text", "done"]);
@@ -508,6 +525,8 @@ fn store_node(
         model_label: None,
         effort: None,
         status,
+        character_id: None,
+        character_name: None,
         metrics: None,
         created_at: now_ms(),
     };
@@ -774,8 +793,8 @@ async fn empty_input_is_400_and_no_upstream_call() {
     );
     for content in ["", " \n\t　"] {
         for body in [
-            json!({"action": "send", "content": content, "model_id": f.model_id, "effort": null}),
-            json!({"action": "edit", "node_id": user, "content": content, "model_id": f.model_id, "effort": null}),
+            json!({"action": "send", "content": content, "character_id": f.character_id}),
+            json!({"action": "edit", "node_id": user, "content": content, "character_id": f.character_id}),
         ] {
             let r = f.post(&conv, body.clone()).await;
             assert_eq!(r.status(), 400, "{body}");
@@ -790,7 +809,7 @@ async fn empty_input_is_400_and_no_upstream_call() {
 }
 
 #[tokio::test]
-async fn effort_outside_levels_is_400_and_no_upstream_call() {
+async fn client_model_and_effort_overrides_are_400_and_no_upstream_call() {
     let f = fixture(deepseek_reply("想", "喵~")).await;
     let plain = f
         .app
@@ -803,7 +822,7 @@ async fn effort_outside_levels_is_400_and_no_upstream_call() {
         let r = f
             .post(
                 &conv,
-                json!({"action": "send", "content": "hi", "model_id": model_id, "effort": effort}),
+                json!({"action": "send", "content": "hi", "character_id":f.character_id, "model_id": model_id, "effort": effort}),
             )
             .await;
         assert_eq!(r.status(), 400, "{model_id} {effort}");
@@ -816,13 +835,13 @@ async fn effort_outside_levels_is_400_and_no_upstream_call() {
 }
 
 #[tokio::test]
-async fn unlisted_model_is_400() {
+async fn unknown_role_is_400() {
     let f = fixture(deepseek_reply("想", "喵~")).await;
     let conv = f.create_conv().await;
     let r = f
         .post(
             &conv,
-            json!({"action": "send", "content": "hi", "model_id": "no-such-model", "effort": null}),
+            json!({"action": "send", "content": "hi", "character_id": "no-such-role"}),
         )
         .await;
     assert_eq!(r.status(), 400);
@@ -836,7 +855,7 @@ async fn unlisted_model_is_400() {
 async fn malformed_turn_bodies_are_400_json() {
     let f = fixture(deepseek_reply("想", "喵~")).await;
     let conv = f.create_conv().await;
-    let unknown_action = json!({"action": "dance", "model_id": f.model_id, "effort": null});
+    let unknown_action = json!({"action": "dance", "character_id": f.character_id});
     let r = f.post(&conv, unknown_action).await;
     assert_eq!(r.status(), 400);
     let v: Value = r.json().await.unwrap();
@@ -914,10 +933,21 @@ async fn stalled_upstream_times_out_with_error_event() {
         .insert_model(&spec("up-model", ReasoningStyle::DeepSeek))
         .unwrap()
         .id;
+    let character_id = app
+        .store
+        .create_character(
+            &serde_json::from_value(json!({
+                "name":"Test role", "display_name":"Test role", "model_id":model_id
+            }))
+            .unwrap(),
+        )
+        .unwrap()
+        .id;
     let f = Fixture {
         app,
         mock,
         model_id,
+        character_id,
     };
     let conv = f.create_conv().await;
     let events = tokio::time::timeout(Duration::from_secs(5), f.send(&conv, "在吗"))
@@ -935,8 +965,8 @@ async fn regenerate_and_edit_need_a_user_node() {
     let reply = events[3].1["node"]["id"].clone();
     for node_id in [reply, json!("no-such-node")] {
         for body in [
-            json!({"action": "regenerate", "node_id": node_id, "model_id": f.model_id, "effort": null}),
-            json!({"action": "edit", "node_id": node_id, "content": "改", "model_id": f.model_id, "effort": null}),
+            json!({"action": "regenerate", "node_id": node_id, "character_id": f.character_id}),
+            json!({"action": "edit", "node_id": node_id, "content": "改", "character_id": f.character_id}),
         ] {
             let r = f.post(&conv, body.clone()).await;
             assert_eq!(r.status(), 400, "{body}");

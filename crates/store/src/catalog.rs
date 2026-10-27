@@ -1,6 +1,6 @@
 //! Characters, settings and listed models.
 
-use nekochat_core::{Price, Protocol, ReasoningSpec};
+use nekochat_core::{Background, GenerationParameters, Price, Protocol, ReasoningSpec};
 use rusqlite::{ErrorCode, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 
@@ -9,10 +9,45 @@ use crate::{Result, Store, StoreError, new_id, now_ms};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Character {
     pub id: String,
-    pub name: String,
-    pub system_prompt: String,
+    #[serde(flatten)]
+    pub spec: CharacterSpec,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CharacterSpec {
+    pub name: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub system_prompt: String,
+    #[serde(default)]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub parameters: GenerationParameters,
+    #[serde(default = "enabled_default")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub sort: i64,
+    #[serde(default)]
+    pub background: Option<Background>,
+    #[serde(default)]
+    pub resource_packs: Vec<String>,
+    #[serde(default = "identity_default")]
+    pub sticker_identity: String,
+    #[serde(default = "frequency_default")]
+    pub sticker_frequency: String,
+}
+
+fn enabled_default() -> bool {
+    true
+}
+fn identity_default() -> String {
+    "neutral".into()
+}
+fn frequency_default() -> String {
+    "often".into()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,14 +85,41 @@ pub struct ListedModel {
     pub spec: ModelSpec,
 }
 
-const CHARACTER_COLS: &str = "id, name, system_prompt, created_at, updated_at";
+const CHARACTER_COLS: &str = "id, name, system_prompt, created_at, updated_at, display_name, model_id, parameters, enabled, sort, background, resource_packs, sticker_identity, sticker_frequency";
 const MODEL_COLS: &str = "id, provider, upstream_id, display_name, sort, protocol, reasoning, vision, context_window, price";
 
 fn character_from_row(r: &Row) -> rusqlite::Result<Character> {
+    fn json<T: serde::de::DeserializeOwned>(r: &Row, i: usize) -> rusqlite::Result<T> {
+        let value: String = r.get(i)?;
+        serde_json::from_str(&value).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(i, rusqlite::types::Type::Text, Box::new(e))
+        })
+    }
     Ok(Character {
         id: r.get(0)?,
-        name: r.get(1)?,
-        system_prompt: r.get(2)?,
+        spec: CharacterSpec {
+            name: r.get(1)?,
+            system_prompt: r.get(2)?,
+            display_name: r.get(5)?,
+            model_id: r.get(6)?,
+            parameters: json(r, 7)?,
+            enabled: r.get(8)?,
+            sort: r.get(9)?,
+            background: r
+                .get::<_, Option<String>>(10)?
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        10,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
+            resource_packs: json(r, 11)?,
+            sticker_identity: r.get(12)?,
+            sticker_frequency: r.get(13)?,
+        },
         created_at: r.get(3)?,
         updated_at: r.get(4)?,
     })
@@ -137,33 +199,34 @@ fn map_unique(e: rusqlite::Error, spec: &ModelSpec) -> StoreError {
 }
 
 impl Store {
-    pub fn create_character(&self, name: &str, system_prompt: &str) -> Result<Character> {
+    pub fn create_character(&self, spec: &CharacterSpec) -> Result<Character> {
         let now = now_ms();
         let c = Character {
             id: new_id(),
-            name: name.to_owned(),
-            system_prompt: system_prompt.to_owned(),
+            spec: spec.clone(),
             created_at: now,
             updated_at: now,
         };
         self.conn().execute(
-            "INSERT INTO characters (id, name, system_prompt, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![c.id, c.name, c.system_prompt, c.created_at, c.updated_at],
+            &format!("INSERT INTO characters ({CHARACTER_COLS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)"),
+            params![c.id, spec.name, spec.system_prompt, now, now, spec.display_name, spec.model_id,
+                serde_json::to_string(&spec.parameters)?, spec.enabled, spec.sort,
+                spec.background.as_ref().map(serde_json::to_string).transpose()?,
+                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency],
         )?;
         Ok(c)
     }
 
-    pub fn update_character(&self, id: &str, name: &str, system_prompt: &str) -> Result<Character> {
+    pub fn update_character(&self, id: &str, spec: &CharacterSpec) -> Result<Character> {
         let conn = self.conn();
         conn.query_row(
-            &format!(
-                "UPDATE characters SET name = ?2, system_prompt = ?3, updated_at = ?4 WHERE id = ?1 RETURNING {CHARACTER_COLS}"
-            ),
-            params![id, name, system_prompt, now_ms()],
+            &format!("UPDATE characters SET name=?2, system_prompt=?3, display_name=?4, model_id=?5, parameters=?6, enabled=?7, sort=?8, background=?9, resource_packs=?10, sticker_identity=?11, sticker_frequency=?12, updated_at=?13 WHERE id=?1 RETURNING {CHARACTER_COLS}"),
+            params![id, spec.name, spec.system_prompt, spec.display_name, spec.model_id,
+                serde_json::to_string(&spec.parameters)?, spec.enabled, spec.sort,
+                spec.background.as_ref().map(serde_json::to_string).transpose()?,
+                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, now_ms()],
             character_from_row,
-        )
-        .optional()?
-        .ok_or(StoreError::NotFound)
+        ).optional()?.ok_or(StoreError::NotFound)
     }
 
     pub fn delete_character(&self, id: &str) -> Result<()> {
@@ -183,7 +246,7 @@ impl Store {
     pub fn list_characters(&self) -> Result<Vec<Character>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(&format!(
-            "SELECT {CHARACTER_COLS} FROM characters ORDER BY created_at, id"
+            "SELECT {CHARACTER_COLS} FROM characters ORDER BY sort, created_at, id"
         ))?;
         let rows = stmt.query_map([], character_from_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)

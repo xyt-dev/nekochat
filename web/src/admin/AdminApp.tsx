@@ -1,9 +1,10 @@
 import { createSignal, For, Match, onMount, Show, Switch } from "solid-js";
 import { render } from "solid-js/web";
 import { allThemes, applyTheme, loadCustomThemes, themeId } from "../themes";
-import { createAdminApi, errorMessage, type AdminApi, type Character, type ListedModel, type Provider, type Settings } from "./api";
+import { createAdminApi, errorMessage, type AdminApi, type Character, type ListedModel, type Provider, type ResourcePack, type Settings } from "./api";
 import { Models, Roles } from "./Management";
 import { Monitor } from "./Monitor";
+import { ResourcePacks } from "./ResourcePacks";
 import "./admin.css";
 
 function ThemeSelect() {
@@ -14,13 +15,14 @@ function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
   const [tab, setTab] = createSignal("monitor");
   const [characters, setCharacters] = createSignal<Character[]>([]);
   const [models, setModels] = createSignal<ListedModel[]>([]);
+  const [packs, setPacks] = createSignal<ResourcePack[]>([]);
   const [settings, setSettings] = createSignal<Settings>({ default_model_id: null, default_character_id: null });
   const [ready, setReady] = createSignal(false);
   const [error, setError] = createSignal("");
   const [loading, setLoading] = createSignal(false);
   async function reload() {
-    const [nextCharacters, nextModels, nextSettings] = await Promise.all([props.api.characters(), props.api.models(), props.api.settings()]);
-    setCharacters(nextCharacters); setModels(nextModels); setSettings(nextSettings); setReady(true);
+    const [nextCharacters, nextModels, nextSettings, nextPacks] = await Promise.all([props.api.characters(), props.api.models(), props.api.settings(), props.api.resourcePacks()]);
+    setCharacters(nextCharacters); setModels(nextModels); setSettings(nextSettings); setPacks(nextPacks); setReady(true);
   }
   async function initialize() {
     setError(""); setLoading(true);
@@ -28,9 +30,20 @@ function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
   }
   onMount(() => void initialize());
   return <>
-    <nav class="admin-nav" aria-label="管理功能"><For each={[["monitor", "用量监控"], ["models", "模型管理"], ["roles", "角色管理"]]}>{([key, label]) => <button type="button" aria-current={tab() === key ? "page" : undefined} classList={{ active: tab() === key }} onClick={() => setTab(key)}>{label}</button>}</For></nav>
+    <nav class="admin-nav" aria-label="管理功能"><For each={[["monitor", "用量监控"], ["models", "模型管理"], ["roles", "角色管理"], ["resources", "资源包"]]}>{([key, label]) => <button type="button" aria-current={tab() === key ? "page" : undefined} classList={{ active: tab() === key }} onClick={() => setTab(key)}>{label}</button>}</For></nav>
     <main class="admin-main"><Show when={error()}><div class="admin-error" role="alert">{error()} <button type="button" disabled={loading()} onClick={() => void initialize()}>重试加载配置</button></div></Show>
-      <Switch><Match when={tab() === "monitor"}><Monitor api={props.api} /></Match><Match when={tab() === "models" || tab() === "roles"}><Show when={ready()} fallback={<p role="status">{loading() ? "正在加载管理配置…" : "配置加载失败，请重试。"}</p>}><Show when={tab() === "models"} fallback={<Roles api={props.api} providers={props.providers} models={models()} characters={characters()} settings={settings()} reload={reload} />}><Models api={props.api} providers={props.providers} models={models()} characters={characters()} settings={settings()} reload={reload} /></Show></Show></Match></Switch>
+      <Switch>
+        <Match when={tab() === "monitor"}><Monitor api={props.api} /></Match>
+        <Match when={tab() !== "monitor"}>
+          <Show when={ready()} fallback={<p role="status">{loading() ? "正在加载管理配置…" : "配置加载失败，请重试。"}</p>}>
+            <Switch>
+              <Match when={tab() === "models"}><Models api={props.api} providers={props.providers} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
+              <Match when={tab() === "roles"}><Roles api={props.api} providers={props.providers} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
+              <Match when={tab() === "resources"}><ResourcePacks packs={packs()} /></Match>
+            </Switch>
+          </Show>
+        </Match>
+      </Switch>
     </main>
   </>;
 }

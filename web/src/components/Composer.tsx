@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
 import { store } from "../store";
 import { confirmAction, toast } from "../ui";
-import { EffortPicker, ModelPicker } from "./Pickers";
+import { CharacterPicker } from "./Pickers";
 
 interface Command {
   name: string;
@@ -96,6 +96,7 @@ export function Composer() {
       }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
+        e.stopPropagation();
         runCommand(list[selected()]);
         return;
       }
@@ -158,8 +159,7 @@ export function Composer() {
           onKeyDown={onKeyDown}
         />
         <div class="composer-tools">
-          <ModelPicker />
-          <EffortPicker />
+          <CharacterPicker />
           <Show
             when={generating()}
             fallback={

@@ -4,7 +4,7 @@ mod chat_completions;
 
 pub use chat_completions::{build_body, list_models, parse_usage, stream_chat};
 
-use nekochat_core::{ReasoningStyle, Usage};
+use nekochat_core::{GenerationParameters, ReasoningStyle, Usage};
 
 pub const USER_AGENT: &str = concat!("nekochat/", env!("CARGO_PKG_VERSION"));
 
@@ -38,6 +38,7 @@ pub struct ChatRequest<'a> {
     pub reasoning: ReasoningStyle,
     pub effort: Option<&'a str>,
     pub session_id: &'a str,
+    pub parameters: &'a GenerationParameters,
 }
 
 #[derive(Clone, Debug, PartialEq)]

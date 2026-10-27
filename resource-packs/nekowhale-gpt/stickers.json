@@ -1,0 +1,2170 @@
+[
+  {
+    "id": "222876e49285.gif",
+    "name": "喝药",
+    "file": "assets/222876e49285.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT01_喝药",
+      "2TT01_喝药",
+      "喝药"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "该吃药了",
+      "催吃药",
+      "照顾",
+      "调侃",
+      "生病",
+      "大郎该吃药了",
+      "下毒"
+    ],
+    "use": "用大肥鱼给GPT娘喂药的画面催人吃药时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT01_喝药",
+      "hash": "222876e49285",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "该吃药了",
+        "催吃药",
+        "照顾",
+        "调侃",
+        "生病",
+        "大郎该吃药了",
+        "下毒"
+      ],
+      "use": "用大肥鱼给GPT娘喂药的画面催人吃药时",
+      "desc": "大肥鱼在左侧笑着托起浅绿色药碗，将碗沿送到右侧GPT娘嘴边。GPT娘脸颊泛红，眼睛呈空白状，嘴被碗挡住；两人和药碗轻轻晃动，维持喂药姿势。",
+      "meme": "《水浒传》潘金莲给武大郎喂药（“大郎，该吃药了”）：表面端药伺候、暗里下毒，常用来调侃“该吃药了”或不怀好意的关心；本表情大肥鱼端药碗喂 GPT娘，大肥鱼演潘金莲、GPT娘演武大郎。",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek feeds GPT a bowl of medicine"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT01_喝药",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT01_喝药",
+      "code": "2TT01",
+      "group": "2TT",
+      "num": 1,
+      "name": "喝药",
+      "variant": "",
+      "file": "2TT01_喝药.gif",
+      "hash": "222876e49285",
+      "bytes": 2589932,
+      "w": 300,
+      "h": 300,
+      "frames": 60,
+      "seconds": 3,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT01_喝药.222876e49285.png",
+      "drag_url": "/media/drag/gif/b94112e170d14ed6866b7b7de07399aea30234199ab343d085f1df55b39f6847.gif",
+      "drag_thumb": "/media/drag/thumb/b94112e170d14ed6866b7b7de07399aea30234199ab343d085f1df55b39f6847.png",
+      "ts": 1792449968
+    }
+  },
+  {
+    "id": "e59859dcf055.gif",
+    "name": "情侣杯",
+    "file": "assets/e59859dcf055.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT02_情侣杯",
+      "2TT02_情侣杯",
+      "情侣杯"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "情侣",
+      "秀恩爱",
+      "一起喝",
+      "甜蜜",
+      "约会"
+    ],
+    "use": "用大肥鱼与GPT娘共饮表达甜蜜陪伴时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT02_情侣杯",
+      "hash": "e59859dcf055",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "情侣",
+        "秀恩爱",
+        "一起喝",
+        "甜蜜",
+        "约会"
+      ],
+      "use": "用大肥鱼与GPT娘共饮表达甜蜜陪伴时",
+      "desc": "大肥鱼在左、GPT娘在右，肩并肩靠在一起，用两根粉色爱心吸管喝同一杯饮料。两人闭眼微笑，脸颊泛红，随着喝饮料的动作轻轻晃动，气氛亲密甜蜜。",
+      "meme": "",
+      "dir": "互相",
+      "en": "DeepSeek and GPT share a romantic drink"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT02_情侣杯",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT02_情侣杯",
+      "code": "2TT02",
+      "group": "2TT",
+      "num": 2,
+      "name": "情侣杯",
+      "variant": "",
+      "file": "2TT02_情侣杯.gif",
+      "hash": "e59859dcf055",
+      "bytes": 1379053,
+      "w": 300,
+      "h": 300,
+      "frames": 30,
+      "seconds": 1.5,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT02_情侣杯.e59859dcf055.png",
+      "drag_url": "/media/drag/gif/209a5cf3f5ce3765d50deb0165bfd83d44f7d8ed64abea0502ce9adfd9b976ab.gif",
+      "drag_thumb": "/media/drag/thumb/209a5cf3f5ce3765d50deb0165bfd83d44f7d8ed64abea0502ce9adfd9b976ab.png",
+      "ts": 1792449967
+    }
+  },
+  {
+    "id": "83f9f6179294.gif",
+    "name": "宠溺",
+    "file": "assets/83f9f6179294.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT03_宠溺",
+      "2TT03_宠溺",
+      "宠溺"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "投喂",
+      "宠溺",
+      "陪玩",
+      "照顾",
+      "甜蜜"
+    ],
+    "use": "用大肥鱼喂GPT娘零食表达宠爱时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT03_宠溺",
+      "hash": "83f9f6179294",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "投喂",
+        "宠溺",
+        "陪玩",
+        "照顾",
+        "甜蜜"
+      ],
+      "use": "用大肥鱼喂GPT娘零食表达宠爱时",
+      "desc": "大肥鱼坐在左边抱着零食袋，GPT娘在右边双手拿着游戏机。大肥鱼取出一片零食递到GPT娘嘴边，GPT娘闭眼笑着吃下，随后大肥鱼收回手，两人继续靠坐在一起。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek feeds snacks to gaming GPT"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT03_宠溺",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT03_宠溺",
+      "code": "2TT03",
+      "group": "2TT",
+      "num": 3,
+      "name": "宠溺",
+      "variant": "",
+      "file": "2TT03_宠溺.gif",
+      "hash": "83f9f6179294",
+      "bytes": 2690346,
+      "w": 300,
+      "h": 300,
+      "frames": 60,
+      "seconds": 3,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT03_宠溺.83f9f6179294.png",
+      "drag_url": "/media/drag/gif/b53eb9148be12d63c947dee636d266f3415a270dda47acc9e224a1ba59773b60.gif",
+      "drag_thumb": "/media/drag/thumb/b53eb9148be12d63c947dee636d266f3415a270dda47acc9e224a1ba59773b60.png",
+      "ts": 1792449966
+    }
+  },
+  {
+    "id": "e691a619b63f.gif",
+    "name": "灵魂吸取",
+    "file": "assets/e691a619b63f.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT04_灵魂吸取",
+      "2TT04_灵魂吸取",
+      "灵魂吸取"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "头部按摩",
+      "舒服到失神",
+      "宠爱",
+      "放松",
+      "解压"
+    ],
+    "use": "用大肥鱼给GPT娘按摩表示舒服到失神时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT04_灵魂吸取",
+      "hash": "e691a619b63f",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "头部按摩",
+        "舒服到失神",
+        "宠爱",
+        "放松",
+        "解压"
+      ],
+      "use": "用大肥鱼给GPT娘按摩表示舒服到失神时",
+      "desc": "大肥鱼站在GPT娘身后笑着操作金属爪状按摩器，将它套在GPT娘头顶反复上下移动。GPT娘脸颊发红、嘴巴微张，双眼逐渐失神，身体随着按摩微微下沉。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek massages GPT into blissful daziness"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT04_灵魂吸取",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT04_灵魂吸取",
+      "code": "2TT04",
+      "group": "2TT",
+      "num": 4,
+      "name": "灵魂吸取",
+      "variant": "",
+      "file": "2TT04_灵魂吸取.gif",
+      "hash": "e691a619b63f",
+      "bytes": 1707930,
+      "w": 300,
+      "h": 300,
+      "frames": 40,
+      "seconds": 2,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT04_灵魂吸取.e691a619b63f.png",
+      "drag_url": "/media/drag/gif/05f0a2202e81c8f10f89a5965c88dacd1f6bb2f4dfa42c0863592a2640eeeb4f.gif",
+      "drag_thumb": "/media/drag/thumb/05f0a2202e81c8f10f89a5965c88dacd1f6bb2f4dfa42c0863592a2640eeeb4f.png",
+      "ts": 1792449965
+    }
+  },
+  {
+    "id": "5d60031667e6.gif",
+    "name": "发布会",
+    "file": "assets/5d60031667e6.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT05_发布会",
+      "2TT05_发布会",
+      "发布会"
+    ],
+    "emotion": "开心",
+    "tags": [
+      "官宣",
+      "发布会",
+      "重大消息",
+      "接受采访",
+      "一起亮相"
+    ],
+    "use": "用大肥鱼与GPT娘共同亮相宣布消息时",
+    "dir": "无",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT05_发布会",
+      "hash": "5d60031667e6",
+      "text": "CNN",
+      "emotion": "开心",
+      "tags": [
+        "官宣",
+        "发布会",
+        "重大消息",
+        "接受采访",
+        "一起亮相"
+      ],
+      "use": "用大肥鱼与GPT娘共同亮相宣布消息时",
+      "desc": "大肥鱼与GPT娘并肩站在一排采访话筒后，大肥鱼张嘴微笑并抬起手，GPT娘安静陪在旁边。画面多次被相机闪光照成白色，随后恢复，两人始终面对前方。",
+      "meme": "",
+      "dir": "无",
+      "en": "DeepSeek and GPT face the press"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT05_发布会",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT05_发布会",
+      "code": "2TT05",
+      "group": "2TT",
+      "num": 5,
+      "name": "发布会",
+      "variant": "",
+      "file": "2TT05_发布会.gif",
+      "hash": "5d60031667e6",
+      "bytes": 1242552,
+      "w": 300,
+      "h": 300,
+      "frames": 30,
+      "seconds": 1.5,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT05_发布会.5d60031667e6.png",
+      "drag_url": "/media/drag/gif/fd11d23ca42b23b1bb2b8a357b1095ed953c5fffa4740097781a4c0bd9bea7d4.gif",
+      "drag_thumb": "/media/drag/thumb/fd11d23ca42b23b1bb2b8a357b1095ed953c5fffa4740097781a4c0bd9bea7d4.png",
+      "ts": 1792449964
+    }
+  },
+  {
+    "id": "a73c60a71dd6.gif",
+    "name": "合影",
+    "file": "assets/a73c60a71dd6.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT06_合影",
+      "2TT06_合影",
+      "合影"
+    ],
+    "emotion": "开心",
+    "tags": [
+      "合影",
+      "自拍",
+      "留念",
+      "好朋友",
+      "秀恩爱"
+    ],
+    "use": "用大肥鱼与GPT娘自拍表达一起留念时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT06_合影",
+      "hash": "a73c60a71dd6",
+      "text": "",
+      "emotion": "开心",
+      "tags": [
+        "合影",
+        "自拍",
+        "留念",
+        "好朋友",
+        "秀恩爱"
+      ],
+      "use": "用大肥鱼与GPT娘自拍表达一起留念时",
+      "desc": "大肥鱼在左侧举着黄色手机，与右侧GPT娘把脑袋贴近，面对手机摆出拍照姿势。大肥鱼俏皮眨起一只眼睛，GPT娘闭眼微笑，两人在胸前比手势并轻轻晃动。",
+      "meme": "",
+      "dir": "互相",
+      "en": "DeepSeek and GPT pose for a selfie"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT06_合影",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT06_合影",
+      "code": "2TT06",
+      "group": "2TT",
+      "num": 6,
+      "name": "合影",
+      "variant": "",
+      "file": "2TT06_合影.gif",
+      "hash": "a73c60a71dd6",
+      "bytes": 1204471,
+      "w": 300,
+      "h": 300,
+      "frames": 30,
+      "seconds": 1.5,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT06_合影.a73c60a71dd6.png",
+      "drag_url": "/media/drag/gif/8ce039d6e19fe581e3e43bfe29638f5ac8530aba6db085832dff0594adba169c.gif",
+      "drag_thumb": "/media/drag/thumb/8ce039d6e19fe581e3e43bfe29638f5ac8530aba6db085832dff0594adba169c.png",
+      "ts": 1792449963
+    }
+  },
+  {
+    "id": "6ce8a58b6dde.gif",
+    "name": "蛐蛐",
+    "file": "assets/6ce8a58b6dde.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT07_蛐蛐",
+      "2TT07_蛐蛐",
+      "蛐蛐"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "悄悄话",
+      "八卦",
+      "蛐蛐",
+      "私下吐槽",
+      "耳语"
+    ],
+    "use": "用大肥鱼向GPT娘耳语表示私下吐槽时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT07_蛐蛐",
+      "hash": "6ce8a58b6dde",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "悄悄话",
+        "八卦",
+        "蛐蛐",
+        "私下吐槽",
+        "耳语"
+      ],
+      "use": "用大肥鱼向GPT娘耳语表示私下吐槽时",
+      "desc": "大肥鱼靠近右侧GPT娘，抬起一只手挡在嘴边，凑到GPT娘耳旁小声说话。GPT娘侧眼看向大肥鱼，表情逐渐带上微笑，两人轻轻晃动，像在交流秘密。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek whispers gossip into GPT's ear"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT07_蛐蛐",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT07_蛐蛐",
+      "code": "2TT07",
+      "group": "2TT",
+      "num": 7,
+      "name": "蛐蛐",
+      "variant": "",
+      "file": "2TT07_蛐蛐.gif",
+      "hash": "6ce8a58b6dde",
+      "bytes": 2698905,
+      "w": 300,
+      "h": 300,
+      "frames": 60,
+      "seconds": 3,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT07_蛐蛐.6ce8a58b6dde.png",
+      "drag_url": "/media/drag/gif/e35711be77565206551b5b5fb34c179f7c2297c52d2c88ccba7c1290e064a87c.gif",
+      "drag_thumb": "/media/drag/thumb/e35711be77565206551b5b5fb34c179f7c2297c52d2c88ccba7c1290e064a87c.png",
+      "ts": 1792449962
+    }
+  },
+  {
+    "id": "bfeedc83641d.gif",
+    "name": "午休",
+    "file": "assets/bfeedc83641d.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT08_午休",
+      "2TT08_午休",
+      "午休"
+    ],
+    "emotion": "疲惫",
+    "tags": [
+      "午休",
+      "一起睡",
+      "休息",
+      "陪伴",
+      "困了"
+    ],
+    "use": "用大肥鱼与GPT娘相依午睡表示休息时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT08_午休",
+      "hash": "bfeedc83641d",
+      "text": "",
+      "emotion": "疲惫",
+      "tags": [
+        "午休",
+        "一起睡",
+        "休息",
+        "陪伴",
+        "困了"
+      ],
+      "use": "用大肥鱼与GPT娘相依午睡表示休息时",
+      "desc": "大肥鱼坐在前侧，GPT娘贴在她身后，两人的脑袋靠在一起，闭着眼睛安静午睡。她们脸颊微红、嘴角带笑，身体随着呼吸缓缓起伏，始终保持亲密依靠的姿势。",
+      "meme": "",
+      "dir": "互相",
+      "en": "DeepSeek and GPT nap together"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT08_午休",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT08_午休",
+      "code": "2TT08",
+      "group": "2TT",
+      "num": 8,
+      "name": "午休",
+      "variant": "",
+      "file": "2TT08_午休.gif",
+      "hash": "bfeedc83641d",
+      "bytes": 1758517,
+      "w": 300,
+      "h": 300,
+      "frames": 40,
+      "seconds": 2,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT08_午休.bfeedc83641d.png",
+      "drag_url": "/media/drag/gif/f2c1923747743d1f9b404c6fa1b1de4ac934814ff6e7e173741e337b56263b62.gif",
+      "drag_thumb": "/media/drag/thumb/f2c1923747743d1f9b404c6fa1b1de4ac934814ff6e7e173741e337b56263b62.png",
+      "ts": 1792449961
+    }
+  },
+  {
+    "id": "db403c92a1c1.gif",
+    "name": "看好书",
+    "file": "assets/db403c92a1c1.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT09_看好书",
+      "2TT09_看好书",
+      "看好书"
+    ],
+    "emotion": "开心",
+    "tags": [
+      "一起看书",
+      "分享好书",
+      "学习",
+      "围观",
+      "推荐"
+    ],
+    "use": "用大肥鱼给GPT娘指书页表示分享好书时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT09_看好书",
+      "hash": "db403c92a1c1",
+      "text": "",
+      "emotion": "开心",
+      "tags": [
+        "一起看书",
+        "分享好书",
+        "学习",
+        "围观",
+        "推荐"
+      ],
+      "use": "用大肥鱼给GPT娘指书页表示分享好书时",
+      "desc": "大肥鱼和GPT娘并肩捧着一本打开的蓝色书，大肥鱼笑着伸手指向书页，像在介绍有趣内容。GPT娘低头看书，脸颊逐渐泛红并半垂双眼，两人随着阅读轻轻晃动。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek shows GPT something in a book"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT09_看好书",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT09_看好书",
+      "code": "2TT09",
+      "group": "2TT",
+      "num": 9,
+      "name": "看好书",
+      "variant": "",
+      "file": "2TT09_看好书.gif",
+      "hash": "db403c92a1c1",
+      "bytes": 1316777,
+      "w": 300,
+      "h": 300,
+      "frames": 30,
+      "seconds": 1.5,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT09_看好书.db403c92a1c1.png",
+      "drag_url": "/media/drag/gif/b654e4e127734c2e388545bc95ab35d03cfe7d023fb87bf63cd3cca65ad7ea1b.gif",
+      "drag_thumb": "/media/drag/thumb/b654e4e127734c2e388545bc95ab35d03cfe7d023fb87bf63cd3cca65ad7ea1b.png",
+      "ts": 1792449960
+    }
+  },
+  {
+    "id": "4fc1f497543e.gif",
+    "name": "替身使者",
+    "file": "assets/4fc1f497543e.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT10_替身使者",
+      "2TT10_替身使者",
+      "替身使者"
+    ],
+    "emotion": "得意",
+    "tags": [
+      "召唤替身",
+      "有人撑腰",
+      "出战",
+      "中二",
+      "搭档"
+    ],
+    "use": "用大肥鱼召出GPT娘表示有人撑腰时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT10_替身使者",
+      "hash": "4fc1f497543e",
+      "text": "",
+      "emotion": "得意",
+      "tags": [
+        "召唤替身",
+        "有人撑腰",
+        "出战",
+        "中二",
+        "搭档"
+      ],
+      "use": "用大肥鱼召出GPT娘表示有人撑腰时",
+      "desc": "大肥鱼从画面边缘进入，先闭眼摆姿势，随后睁眼向前伸手指人。镜头拉远，巨大的半透明GPT娘在大肥鱼身后逐渐浮现，像被召出的替身一样陪她面对前方。",
+      "meme": "《JOJO的奇妙冒险》“替身使者”：角色身后浮现替身一同战斗；本表情大肥鱼摆 JOJO 立，身后浮现巨大的 GPT娘当她的替身。",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek summons GPT as her Stand"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT10_替身使者",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT10_替身使者",
+      "code": "2TT10",
+      "group": "2TT",
+      "num": 10,
+      "name": "替身使者",
+      "variant": "",
+      "file": "2TT10_替身使者.gif",
+      "hash": "4fc1f497543e",
+      "bytes": 1287295,
+      "w": 300,
+      "h": 300,
+      "frames": 40,
+      "seconds": 2,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT10_替身使者.4fc1f497543e.png",
+      "drag_url": "/media/drag/gif/af07a5b34bf077061f8ea5932a4b92b654235001eefedafd9ed4d51f86c79c67.gif",
+      "drag_thumb": "/media/drag/thumb/af07a5b34bf077061f8ea5932a4b92b654235001eefedafd9ed4d51f86c79c67.png",
+      "ts": 1792449959
+    }
+  },
+  {
+    "id": "a9bf310e1167.gif",
+    "name": "压力",
+    "file": "assets/a9bf310e1167.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT11_压力",
+      "2TT11_压力",
+      "压力"
+    ],
+    "emotion": "害怕",
+    "tags": [
+      "压力山大",
+      "被盯着",
+      "心虚",
+      "压迫感",
+      "催促"
+    ],
+    "use": "用GPT娘逼近大肥鱼表达被施压的心情时",
+    "dir": "GPT娘→大肥鱼",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT11_压力",
+      "hash": "a9bf310e1167",
+      "text": "",
+      "emotion": "害怕",
+      "tags": [
+        "压力山大",
+        "被盯着",
+        "心虚",
+        "压迫感",
+        "催促"
+      ],
+      "use": "用GPT娘逼近大肥鱼表达被施压的心情时",
+      "desc": "GPT娘涨红着脸皱眉盯向前方，身形逐渐放大并向前逼近。旁边的大肥鱼双手缩在胸前，表情紧张，随着GPT娘越来越大而显得越来越小，最后挤在画面角落。",
+      "meme": "",
+      "dir": "GPT娘→大肥鱼",
+      "en": "GPT looms over a nervous DeepSeek"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT11_压力",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT11_压力",
+      "code": "2TT11",
+      "group": "2TT",
+      "num": 11,
+      "name": "压力",
+      "variant": "",
+      "file": "2TT11_压力.gif",
+      "hash": "a9bf310e1167",
+      "bytes": 1681247,
+      "w": 300,
+      "h": 300,
+      "frames": 40,
+      "seconds": 2,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT11_压力.a9bf310e1167.png",
+      "drag_url": "/media/drag/gif/498cfc05d8301f670a3e55bf62c4a1ad10abfe2a6a317e1d26f0b041be15543c.gif",
+      "drag_thumb": "/media/drag/thumb/498cfc05d8301f670a3e55bf62c4a1ad10abfe2a6a317e1d26f0b041be15543c.png",
+      "ts": 1792449958
+    }
+  },
+  {
+    "id": "3a66f823a71a.gif",
+    "name": "monkey_game",
+    "file": "assets/3a66f823a71a.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/2TT12_monkey_game",
+      "2TT12_monkey_game",
+      "monkey_game"
+    ],
+    "emotion": "害羞",
+    "tags": [
+      "饼干游戏",
+      "暧昧",
+      "亲密",
+      "心动",
+      "秀恩爱"
+    ],
+    "use": "用大肥鱼与GPT娘共咬饼干表达暧昧时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/2TT12_monkey_game",
+      "hash": "3a66f823a71a",
+      "text": "",
+      "emotion": "害羞",
+      "tags": [
+        "饼干游戏",
+        "暧昧",
+        "亲密",
+        "心动",
+        "秀恩爱"
+      ],
+      "use": "用大肥鱼与GPT娘共咬饼干表达暧昧时",
+      "desc": "大肥鱼拿着红色饼干盒，与GPT娘分别咬住同一根细长饼干的两端。两人脸颊通红，边咬边轻轻靠近，大肥鱼时而眯眼，GPT娘一直闭眼笑着，距离逐渐缩短。",
+      "meme": "Pocky 游戏（百奇游戏）：两人各咬住一根 Pocky 的一端往中间吃，先松口的输，常用来制造暧昧；本表情大肥鱼和 GPT娘红着脸玩 Pocky 游戏。",
+      "dir": "互相",
+      "en": "DeepSeek and GPT play the Pocky game"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/2TT12_monkey_game",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "2TT12_monkey_game",
+      "code": "2TT12",
+      "group": "2TT",
+      "num": 12,
+      "name": "monkey_game",
+      "variant": "",
+      "file": "2TT12_monkey_game.gif",
+      "hash": "3a66f823a71a",
+      "bytes": 1301106,
+      "w": 300,
+      "h": 300,
+      "frames": 30,
+      "seconds": 1.5,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/2TT12_monkey_game.3a66f823a71a.png",
+      "drag_url": "/media/drag/gif/4b716026105efde0ee0cc815dfef95352dd38027e96864c920631e1c82d4f6e2.gif",
+      "drag_thumb": "/media/drag/thumb/4b716026105efde0ee0cc815dfef95352dd38027e96864c920631e1c82d4f6e2.png",
+      "ts": 1792449957
+    }
+  },
+  {
+    "id": "1eef947ff898.gif",
+    "name": "还不能休息哦",
+    "file": "assets/1eef947ff898.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT01_还不能休息哦",
+      "3TT01_还不能休息哦",
+      "还不能休息哦"
+    ],
+    "emotion": "疲惫",
+    "tags": [
+      "加班",
+      "还不能休息",
+      "工作堆积",
+      "催稿",
+      "打工"
+    ],
+    "use": "用GPT娘给大肥鱼加任务表达还得加班时",
+    "dir": "GPT娘→大肥鱼",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT01_还不能休息哦",
+      "hash": "1eef947ff898",
+      "text": "",
+      "emotion": "疲惫",
+      "tags": [
+        "加班",
+        "还不能休息",
+        "工作堆积",
+        "催稿",
+        "打工"
+      ],
+      "use": "用GPT娘给大肥鱼加任务表达还得加班时",
+      "desc": "大肥鱼坐在桌前拿笔写文件，神情越来越疲倦。GPT娘从右侧出现，把一大摞文件搬到大肥鱼面前；大肥鱼无奈地看着新增工作，GPT娘则笑着靠在旁边。",
+      "meme": "",
+      "dir": "GPT娘→大肥鱼",
+      "en": "GPT gives tired DeepSeek even more work"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT01_还不能休息哦",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT01_还不能休息哦",
+      "code": "3TT01",
+      "group": "3TT",
+      "num": 1,
+      "name": "还不能休息哦",
+      "variant": "",
+      "file": "3TT01_还不能休息哦.gif",
+      "hash": "1eef947ff898",
+      "bytes": 1938058,
+      "w": 300,
+      "h": 300,
+      "frames": 50,
+      "seconds": 2.5,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT01_还不能休息哦.1eef947ff898.png",
+      "drag_url": "/media/drag/gif/f80213ac4ef0a338b5e80da20518d21201cd0242c78f3e9d72e5f7ad72699b0a.gif",
+      "drag_thumb": "/media/drag/thumb/f80213ac4ef0a338b5e80da20518d21201cd0242c78f3e9d72e5f7ad72699b0a.png",
+      "ts": 1792450068
+    }
+  },
+  {
+    "id": "b2ef55f4e3d6.gif",
+    "name": "打包",
+    "file": "assets/b2ef55f4e3d6.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT02_打包",
+      "3TT02_打包",
+      "打包"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "打包带走",
+      "拐走",
+      "恶作剧",
+      "抱走",
+      "喜欢你"
+    ],
+    "use": "用大肥鱼把GPT娘打包表示想带走对方时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT02_打包",
+      "hash": "b2ef55f4e3d6",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "打包带走",
+        "拐走",
+        "恶作剧",
+        "抱走",
+        "喜欢你"
+      ],
+      "use": "用大肥鱼把GPT娘打包表示想带走对方时",
+      "desc": "GPT娘站在前方，大肥鱼从她身后悄悄探头。GPT娘转过脸后，一个棕色袋子从上方罩下来把她装住；随后大肥鱼露出脑袋，抱着鼓起的袋子闭眼笑起来。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek bags GPT up to take away"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT02_打包",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT02_打包",
+      "code": "3TT02",
+      "group": "3TT",
+      "num": 2,
+      "name": "打包",
+      "variant": "",
+      "file": "3TT02_打包.gif",
+      "hash": "b2ef55f4e3d6",
+      "bytes": 1739649,
+      "w": 300,
+      "h": 300,
+      "frames": 60,
+      "seconds": 3,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT02_打包.b2ef55f4e3d6.png",
+      "drag_url": "/media/drag/gif/dde2bdda83e178be87eec7f742685649ebc33a09bab769766cb5e1ccffe6c744.gif",
+      "drag_thumb": "/media/drag/thumb/dde2bdda83e178be87eec7f742685649ebc33a09bab769766cb5e1ccffe6c744.png",
+      "ts": 1792450067
+    }
+  },
+  {
+    "id": "de61cd972113.gif",
+    "name": "非常坏",
+    "file": "assets/de61cd972113.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT03_非常坏",
+      "3TT03_非常坏",
+      "非常坏"
+    ],
+    "emotion": "生气",
+    "tags": [
+      "你好坏",
+      "闹别扭",
+      "惹人生气",
+      "捶你",
+      "打闹"
+    ],
+    "use": "用GPT娘捶大肥鱼表示对方太坏了时",
+    "dir": "GPT娘→大肥鱼",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT03_非常坏",
+      "hash": "de61cd972113",
+      "text": "",
+      "emotion": "生气",
+      "tags": [
+        "你好坏",
+        "闹别扭",
+        "惹人生气",
+        "捶你",
+        "打闹"
+      ],
+      "use": "用GPT娘捶大肥鱼表示对方太坏了时",
+      "desc": "GPT娘站在大肥鱼身后，脸涨得通红，额头浮出红色怒气符号。她反复抬起拳头朝大肥鱼后背捶去，大肥鱼趴低在前方，半眯着眼睛，嘴角仍带着调皮的笑意。",
+      "meme": "",
+      "dir": "GPT娘→大肥鱼",
+      "en": "Angry GPT pounds mischievous DeepSeek's back"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT03_非常坏",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT03_非常坏",
+      "code": "3TT03",
+      "group": "3TT",
+      "num": 3,
+      "name": "非常坏",
+      "variant": "",
+      "file": "3TT03_非常坏.gif",
+      "hash": "de61cd972113",
+      "bytes": 786216,
+      "w": 300,
+      "h": 300,
+      "frames": 20,
+      "seconds": 1,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT03_非常坏.de61cd972113.png",
+      "drag_url": "/media/drag/gif/79774492436cbdcf514d9329eef4a3590cdc7273a7fa129ab451d7006fc41ff0.gif",
+      "drag_thumb": "/media/drag/thumb/79774492436cbdcf514d9329eef4a3590cdc7273a7fa129ab451d7006fc41ff0.png",
+      "ts": 1792450066
+    }
+  },
+  {
+    "id": "4d1231f7f25f.gif",
+    "name": "smoker",
+    "file": "assets/4d1231f7f25f.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT04_smoker",
+      "3TT04_smoker",
+      "smoker"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "抓回来",
+      "别玩手机",
+      "强行拉走",
+      "恶作剧",
+      "求关注"
+    ],
+    "use": "用大肥鱼长舌拉走GPT娘表示抓人回来时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT04_smoker",
+      "hash": "4d1231f7f25f",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "抓回来",
+        "别玩手机",
+        "强行拉走",
+        "恶作剧",
+        "求关注"
+      ],
+      "use": "用大肥鱼长舌拉走GPT娘表示抓人回来时",
+      "desc": "大肥鱼先伸出舌头，随后猛地把粉色长舌射向远处。正在看手机的GPT娘被长舌绕住脖颈并向左拉走，手机从手中飞出，最后画面只剩空白。",
+      "meme": "《求生之路》特感 Smoker：用长舌头远距离缠住幸存者拖走；本表情大肥鱼伸出长舌，把正在玩手机的 GPT娘拖走。",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek's long tongue drags GPT away"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT04_smoker",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT04_smoker",
+      "code": "3TT04",
+      "group": "3TT",
+      "num": 4,
+      "name": "smoker",
+      "variant": "",
+      "file": "3TT04_smoker.gif",
+      "hash": "4d1231f7f25f",
+      "bytes": 1072002,
+      "w": 300,
+      "h": 300,
+      "frames": 45,
+      "seconds": 2.25,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT04_smoker.4d1231f7f25f.png",
+      "drag_url": "/media/drag/gif/801faaba1547e38c12ad5ce9049ef8a18b2c024af8865356ff038c6db52087ca.gif",
+      "drag_thumb": "/media/drag/thumb/801faaba1547e38c12ad5ce9049ef8a18b2c024af8865356ff038c6db52087ca.png",
+      "ts": 1792450065
+    }
+  },
+  {
+    "id": "6d10a58c5833.gif",
+    "name": "你醒啦",
+    "file": "assets/6d10a58c5833.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT05_你醒啦",
+      "3TT05_你醒啦",
+      "你醒啦"
+    ],
+    "emotion": "打招呼",
+    "tags": [
+      "你醒啦",
+      "起床",
+      "探望",
+      "醒来",
+      "关心"
+    ],
+    "use": "用大肥鱼与GPT娘俯身探望问候刚醒的人时",
+    "dir": "无",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT05_你醒啦",
+      "hash": "6d10a58c5833",
+      "text": "",
+      "emotion": "打招呼",
+      "tags": [
+        "你醒啦",
+        "起床",
+        "探望",
+        "醒来",
+        "关心"
+      ],
+      "use": "用大肥鱼与GPT娘俯身探望问候刚醒的人时",
+      "desc": "画面先全黑，接着像睁眼般出现模糊缝隙，再逐渐清晰。大肥鱼从左下方俯身探看并举手示意，GPT娘随后从右上方凑近，两人一起笑着看向画面中央。",
+      "meme": "",
+      "dir": "无",
+      "en": "DeepSeek and GPT greet you waking up"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT05_你醒啦",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT05_你醒啦",
+      "code": "3TT05",
+      "group": "3TT",
+      "num": 5,
+      "name": "你醒啦",
+      "variant": "",
+      "file": "3TT05_你醒啦.gif",
+      "hash": "6d10a58c5833",
+      "bytes": 1349212,
+      "w": 300,
+      "h": 300,
+      "frames": 50,
+      "seconds": 2.5,
+      "tone": "dark",
+      "thumb": "大肥鱼和GPT娘/3TT05_你醒啦.6d10a58c5833.png",
+      "drag_url": "/media/drag/gif/d1893406904b4777c8714f3e3ec89ed215f1c336beadc9774b44129af8b0a71f.gif",
+      "drag_thumb": "/media/drag/thumb/d1893406904b4777c8714f3e3ec89ed215f1c336beadc9774b44129af8b0a71f.png",
+      "ts": 1792450064
+    }
+  },
+  {
+    "id": "9e33e3053140.gif",
+    "name": "当场抓获",
+    "file": "assets/9e33e3053140.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT06_当场抓获",
+      "3TT06_当场抓获",
+      "当场抓获"
+    ],
+    "emotion": "得意",
+    "tags": [
+      "当场抓包",
+      "逮到你了",
+      "偷懒被抓",
+      "恶作剧",
+      "心虚",
+      "查岗"
+    ],
+    "use": "用大肥鱼抓住GPT娘表示逮到对方时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT06_当场抓获",
+      "hash": "9e33e3053140",
+      "text": "",
+      "emotion": "得意",
+      "tags": [
+        "当场抓包",
+        "逮到你了",
+        "偷懒被抓",
+        "恶作剧",
+        "心虚",
+        "查岗"
+      ],
+      "use": "用大肥鱼抓住GPT娘表示逮到对方时",
+      "desc": "GPT娘起初闭眼笑着，一只手从头顶后方伸出。随后大肥鱼从后面现身，伸手抓住GPT娘头顶的头发；GPT娘被按低，睁眼露出不满神情，大肥鱼则笑着眨眼。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek catches GPT red-handed"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT06_当场抓获",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT06_当场抓获",
+      "code": "3TT06",
+      "group": "3TT",
+      "num": 6,
+      "name": "当场抓获",
+      "variant": "",
+      "file": "3TT06_当场抓获.gif",
+      "hash": "9e33e3053140",
+      "bytes": 2094862,
+      "w": 300,
+      "h": 300,
+      "frames": 55,
+      "seconds": 2.75,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT06_当场抓获.9e33e3053140.png",
+      "drag_url": "/media/drag/gif/ecedfbcd167cc976a79ac4a46ca026333d90d77ee48365abf73f0f208541a307.gif",
+      "drag_thumb": "/media/drag/thumb/ecedfbcd167cc976a79ac4a46ca026333d90d77ee48365abf73f0f208541a307.png",
+      "ts": 1792450063
+    }
+  },
+  {
+    "id": "3eb8d1cf8edb.gif",
+    "name": "捂嘴",
+    "file": "assets/3eb8d1cf8edb.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT07_捂嘴",
+      "3TT07_捂嘴",
+      "捂嘴"
+    ],
+    "emotion": "拒绝",
+    "tags": [
+      "别说了",
+      "捂嘴",
+      "保密",
+      "制止",
+      "闭嘴"
+    ],
+    "use": "用大肥鱼捂住GPT娘嘴巴表示别再说了时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT07_捂嘴",
+      "hash": "3eb8d1cf8edb",
+      "text": "",
+      "emotion": "拒绝",
+      "tags": [
+        "别说了",
+        "捂嘴",
+        "保密",
+        "制止",
+        "闭嘴"
+      ],
+      "use": "用大肥鱼捂住GPT娘嘴巴表示别再说了时",
+      "desc": "大肥鱼站在GPT娘身后，伸手盖住GPT娘的嘴巴，另一只手扶在她身旁。GPT娘脸涨红，睁大眼睛并抬起双手挣动，大肥鱼始终平静地捂着她的嘴。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek covers GPT's mouth to stop her"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT07_捂嘴",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT07_捂嘴",
+      "code": "3TT07",
+      "group": "3TT",
+      "num": 7,
+      "name": "捂嘴",
+      "variant": "",
+      "file": "3TT07_捂嘴.gif",
+      "hash": "3eb8d1cf8edb",
+      "bytes": 1626394,
+      "w": 300,
+      "h": 300,
+      "frames": 40,
+      "seconds": 2,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT07_捂嘴.3eb8d1cf8edb.png",
+      "drag_url": "/media/drag/gif/d8a9c735905c13da7bc2f27b5c26524d78f0e34c86b03551158db7d946eeba67.gif",
+      "drag_thumb": "/media/drag/thumb/d8a9c735905c13da7bc2f27b5c26524d78f0e34c86b03551158db7d946eeba67.png",
+      "ts": 1792450062
+    }
+  },
+  {
+    "id": "94deeda5756e.gif",
+    "name": "打伞",
+    "file": "assets/94deeda5756e.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT08_打伞",
+      "3TT08_打伞",
+      "打伞"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "撑伞",
+      "陪伴",
+      "照顾",
+      "心动",
+      "一起走"
+    ],
+    "use": "用大肥鱼为GPT娘撑伞表达贴心陪伴时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT08_打伞",
+      "hash": "94deeda5756e",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "撑伞",
+        "陪伴",
+        "照顾",
+        "心动",
+        "一起走"
+      ],
+      "use": "用大肥鱼为GPT娘撑伞表达贴心陪伴时",
+      "desc": "大肥鱼握着透明雨伞的伞柄，与GPT娘肩并肩站在伞下。GPT娘闭着眼睛幸福地靠近大肥鱼，头旁不断浮出粉红爱心；大肥鱼偶尔眨眼，两人一起轻轻晃动。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek shares an umbrella with delighted GPT"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT08_打伞",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT08_打伞",
+      "code": "3TT08",
+      "group": "3TT",
+      "num": 8,
+      "name": "打伞",
+      "variant": "",
+      "file": "3TT08_打伞.gif",
+      "hash": "94deeda5756e",
+      "bytes": 1436517,
+      "w": 300,
+      "h": 300,
+      "frames": 30,
+      "seconds": 1.5,
+      "tone": "light",
+      "thumb": "大肥鱼和GPT娘/3TT08_打伞.94deeda5756e.png",
+      "drag_url": "/media/drag/gif/a5acb0179ff70ea20fc4302881eb218afdf6ebcafa2824bdbdc3c0b385329e35.gif",
+      "drag_thumb": "/media/drag/thumb/a5acb0179ff70ea20fc4302881eb218afdf6ebcafa2824bdbdc3c0b385329e35.png",
+      "ts": 1792450061
+    }
+  },
+  {
+    "id": "9b8a1c3469af.gif",
+    "name": "鬼脸",
+    "file": "assets/9b8a1c3469af.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT09_鬼脸",
+      "3TT09_鬼脸",
+      "鬼脸"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "做鬼脸",
+      "恶作剧",
+      "逗你",
+      "捏脸",
+      "打闹"
+    ],
+    "use": "用大肥鱼拉GPT娘嘴角表示调皮逗人时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT09_鬼脸",
+      "hash": "9b8a1c3469af",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "做鬼脸",
+        "恶作剧",
+        "逗你",
+        "捏脸",
+        "打闹"
+      ],
+      "use": "用大肥鱼拉GPT娘嘴角表示调皮逗人时",
+      "desc": "大肥鱼笑着站在GPT娘后面，伸出双手捏住GPT娘的嘴角，向两侧拉成长长的横线。GPT娘半垂着眼睛，额头冒出红色怒气符号，大肥鱼仍开心地反复拉扯。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek stretches GPT's mouth into a face"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT09_鬼脸",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT09_鬼脸",
+      "code": "3TT09",
+      "group": "3TT",
+      "num": 9,
+      "name": "鬼脸",
+      "variant": "",
+      "file": "3TT09_鬼脸.gif",
+      "hash": "9b8a1c3469af",
+      "bytes": 825490,
+      "w": 300,
+      "h": 300,
+      "frames": 20,
+      "seconds": 1,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT09_鬼脸.9b8a1c3469af.png",
+      "drag_url": "/media/drag/gif/e6e1ea718e7b011eea617593412aec147df61cabbe637a9190748d1c0479746d.gif",
+      "drag_thumb": "/media/drag/thumb/e6e1ea718e7b011eea617593412aec147df61cabbe637a9190748d1c0479746d.png",
+      "ts": 1792450060
+    }
+  },
+  {
+    "id": "a231d136cb36.gif",
+    "name": "拍按钮",
+    "file": "assets/a231d136cb36.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT10_拍按钮",
+      "3TT10_拍按钮",
+      "拍按钮"
+    ],
+    "emotion": "兴奋",
+    "tags": [
+      "抢答",
+      "疯狂点击",
+      "游戏",
+      "一起玩",
+      "拍按钮"
+    ],
+    "use": "用大肥鱼与GPT娘拍按钮表示兴奋抢答时",
+    "dir": "无",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT10_拍按钮",
+      "hash": "a231d136cb36",
+      "text": "",
+      "emotion": "兴奋",
+      "tags": [
+        "抢答",
+        "疯狂点击",
+        "游戏",
+        "一起玩",
+        "拍按钮"
+      ],
+      "use": "用大肥鱼与GPT娘拍按钮表示兴奋抢答时",
+      "desc": "大肥鱼与GPT娘坐在桌前，大肥鱼面前是绿色按钮，GPT娘面前是红色按钮。两人闭眼大笑，轮流把手高高举起再拍向各自的按钮，身体随着动作兴奋地上下跳动。",
+      "meme": "",
+      "dir": "无",
+      "en": "DeepSeek and GPT excitedly mash their buttons"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT10_拍按钮",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT10_拍按钮",
+      "code": "3TT10",
+      "group": "3TT",
+      "num": 10,
+      "name": "拍按钮",
+      "variant": "",
+      "file": "3TT10_拍按钮.gif",
+      "hash": "a231d136cb36",
+      "bytes": 839440,
+      "w": 300,
+      "h": 300,
+      "frames": 20,
+      "seconds": 1,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT10_拍按钮.a231d136cb36.png",
+      "drag_url": "/media/drag/gif/ec33ecb7aad5446d6859b31999cc9304c1340285572466eb6ec8628e30c420bf.gif",
+      "drag_thumb": "/media/drag/thumb/ec33ecb7aad5446d6859b31999cc9304c1340285572466eb6ec8628e30c420bf.png",
+      "ts": 1792450059
+    }
+  },
+  {
+    "id": "bc0a0be9354a.gif",
+    "name": "洗头",
+    "file": "assets/bc0a0be9354a.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT11_洗头",
+      "3TT11_洗头",
+      "洗头"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "洗头",
+      "照顾",
+      "宠爱",
+      "舒服",
+      "日常陪伴"
+    ],
+    "use": "用大肥鱼给GPT娘洗头表达温柔照顾时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT11_洗头",
+      "hash": "bc0a0be9354a",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "洗头",
+        "照顾",
+        "宠爱",
+        "舒服",
+        "日常陪伴"
+      ],
+      "use": "用大肥鱼给GPT娘洗头表达温柔照顾时",
+      "desc": "大肥鱼站在左后方给GPT娘揉洗头发，GPT娘低着头，头顶堆着蓬松的大团白色泡沫。泡泡不断向上飘起，GPT娘闭眼开心地笑，大肥鱼也带着满足的笑容。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek washes GPT's hair with fluffy foam"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT11_洗头",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT11_洗头",
+      "code": "3TT11",
+      "group": "3TT",
+      "num": 11,
+      "name": "洗头",
+      "variant": "",
+      "file": "3TT11_洗头.gif",
+      "hash": "bc0a0be9354a",
+      "bytes": 777275,
+      "w": 300,
+      "h": 300,
+      "frames": 20,
+      "seconds": 1,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT11_洗头.bc0a0be9354a.png",
+      "drag_url": "/media/drag/gif/a23f7772e2e4266e5964cab8a3a7a1edf65440a59a5127a4c065d8b0e03d46ec.gif",
+      "drag_thumb": "/media/drag/thumb/a23f7772e2e4266e5964cab8a3a7a1edf65440a59a5127a4c065d8b0e03d46ec.png",
+      "ts": 1792450058
+    }
+  },
+  {
+    "id": "70982f8361ff.gif",
+    "name": "躲猫猫",
+    "file": "assets/70982f8361ff.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/3TT12_躲猫猫",
+      "3TT12_躲猫猫",
+      "躲猫猫"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "躲猫猫",
+      "找到你了",
+      "偷看",
+      "惊喜",
+      "逗朋友"
+    ],
+    "use": "用大肥鱼隔窗找到GPT娘表示发现你了时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/3TT12_躲猫猫",
+      "hash": "70982f8361ff",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "躲猫猫",
+        "找到你了",
+        "偷看",
+        "惊喜",
+        "逗朋友"
+      ],
+      "use": "用大肥鱼隔窗找到GPT娘表示发现你了时",
+      "desc": "GPT娘躲在窗旁捂嘴偷笑，大肥鱼的脑袋逐渐从窗外探进视野，举起手贴在玻璃上观察。GPT娘随后放下手转头看向窗户，大肥鱼隔着玻璃笑着回应。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek finds GPT hiding beside the window"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/3TT12_躲猫猫",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "3TT12_躲猫猫",
+      "code": "3TT12",
+      "group": "3TT",
+      "num": 12,
+      "name": "躲猫猫",
+      "variant": "",
+      "file": "3TT12_躲猫猫.gif",
+      "hash": "70982f8361ff",
+      "bytes": 1268890,
+      "w": 300,
+      "h": 300,
+      "frames": 40,
+      "seconds": 2,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/3TT12_躲猫猫.70982f8361ff.png",
+      "drag_url": "/media/drag/gif/dd5a8ef24e25c56aefea4c4498316b66f86749eacc4b9648b653b0ce7903b487.gif",
+      "drag_thumb": "/media/drag/thumb/dd5a8ef24e25c56aefea4c4498316b66f86749eacc4b9648b653b0ce7903b487.png",
+      "ts": 1792450057
+    }
+  },
+  {
+    "id": "e7c406d98e7a.gif",
+    "name": "钻戒求婚",
+    "file": "assets/e7c406d98e7a.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT01_钻戒求婚",
+      "TT01_钻戒求婚",
+      "钻戒求婚"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "求婚",
+      "表白",
+      "嫁给我",
+      "心动",
+      "秀恩爱",
+      "喜欢你"
+    ],
+    "use": "用大肥鱼向GPT娘送钻戒表达求婚或爱意时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT01_钻戒求婚",
+      "hash": "e7c406d98e7a",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "求婚",
+        "表白",
+        "嫁给我",
+        "心动",
+        "秀恩爱",
+        "喜欢你"
+      ],
+      "use": "用大肥鱼向GPT娘送钻戒表达求婚或爱意时",
+      "desc": "大肥鱼在左侧展示打开的红色戒指盒，大钻石反复闪出金色光芒，她笑得眯起眼睛，又兴奋地闭紧双眼。右侧GPT娘红着脸，双手捂在嘴边，望着钻戒露出害羞神情。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek proposes to GPT with a diamond"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT01_钻戒求婚",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT01_钻戒求婚",
+      "code": "TT01",
+      "group": "TT",
+      "num": 1,
+      "name": "钻戒求婚",
+      "variant": "",
+      "file": "TT01_钻戒求婚.gif",
+      "hash": "e7c406d98e7a",
+      "bytes": 1237056,
+      "w": 300,
+      "h": 300,
+      "frames": 31,
+      "seconds": 1.55,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT01_钻戒求婚.e7c406d98e7a.png",
+      "drag_url": "/media/drag/gif/babf7008bde82c420ebf672386f8e01f887741fef31fd25dda9dff06d7c6c039.gif",
+      "drag_thumb": "/media/drag/thumb/babf7008bde82c420ebf672386f8e01f887741fef31fd25dda9dff06d7c6c039.png",
+      "ts": 1792449868
+    }
+  },
+  {
+    "id": "f17235c510b9.gif",
+    "name": "比心",
+    "file": "assets/f17235c510b9.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT02_比心",
+      "TT02_比心",
+      "比心"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "比心",
+      "爱你",
+      "表白",
+      "甜蜜",
+      "感谢喜欢"
+    ],
+    "use": "用大肥鱼与GPT娘合力比心表达喜欢时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT02_比心",
+      "hash": "f17235c510b9",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "比心",
+        "爱你",
+        "表白",
+        "甜蜜",
+        "感谢喜欢"
+      ],
+      "use": "用大肥鱼与GPT娘合力比心表达喜欢时",
+      "desc": "大肥鱼和GPT娘紧靠在一起，各伸出一只手在中间拼成爱心形状，掌心间出现粉红色爱心。两人分别眨起一只眼睛，张嘴微笑，爱心随着动作轻轻跳动。",
+      "meme": "",
+      "dir": "互相",
+      "en": "DeepSeek and GPT make a heart together"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT02_比心",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT02_比心",
+      "code": "TT02",
+      "group": "TT",
+      "num": 2,
+      "name": "比心",
+      "variant": "",
+      "file": "TT02_比心.gif",
+      "hash": "f17235c510b9",
+      "bytes": 899683,
+      "w": 300,
+      "h": 300,
+      "frames": 21,
+      "seconds": 1.05,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT02_比心.f17235c510b9.png",
+      "drag_url": "/media/drag/gif/e88fef9260c7f25ba4424ca1e7d71fd5eecc214a6bc0c1dc6243a03960127328.gif",
+      "drag_thumb": "/media/drag/thumb/e88fef9260c7f25ba4424ca1e7d71fd5eecc214a6bc0c1dc6243a03960127328.png",
+      "ts": 1792449867
+    }
+  },
+  {
+    "id": "9efc3c7a99c3.gif",
+    "name": "举火把",
+    "file": "assets/9efc3c7a99c3.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT03_举火把",
+      "TT03_举火把",
+      "举火把"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "举火把",
+      "讨伐",
+      "围观",
+      "怨念",
+      "起哄"
+    ],
+    "use": "用大肥鱼与GPT娘举火把表示一起起哄时",
+    "dir": "无",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT03_举火把",
+      "hash": "9efc3c7a99c3",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "举火把",
+        "讨伐",
+        "围观",
+        "怨念",
+        "起哄"
+      ],
+      "use": "用大肥鱼与GPT娘举火把表示一起起哄时",
+      "desc": "大肥鱼与GPT娘并排站着，各自在外侧举起一根燃烧的火把，橙黄色火焰不断跳动。大肥鱼半眯眼带着坏笑，GPT娘面无表情地盯着前方，火光映出阴暗气氛。",
+      "meme": "",
+      "dir": "无",
+      "en": "DeepSeek and GPT raise flaming torches"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT03_举火把",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT03_举火把",
+      "code": "TT03",
+      "group": "TT",
+      "num": 3,
+      "name": "举火把",
+      "variant": "",
+      "file": "TT03_举火把.gif",
+      "hash": "9efc3c7a99c3",
+      "bytes": 1062291,
+      "w": 300,
+      "h": 300,
+      "frames": 21,
+      "seconds": 1.05,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT03_举火把.9efc3c7a99c3.png",
+      "drag_url": "/media/drag/gif/380c209476935f3dc19c33574f3dd9a372d59c17bcb89b0a39ddca3497d50947.gif",
+      "drag_thumb": "/media/drag/thumb/380c209476935f3dc19c33574f3dd9a372d59c17bcb89b0a39ddca3497d50947.png",
+      "ts": 1792449866
+    }
+  },
+  {
+    "id": "1cd91703007e.gif",
+    "name": "扑倒",
+    "file": "assets/1cd91703007e.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT04_扑倒",
+      "TT04_扑倒",
+      "扑倒"
+    ],
+    "emotion": "兴奋",
+    "tags": [
+      "扑倒",
+      "抱抱",
+      "突然袭击",
+      "想你了",
+      "亲昵"
+    ],
+    "use": "用大肥鱼扑倒GPT娘表达热情抱抱时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT04_扑倒",
+      "hash": "1cd91703007e",
+      "text": "",
+      "emotion": "兴奋",
+      "tags": [
+        "扑倒",
+        "抱抱",
+        "突然袭击",
+        "想你了",
+        "亲昵"
+      ],
+      "use": "用大肥鱼扑倒GPT娘表达热情抱抱时",
+      "desc": "GPT娘从画面右侧慢慢进入，头旁忽然出现黄色惊叹符号。大肥鱼从左侧猛扑过来，闭眼开心地撞向GPT娘；GPT娘惊讶张嘴，两人一起向右下方倒出画面。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek excitedly tackles GPT out of frame"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT04_扑倒",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT04_扑倒",
+      "code": "TT04",
+      "group": "TT",
+      "num": 4,
+      "name": "扑倒",
+      "variant": "",
+      "file": "TT04_扑倒.gif",
+      "hash": "1cd91703007e",
+      "bytes": 489605,
+      "w": 300,
+      "h": 300,
+      "frames": 31,
+      "seconds": 1.55,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT04_扑倒.1cd91703007e.png",
+      "drag_url": "/media/drag/gif/5baeae4acc810a2b694705d166b56271026fe2ff81c8715509ca1f5171bb991a.gif",
+      "drag_thumb": "/media/drag/thumb/5baeae4acc810a2b694705d166b56271026fe2ff81c8715509ca1f5171bb991a.png",
+      "ts": 1792449865
+    }
+  },
+  {
+    "id": "c2417789623e.gif",
+    "name": "舌吻",
+    "file": "assets/c2417789623e.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT05_舌吻",
+      "TT05_舌吻",
+      "舌吻"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "亲亲",
+      "热吻",
+      "秀恩爱",
+      "亲密",
+      "搞怪"
+    ],
+    "use": "用大肥鱼与GPT娘夸张舌吻表达亲昵时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT05_舌吻",
+      "hash": "c2417789623e",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "亲亲",
+        "热吻",
+        "秀恩爱",
+        "亲密",
+        "搞怪"
+      ],
+      "use": "用大肥鱼与GPT娘夸张舌吻表达亲昵时",
+      "desc": "大肥鱼和GPT娘并排靠近，脸颊通红，各自从嘴里伸出一条夸张的粉色长舌。两条舌头在中间不断弯曲、交叉和缠绕，两人带着笑意保持亲密的互动。",
+      "meme": "",
+      "dir": "互相",
+      "en": "DeepSeek and GPT intertwine exaggerated long tongues"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT05_舌吻",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT05_舌吻",
+      "code": "TT05",
+      "group": "TT",
+      "num": 5,
+      "name": "舌吻",
+      "variant": "",
+      "file": "TT05_舌吻.gif",
+      "hash": "c2417789623e",
+      "bytes": 913071,
+      "w": 300,
+      "h": 300,
+      "frames": 21,
+      "seconds": 1.05,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT05_舌吻.c2417789623e.png",
+      "drag_url": "/media/drag/gif/15350d8dcf40f742919ba3b190478cbf1459a6d3cf0226034081375169c076d5.gif",
+      "drag_thumb": "/media/drag/thumb/15350d8dcf40f742919ba3b190478cbf1459a6d3cf0226034081375169c076d5.png",
+      "ts": 1792449864
+    }
+  },
+  {
+    "id": "f4149ae82b0b.gif",
+    "name": "仙女棒",
+    "file": "assets/f4149ae82b0b.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT06_仙女棒",
+      "TT06_仙女棒",
+      "仙女棒"
+    ],
+    "emotion": "开心",
+    "tags": [
+      "烟花",
+      "庆祝",
+      "节日",
+      "浪漫",
+      "一起玩"
+    ],
+    "use": "用大肥鱼与GPT娘玩仙女棒表达节日快乐时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT06_仙女棒",
+      "hash": "f4149ae82b0b",
+      "text": "",
+      "emotion": "开心",
+      "tags": [
+        "烟花",
+        "庆祝",
+        "节日",
+        "浪漫",
+        "一起玩"
+      ],
+      "use": "用大肥鱼与GPT娘玩仙女棒表达节日快乐时",
+      "desc": "大肥鱼与GPT娘并肩站着，各自握着一根仙女棒，将燃烧的顶端靠在一起。金黄色火星不断闪烁飞散，两人望着火花微笑，手和身体随着动作轻轻晃动。",
+      "meme": "",
+      "dir": "互相",
+      "en": "DeepSeek and GPT enjoy sparklers together"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT06_仙女棒",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT06_仙女棒",
+      "code": "TT06",
+      "group": "TT",
+      "num": 6,
+      "name": "仙女棒",
+      "variant": "",
+      "file": "TT06_仙女棒.gif",
+      "hash": "f4149ae82b0b",
+      "bytes": 1077133,
+      "w": 300,
+      "h": 300,
+      "frames": 21,
+      "seconds": 1.05,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT06_仙女棒.f4149ae82b0b.png",
+      "drag_url": "/media/drag/gif/e39e648eb2d1aea7dc049fc4f360552cd1891ed36033d0f3f4e2752c0942e938.gif",
+      "drag_thumb": "/media/drag/thumb/e39e648eb2d1aea7dc049fc4f360552cd1891ed36033d0f3f4e2752c0942e938.png",
+      "ts": 1792449863
+    }
+  },
+  {
+    "id": "48f85d7bc8f4.gif",
+    "name": "干杯",
+    "file": "assets/48f85d7bc8f4.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT07_干杯",
+      "TT07_干杯",
+      "干杯"
+    ],
+    "emotion": "开心",
+    "tags": [
+      "干杯",
+      "庆祝",
+      "合作愉快",
+      "聚会",
+      "敬你一杯"
+    ],
+    "use": "用大肥鱼与GPT娘碰杯表达庆祝或祝福时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT07_干杯",
+      "hash": "48f85d7bc8f4",
+      "text": "",
+      "emotion": "开心",
+      "tags": [
+        "干杯",
+        "庆祝",
+        "合作愉快",
+        "聚会",
+        "敬你一杯"
+      ],
+      "use": "用大肥鱼与GPT娘碰杯表达庆祝或祝福时",
+      "desc": "大肥鱼与GPT娘各自举着装有粉红饮料的高脚杯，笑着把杯子向中间靠拢。两只杯沿相碰时闪出小亮点，随后各自稍稍收回，仍并肩微笑着举杯。",
+      "meme": "",
+      "dir": "互相",
+      "en": "DeepSeek and GPT clink glasses in celebration"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT07_干杯",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT07_干杯",
+      "code": "TT07",
+      "group": "TT",
+      "num": 7,
+      "name": "干杯",
+      "variant": "",
+      "file": "TT07_干杯.gif",
+      "hash": "48f85d7bc8f4",
+      "bytes": 1361567,
+      "w": 300,
+      "h": 300,
+      "frames": 31,
+      "seconds": 1.55,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT07_干杯.48f85d7bc8f4.png",
+      "drag_url": "/media/drag/gif/40571fd016babdfaa7d563fa4ef9b54a971e83ce307f2e5e518af55c9bc34e44.gif",
+      "drag_thumb": "/media/drag/thumb/40571fd016babdfaa7d563fa4ef9b54a971e83ce307f2e5e518af55c9bc34e44.png",
+      "ts": 1792449862
+    }
+  },
+  {
+    "id": "43472adc003c.gif",
+    "name": "盖帽",
+    "file": "assets/43472adc003c.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT08_盖帽",
+      "TT08_盖帽",
+      "盖帽"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "绿帽子",
+      "恶作剧",
+      "损友",
+      "调侃",
+      "无语"
+    ],
+    "use": "用大肥鱼给GPT娘戴绿帽开玩笑调侃时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT08_盖帽",
+      "hash": "43472adc003c",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "绿帽子",
+        "恶作剧",
+        "损友",
+        "调侃",
+        "无语"
+      ],
+      "use": "用大肥鱼给GPT娘戴绿帽开玩笑调侃时",
+      "desc": "大肥鱼笑着拿出一顶绿色针织帽，举到GPT娘头顶后放下，将帽子扣在她头上。GPT娘原本就半垂着眼睛，戴帽后脸颊发红、嘴角下撇，大肥鱼则继续开心地笑。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek puts a green hat on GPT"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT08_盖帽",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT08_盖帽",
+      "code": "TT08",
+      "group": "TT",
+      "num": 8,
+      "name": "盖帽",
+      "variant": "",
+      "file": "TT08_盖帽.gif",
+      "hash": "43472adc003c",
+      "bytes": 1307719,
+      "w": 300,
+      "h": 300,
+      "frames": 31,
+      "seconds": 1.55,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT08_盖帽.43472adc003c.png",
+      "drag_url": "/media/drag/gif/362450cc9c5233fd4ba5c94231948969e567382cc3593c5b54ffaebe04c6bdcf.gif",
+      "drag_thumb": "/media/drag/thumb/362450cc9c5233fd4ba5c94231948969e567382cc3593c5b54ffaebe04c6bdcf.png",
+      "ts": 1792449861
+    }
+  },
+  {
+    "id": "b34ec05e88a2.gif",
+    "name": "摸下巴",
+    "file": "assets/b34ec05e88a2.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT09_摸下巴",
+      "TT09_摸下巴",
+      "摸下巴"
+    ],
+    "emotion": "喜欢",
+    "tags": [
+      "摸下巴",
+      "宠爱",
+      "哄人",
+      "亲昵",
+      "舒服"
+    ],
+    "use": "用大肥鱼摸GPT娘下巴表达宠溺安抚时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT09_摸下巴",
+      "hash": "b34ec05e88a2",
+      "text": "",
+      "emotion": "喜欢",
+      "tags": [
+        "摸下巴",
+        "宠爱",
+        "哄人",
+        "亲昵",
+        "舒服"
+      ],
+      "use": "用大肥鱼摸GPT娘下巴表达宠溺安抚时",
+      "desc": "大肥鱼站在左侧，伸手托住GPT娘的下巴并轻轻抚摸。GPT娘闭起双眼，脸颊泛红，开心地张嘴笑着，脑袋顺着大肥鱼手的动作缓缓晃动，显得十分享受。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek gently strokes GPT under her chin"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT09_摸下巴",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT09_摸下巴",
+      "code": "TT09",
+      "group": "TT",
+      "num": 9,
+      "name": "摸下巴",
+      "variant": "",
+      "file": "TT09_摸下巴.gif",
+      "hash": "b34ec05e88a2",
+      "bytes": 868739,
+      "w": 300,
+      "h": 300,
+      "frames": 21,
+      "seconds": 1.05,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT09_摸下巴.b34ec05e88a2.png",
+      "drag_url": "/media/drag/gif/c1329d4653eb2b90996161da4c9a2e68b32003ee18ea3a411e6ae0379533c671.gif",
+      "drag_thumb": "/media/drag/thumb/c1329d4653eb2b90996161da4c9a2e68b32003ee18ea3a411e6ae0379533c671.png",
+      "ts": 1792449860
+    }
+  },
+  {
+    "id": "1ff2f5a375ce.gif",
+    "name": "舔猫",
+    "file": "assets/1ff2f5a375ce.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT10_舔猫",
+      "TT10_舔猫",
+      "舔猫"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "舔舔",
+      "亲昵",
+      "黏人",
+      "逗你",
+      "喜欢你"
+    ],
+    "use": "用大肥鱼舔GPT娘脸颊表达黏人亲昵时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT10_舔猫",
+      "hash": "1ff2f5a375ce",
+      "text": "",
+      "emotion": "搞怪",
+      "tags": [
+        "舔舔",
+        "亲昵",
+        "黏人",
+        "逗你",
+        "喜欢你"
+      ],
+      "use": "用大肥鱼舔GPT娘脸颊表达黏人亲昵时",
+      "desc": "大肥鱼笑着从嘴里伸出夸张的粉色长舌，反复扫过GPT娘的脸颊和额前。GPT娘脸颊泛红，半垂着眼睛、嘴角下撇，保持无奈表情让大肥鱼来回舔。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek repeatedly licks GPT's unimpressed face"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT10_舔猫",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT10_舔猫",
+      "code": "TT10",
+      "group": "TT",
+      "num": 10,
+      "name": "舔猫",
+      "variant": "",
+      "file": "TT10_舔猫.gif",
+      "hash": "1ff2f5a375ce",
+      "bytes": 849800,
+      "w": 300,
+      "h": 300,
+      "frames": 21,
+      "seconds": 1.05,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT10_舔猫.1ff2f5a375ce.png",
+      "drag_url": "/media/drag/gif/08dab01b3ac0ef404a002e0b6a0f7f051e03bb8f691f6381bc94ff2a373e6dbc.gif",
+      "drag_thumb": "/media/drag/thumb/08dab01b3ac0ef404a002e0b6a0f7f051e03bb8f691f6381bc94ff2a373e6dbc.png",
+      "ts": 1792449859
+    }
+  },
+  {
+    "id": "ced329347985.gif",
+    "name": "交个朋友",
+    "file": "assets/ced329347985.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT11_交个朋友",
+      "TT11_交个朋友",
+      "交个朋友"
+    ],
+    "emotion": "搞怪",
+    "tags": [
+      "交个朋友",
+      "搭讪",
+      "暧昧",
+      "调戏",
+      "不怀好意"
+    ],
+    "use": "用大肥鱼向GPT娘递小包装表示暧昧搭讪时",
+    "dir": "大肥鱼→GPT娘",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT11_交个朋友",
+      "hash": "ced329347985",
+      "text": "YES!",
+      "emotion": "搞怪",
+      "tags": [
+        "交个朋友",
+        "搭讪",
+        "暧昧",
+        "调戏",
+        "不怀好意"
+      ],
+      "use": "用大肥鱼向GPT娘递小包装表示暧昧搭讪时",
+      "desc": "大肥鱼靠在GPT娘身边，笑着举起一叠彩色小包装，最前面印着YES!字样。她时而闭眼大笑，时而睁眼凑近；GPT娘脸颊涨红，始终半眯着眼睛侧看她。",
+      "meme": "",
+      "dir": "大肥鱼→GPT娘",
+      "en": "DeepSeek cheekily offers GPT colorful little packets"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT11_交个朋友",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT11_交个朋友",
+      "code": "TT11",
+      "group": "TT",
+      "num": 11,
+      "name": "交个朋友",
+      "variant": "",
+      "file": "TT11_交个朋友.gif",
+      "hash": "ced329347985",
+      "bytes": 1242766,
+      "w": 300,
+      "h": 300,
+      "frames": 31,
+      "seconds": 1.55,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT11_交个朋友.ced329347985.png",
+      "drag_url": "/media/drag/gif/70bc2fdbf8606b3585255ca71c72bd72f9deea8402945d5e25f7d46cbe03c32c.gif",
+      "drag_thumb": "/media/drag/thumb/70bc2fdbf8606b3585255ca71c72bd72f9deea8402945d5e25f7d46cbe03c32c.png",
+      "ts": 1792449858
+    }
+  },
+  {
+    "id": "27dd602bb581.gif",
+    "name": "好人",
+    "file": "assets/27dd602bb581.gif",
+    "aliases": [
+      "大肥鱼和GPT娘/TT12_好人",
+      "TT12_好人",
+      "好人"
+    ],
+    "emotion": "无语",
+    "tags": [
+      "好人卡",
+      "表白被拒",
+      "尴尬",
+      "单相思",
+      "你是好人"
+    ],
+    "use": "用大肥鱼比心却获GPT娘点赞表达好人卡时",
+    "dir": "互相",
+    "upstream": {
+      "id": "大肥鱼和GPT娘/TT12_好人",
+      "hash": "27dd602bb581",
+      "text": "",
+      "emotion": "无语",
+      "tags": [
+        "好人卡",
+        "表白被拒",
+        "尴尬",
+        "单相思",
+        "你是好人"
+      ],
+      "use": "用大肥鱼比心却获GPT娘点赞表达好人卡时",
+      "desc": "大肥鱼笑着伸出一只手摆出半颗爱心，等待GPT娘配合。GPT娘却在旁边竖起大拇指，神情认真地望着前方，两人的手势始终无法拼成爱心，大肥鱼露出尴尬笑意。",
+      "meme": "“好人卡”梗：表白被拒时对方说“你是个好人”；本表情大肥鱼比出半颗心等 GPT娘合成爱心，GPT娘却只竖大拇指，等于发了好人卡。",
+      "dir": "互相",
+      "en": "DeepSeek offers love, GPT gives a thumbs-up"
+    },
+    "manifest": {
+      "id": "大肥鱼和GPT娘/TT12_好人",
+      "pack": "大肥鱼和GPT娘",
+      "stem": "TT12_好人",
+      "code": "TT12",
+      "group": "TT",
+      "num": 12,
+      "name": "好人",
+      "variant": "",
+      "file": "TT12_好人.gif",
+      "hash": "27dd602bb581",
+      "bytes": 899114,
+      "w": 300,
+      "h": 300,
+      "frames": 21,
+      "seconds": 1.05,
+      "tone": "",
+      "thumb": "大肥鱼和GPT娘/TT12_好人.27dd602bb581.png",
+      "drag_url": "/media/drag/gif/0faf18e342bac475150e7f6da282d13745d94871e3bb0381c043337859ade048.gif",
+      "drag_thumb": "/media/drag/thumb/0faf18e342bac475150e7f6da282d13745d94871e3bb0381c043337859ade048.png",
+      "ts": 1792449857
+    }
+  }
+]

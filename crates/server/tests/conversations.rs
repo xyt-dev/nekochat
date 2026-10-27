@@ -14,6 +14,22 @@ async fn app() -> TestApp {
     })
     .await;
     app.login_admin("ap").await;
+    let model = app
+        .store
+        .insert_model(&model_spec(
+            PROVIDER_KEY,
+            "test",
+            json!({"style":"none","levels":[],"default":null}),
+        ))
+        .unwrap();
+    app.store
+        .create_character(
+            &serde_json::from_value(
+                json!({"name":"test","display_name":"test","model_id":model.id}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
     app
 }
 
@@ -25,6 +41,7 @@ async fn create_conv(app: &TestApp) -> String {
     let r = app
         .client
         .post(app.url("/api/conversations"))
+        .json(&json!({}))
         .send()
         .await
         .unwrap();
@@ -32,7 +49,9 @@ async fn create_conv(app: &TestApp) -> String {
     let v: Value = r.json().await.unwrap();
     assert_eq!(
         keys(&v),
-        ["id", "title", "updated_at"].map(String::from).into()
+        ["id", "title", "updated_at", "character_id"]
+            .map(String::from)
+            .into()
     );
     v["id"].as_str().unwrap().to_owned()
 }
@@ -48,6 +67,8 @@ fn node(conv: &str, id: &str, parent: Option<&str>, created_at: i64) -> Node {
         model_id: None,
         model_label: None,
         effort: None,
+        character_id: None,
+        character_name: None,
         status: NodeStatus::Complete,
         metrics: None,
         created_at,
@@ -55,57 +76,38 @@ fn node(conv: &str, id: &str, parent: Option<&str>, created_at: i64) -> Node {
 }
 
 #[tokio::test]
-async fn models_endpoint_exposes_only_picker_fields() {
+async fn characters_endpoint_only_exposes_public_role_fields() {
     let app = app().await;
-    let r = app
-        .client
-        .post(app.url("/api/admin/models"))
-        .json(&json!({
-            "provider": PROVIDER_KEY,
-            "upstream_id": "deepseek-v4-pro",
-            "display_name": "DeepSeek V4 Pro",
-            "sort": 0,
-            "protocol": "chat_completions",
-            "reasoning": {"style": "deepseek", "levels": ["high"], "default": "high"},
-            "vision": false,
-            "context_window": 128000,
-            "price": {"cached_in": 0.1, "uncached_in": 1.0, "output": 2.0}
-        }))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(r.status(), 201);
-
     let v: Value = app
         .client
-        .get(app.url("/api/models"))
+        .get(app.url("/api/characters"))
         .send()
         .await
         .unwrap()
         .json()
         .await
         .unwrap();
-    assert_eq!(v["default_model_id"], Value::Null);
-    let m = &v["models"][0];
     assert_eq!(
-        keys(m),
-        [
-            "id",
-            "display_name",
-            "provider_label",
-            "label",
-            "reasoning",
-            "vision"
-        ]
-        .map(String::from)
-        .into()
+        keys(&v),
+        ["default_character_id", "characters"]
+            .map(String::from)
+            .into()
     );
     assert_eq!(
-        keys(&m["reasoning"]),
-        ["levels", "default"].map(String::from).into()
+        keys(&v["characters"][0]),
+        ["id", "display_name", "background"]
+            .map(String::from)
+            .into()
     );
-    assert_eq!(m["label"], "DeepSeek V4 Pro · Mock");
-    assert_eq!(m["reasoning"]["levels"], json!(["high"]));
+    assert_eq!(
+        app.client
+            .get(app.url("/api/models"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
 }
 
 fn model_spec(provider: &str, upstream_id: &str, reasoning: Value) -> nekochat_store::ModelSpec {
@@ -125,7 +127,7 @@ fn model_spec(provider: &str, upstream_id: &str, reasoning: Value) -> nekochat_s
 
 async fn picker(app: &TestApp) -> Value {
     app.client
-        .get(app.url("/api/models"))
+        .get(app.url("/api/characters"))
         .send()
         .await
         .unwrap()
@@ -135,54 +137,46 @@ async fn picker(app: &TestApp) -> Value {
 }
 
 #[tokio::test]
-async fn models_endpoint_drops_unavailable_default_model() {
+async fn unavailable_and_unbound_roles_are_not_offered() {
     let app = app().await;
     let ghost = app
         .store
         .insert_model(&model_spec(
             "ghost",
             "g1",
-            json!({"style": "none", "levels": [], "default": null}),
+            json!({"style":"none","levels":[],"default":null}),
         ))
         .unwrap();
-    app.store
-        .set_setting(SettingKey::DefaultModel, Some(&ghost.id))
-        .unwrap();
-    let v = picker(&app).await;
-    assert_eq!(v["default_model_id"], Value::Null);
-    assert_eq!(v["models"], json!([]));
-}
-
-#[tokio::test]
-async fn models_endpoint_hides_effort_of_non_reasoning_models() {
-    let app = app().await;
-    // Written straight to the store, bypassing the admin validation.
-    let plain = app
+    let role = app
         .store
-        .insert_model(&model_spec(
-            PROVIDER_KEY,
-            "plain",
-            json!({"style": "none", "levels": ["high"], "default": "high"}),
-        ))
+        .create_character(
+            &serde_json::from_value(
+                json!({"name":"ghost","display_name":"ghost","model_id":ghost.id}),
+            )
+            .unwrap(),
+        )
         .unwrap();
     app.store
-        .set_setting(SettingKey::DefaultModel, Some(&plain.id))
+        .set_setting(SettingKey::DefaultCharacter, Some(&role.id))
+        .unwrap();
+    app.store
+        .create_character(
+            &serde_json::from_value(json!({"name":"unbound","display_name":"unbound"})).unwrap(),
+        )
         .unwrap();
     let v = picker(&app).await;
-    assert_eq!(v["default_model_id"], json!(plain.id));
-    assert_eq!(
-        v["models"][0]["reasoning"],
-        json!({"levels": [], "default": null})
-    );
+    assert_eq!(v["characters"].as_array().unwrap().len(), 1);
+    assert_ne!(v["default_character_id"], role.id);
 }
 
 #[tokio::test]
-async fn conversation_view_has_no_character_data() {
+async fn conversation_view_exposes_role_snapshot_not_private_configuration() {
     let app = app().await;
+    let model_id = app.store.list_models().unwrap()[0].id.clone();
     let c: Value = app
         .client
         .post(app.url("/api/admin/characters"))
-        .json(&json!({"name": "Neko", "system_prompt": "SECRET-PROMPT"}))
+        .json(&json!({"name": "Neko", "display_name":"Neko", "model_id":model_id, "system_prompt": "SECRET-PROMPT"}))
         .send()
         .await
         .unwrap()
@@ -201,7 +195,10 @@ async fn conversation_view_has_no_character_data() {
     let id = create_conv(&app).await;
     let conv = app.store.get_conversation(&id).unwrap().unwrap();
     assert_eq!(conv.character_id.as_deref(), c["id"].as_str());
-    app.store.insert_node(&node(&id, "n1", None, 1)).unwrap();
+    let mut historical = node(&id, "n1", None, 1);
+    historical.model_label = Some("PRIVATE OLD MODEL".into());
+    historical.effort = Some("high".into());
+    app.store.insert_node(&historical).unwrap();
 
     let text = app
         .client
@@ -213,11 +210,15 @@ async fn conversation_view_has_no_character_data() {
         .await
         .unwrap();
     assert!(!text.contains("SECRET-PROMPT"));
-    assert!(!text.contains("character"));
+    assert!(!text.contains("PRIVATE OLD MODEL"));
+    assert!(!text.contains("model_label"));
+    assert!(!text.contains("\"effort\""));
     let v: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(
         keys(&v),
-        ["id", "title", "leaf_id", "nodes"].map(String::from).into()
+        ["id", "title", "character_id", "leaf_id", "nodes"]
+            .map(String::from)
+            .into()
     );
     assert_eq!(
         keys(&v["nodes"][0]),
@@ -227,8 +228,8 @@ async fn conversation_view_has_no_character_data() {
             "role",
             "content",
             "reasoning",
-            "model_label",
-            "effort",
+            "character_id",
+            "character_name",
             "status",
             "metrics",
             "created_at"
