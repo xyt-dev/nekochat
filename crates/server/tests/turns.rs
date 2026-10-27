@@ -529,6 +529,7 @@ fn store_node(
         character_name: None,
         metrics: None,
         created_at: now_ms(),
+        attachments: vec![],
     };
     f.app.store.insert_node(&node).unwrap();
     node.id
@@ -992,4 +993,203 @@ fn cost_requires_all_prices() {
     let mut p = price();
     p.output = None;
     assert_eq!(cost_usd(&p, &u), None);
+}
+
+async fn upload_png(f: &Fixture, conv: &str) -> Value {
+    let response = f
+        .app
+        .client
+        .post(f.app.url(&format!("/api/conversations/{conv}/attachments")))
+        .header("content-type", "image/png")
+        .body(b"\x89PNG\r\n\x1a\nimage fixture".to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    response.json().await.unwrap()
+}
+
+#[tokio::test]
+async fn image_attachment_reaches_upstream_and_survives_edit_and_regenerate() {
+    let f = fixture(deepseek_reply("", "seen")).await;
+    let mut model = f.app.store.get_model(&f.model_id).unwrap().unwrap().spec;
+    model.vision = true;
+    f.app.store.update_model(&f.model_id, &model).unwrap();
+    let picker: Value = f
+        .app
+        .client
+        .get(f.app.url("/api/characters"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let public_role = picker["characters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|role| role["id"] == f.character_id)
+        .unwrap();
+    assert_eq!(public_role["vision"], true);
+    assert!(public_role.get("model_id").is_none());
+    assert!(public_role.get("provider").is_none());
+    let conv = f.create_conv().await;
+    let attachment = upload_png(&f, &conv).await;
+    let events = f.turn(&conv, json!({"action":"send","content":"","character_id":f.character_id,"attachment_ids":[attachment["id"]]})).await;
+    let user = &events.iter().find(|(name, _)| name == "start").unwrap().1["user_node"];
+    assert_eq!(user["attachments"][0]["id"], attachment["id"]);
+    let first = f.requests();
+    assert_eq!(
+        first[0].body["messages"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()["content"][0]["type"],
+        "image_url"
+    );
+    assert!(
+        first[0].body["messages"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()["content"][0]["image_url"]["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,")
+    );
+    let edited = f.turn(&conv, json!({"action":"edit","node_id":user["id"],"content":"describe","character_id":f.character_id})).await;
+    let edited_user = &edited.iter().find(|(name, _)| name == "start").unwrap().1["user_node"];
+    assert_eq!(edited_user["attachments"][0]["id"], attachment["id"]);
+    f.turn(
+        &conv,
+        json!({"action":"regenerate","node_id":edited_user["id"],"character_id":f.character_id}),
+    )
+    .await;
+    let requests = f.requests();
+    assert_eq!(requests.len(), 3);
+    assert_eq!(
+        requests[1].body["messages"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()["content"],
+        requests[2].body["messages"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()["content"]
+    );
+}
+
+#[tokio::test]
+async fn image_capability_and_conversation_ownership_are_checked_before_saving() {
+    let f = fixture(deepseek_reply("", "never")).await;
+    let conv = f.create_conv().await;
+    let other = f.create_conv().await;
+    let attachment = upload_png(&f, &conv).await;
+    let body = json!({"action":"send","content":"","character_id":f.character_id,"attachment_ids":[attachment["id"]]});
+    assert_eq!(f.post(&conv, body.clone()).await.status(), 400);
+    assert!(f.app.store.nodes(&conv).unwrap().is_empty());
+    assert!(f.requests().is_empty());
+    let mut model = f.app.store.get_model(&f.model_id).unwrap().unwrap().spec;
+    model.vision = true;
+    f.app.store.update_model(&f.model_id, &model).unwrap();
+    assert_eq!(f.post(&other, body).await.status(), 400);
+    assert!(f.app.store.nodes(&other).unwrap().is_empty());
+    assert!(f.requests().is_empty());
+}
+
+#[tokio::test]
+async fn clear_and_delete_remove_even_unused_uploads_and_serve_private_image_headers() {
+    let f = fixture(deepseek_reply("", "")).await;
+    let conv = f.create_conv().await;
+    let attachment = upload_png(&f, &conv).await;
+    let url = f.app.url(attachment["url"].as_str().unwrap());
+    let response = f.app.client.get(&url).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert_eq!(response.headers()["x-content-type-options"], "nosniff");
+    assert_eq!(response.headers()["content-type"], "image/png");
+    let other = f.create_conv().await;
+    assert_eq!(
+        f.app
+            .client
+            .get(f.app.url(&format!(
+                "/api/conversations/{other}/attachments/{}",
+                attachment["id"].as_str().unwrap()
+            )))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        f.app
+            .client
+            .post(f.app.url(&format!("/api/conversations/{conv}/clear")))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    assert_eq!(f.app.client.get(&url).send().await.unwrap().status(), 404);
+    let second = upload_png(&f, &conv).await;
+    assert_eq!(
+        f.app
+            .client
+            .delete(f.app.url(&format!("/api/conversations/{conv}")))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    assert_eq!(
+        f.app
+            .client
+            .get(f.app.url(second["url"].as_str().unwrap()))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+}
+
+#[tokio::test]
+async fn sixth_image_and_remote_image_url_are_rejected_without_saving_or_upstream() {
+    let f = fixture(deepseek_reply("", "never")).await;
+    let mut model = f.app.store.get_model(&f.model_id).unwrap().unwrap().spec;
+    model.vision = true;
+    f.app.store.update_model(&f.model_id, &model).unwrap();
+    let conv = f.create_conv().await;
+    let mut ids = Vec::new();
+    for _ in 0..6 {
+        ids.push(upload_png(&f, &conv).await["id"].clone());
+    }
+    let request =
+        json!({"action":"send","content":"","character_id":f.character_id,"attachment_ids":ids});
+    assert_eq!(f.post(&conv, request).await.status(), 400);
+    assert_eq!(f.post(&conv,json!({"action":"send","content":"url","character_id":f.character_id,"images":["https://example.com/private.png"]})).await.status(),400);
+    assert!(f.requests().is_empty());
+    assert!(f.app.store.nodes(&conv).unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn role_switch_to_text_only_refuses_image_history_before_saving_or_upstream() {
+    let f = fixture(deepseek_reply("", "seen")).await;
+    let mut model = f.app.store.get_model(&f.model_id).unwrap().unwrap().spec;
+    model.vision = true;
+    f.app.store.update_model(&f.model_id, &model).unwrap();
+    let conv = f.create_conv().await;
+    let image = upload_png(&f, &conv).await;
+    f.turn(&conv,json!({"action":"send","content":"","character_id":f.character_id,"attachment_ids":[image["id"]]})).await;
+    model.vision = false;
+    f.app.store.update_model(&f.model_id, &model).unwrap();
+    assert_eq!(f.post(&conv, f.send_body("continue")).await.status(), 400);
+    assert_eq!(f.requests().len(), 1);
+    assert_eq!(f.app.store.nodes(&conv).unwrap().len(), 2);
 }

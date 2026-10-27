@@ -19,11 +19,19 @@ export interface Metrics {
   usage: Usage;
 }
 
+export interface Attachment {
+  id: string;
+  media_type: string;
+  size: number;
+  url: string;
+}
+
 export interface NodeView {
   id: string;
   parent_id: string | null;
   role: Role;
   content: string;
+  attachments: Attachment[];
   reasoning: string | null;
   character_id: string | null;
   character_name: string | null;
@@ -56,6 +64,8 @@ export interface PickerCharacter {
   id: string;
   display_name: string;
   background: CharacterBackground | null;
+  vision: boolean;
+  uses_chatgpt_plan: boolean;
 }
 
 export interface CharactersView {
@@ -70,8 +80,8 @@ export interface CustomTheme {
 }
 
 export type TurnAction =
-  | { action: "send"; content: string }
-  | { action: "edit"; node_id: string; content: string }
+  | { action: "send"; content: string; attachment_ids?: string[] }
+  | { action: "edit"; node_id: string; content: string; attachment_ids?: string[] }
   | { action: "regenerate"; node_id: string };
 
 export type TurnRequest = TurnAction & { character_id: string };
@@ -176,6 +186,12 @@ export const api = {
   createConversation: (character_id?: string) =>
     json<ConversationSummary>("/api/conversations", "POST", character_id ? { character_id } : {}),
   conversation: (id: string) => json<ConversationView>(conv(id)),
+  uploadAttachment: async (id: string, file: File): Promise<Attachment> => {
+    const response = await request(`${conv(id)}/attachments`, {
+      method: "POST", headers: { "content-type": "application/octet-stream" }, body: file,
+    });
+    return await response.json() as Attachment;
+  },
   deleteConversation: (id: string) => json<void>(conv(id), "DELETE"),
   clearConversation: (id: string) => json<void>(`${conv(id)}/clear`, "POST"),
   setLeaf: (id: string, node_id: string, descend: boolean) =>

@@ -3,6 +3,7 @@ import { type Accessor, batch, createMemo, createRoot, createSignal, type Setter
 import {
   ApiError,
   api,
+  type Attachment,
   type ConversationSummary,
   type ConversationView,
   type CharactersView,
@@ -102,9 +103,12 @@ function createAppStore() {
   const [characters, setCharacters] = createSignal<CharactersView>({ default_character_id: null, characters: [] });
   const [characterId, setCharacterId] = createSignal<string | null>(null);
   const [composerText, setComposerText] = createSignal("");
+  const [composerAttachments, setComposerAttachments] = createSignal<Attachment[]>([]);
+  const [uploadingImages, setUploadingImages] = createSignal(0);
   const [editing, setEditing] = createSignal<Editing | null>(null);
   const [treeOpen, setTreeOpen] = createSignal(false);
   const [sidebarOpen, setSidebarOpen] = createSignal(false);
+  let uploadDraftVersion = 0;
 
   const index = createMemo<TreeIndex>(() => indexTree(conv()?.nodes ?? []));
   const path = createMemo(() => pathTo(index(), conv()?.leaf_id ?? null));
@@ -147,6 +151,8 @@ function createAppStore() {
   let loadSeq = 0;
   async function openConversation(id: string | null) {
     const seq = ++loadSeq;
+    uploadDraftVersion++;
+    setComposerAttachments([]);
     setEditing(null);
     setTreeOpen(false);
     setSidebarOpen(false);
@@ -242,6 +248,8 @@ function createAppStore() {
         return rest;
       });
       setEditing(null);
+      if (conv()?.id === id) setComposerAttachments([]);
+      uploadDraftVersion++;
       await reloadConversation(id);
       await loadConversations();
     } catch (e) {
@@ -334,6 +342,35 @@ function createAppStore() {
     });
   }
 
+  async function uploadImages(files: File[]) {
+    if (files.length === 0) return;
+    if (composerAttachments().length + uploadingImages() + files.length > 5) {
+      toast("每条消息最多 5 张图片");
+      return;
+    }
+    if (files.some((file) => file.size === 0 || file.size > 8 * 1024 * 1024)) {
+      toast("每张图片大小必须为 1 字节至 8 MiB");
+      return;
+    }
+    setUploadingImages((count) => count + files.length);
+    try {
+      const id = conv()?.id ?? await newConversation();
+      if (!id) return;
+      const version = uploadDraftVersion;
+      for (const file of files) {
+        if (uploadDraftVersion !== version || conv()?.id !== id) break;
+        try {
+          const attachment = await api.uploadAttachment(id, file);
+          if (conv()?.id === id && uploadDraftVersion === version) setComposerAttachments((list) => [...list, attachment]);
+        } catch (error) {
+          toast(error instanceof ApiError ? error.message : "图片上传失败");
+        }
+      }
+    } finally {
+      setUploadingImages((count) => count - files.length);
+    }
+  }
+
   function dropLive(turn: LiveTurn) {
     setLive((l) => {
       if (l[turn.convId] !== turn) return l;
@@ -399,6 +436,7 @@ function createAppStore() {
         id: turn.assistantId(),
         parent_id: turn.parentId(),
         role: "assistant",
+        attachments: [],
         content: turn.buf.content,
         reasoning: turn.buf.reasoning || null,
         character_id: turn.characterId(),
@@ -437,6 +475,10 @@ function createAppStore() {
     chooseCharacter,
     composerText,
     setComposerText,
+    composerAttachments,
+    setComposerAttachments,
+    uploadingImages,
+    uploadImages,
     editing,
     setEditing,
     treeOpen,

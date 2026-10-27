@@ -99,6 +99,13 @@ pub fn resolve_api_keys(
     cfg: &Config,
     env: impl Fn(&str) -> Option<String>,
 ) -> anyhow::Result<Vec<(ProviderEntry, String)>> {
+    if cfg
+        .providers
+        .iter()
+        .any(|provider| provider.key == crate::codex::PROVIDER_KEY)
+    {
+        bail!("chatgpt-subscription 是官方账号连接的保留提供商标识，请勿在 providers 中配置");
+    }
     cfg.providers
         .iter()
         .map(|p| match env(&p.api_key_env).filter(|k| !k.is_empty()) {

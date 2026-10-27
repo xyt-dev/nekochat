@@ -53,7 +53,7 @@ fn schema_one_migrates_without_losing_tree_usage_or_private_model_metadata() {
     assert_eq!(
         conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
             .unwrap(),
-        2
+        3
     );
     drop(conn);
     assert_eq!(Store::open(&path).unwrap().nodes("conv").unwrap().len(), 2);

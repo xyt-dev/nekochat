@@ -22,6 +22,7 @@ fn node(conv: &str, id: &str, parent: Option<&str>, role: NodeRole, at: i64) -> 
         status: NodeStatus::Complete,
         metrics: None,
         created_at: at,
+        attachments: vec![],
     }
 }
 
@@ -302,7 +303,7 @@ fn newer_schema_version_is_refused() {
         .unwrap();
     let err = Store::open(&path).err().expect("must refuse");
     let msg = err.to_string();
-    assert!(msg.contains("99") && msg.contains('2'), "{msg}");
+    assert!(msg.contains("99") && msg.contains('3'), "{msg}");
     let version: i64 = rusqlite::Connection::open(&path)
         .unwrap()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -318,7 +319,7 @@ fn fresh_database_gets_schema_version() {
         .unwrap()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
 }
 
 #[test]
@@ -330,4 +331,77 @@ fn deleting_character_detaches_conversations() {
     store.delete_character(&ch.id).unwrap();
     let conv = store.get_conversation(&c.id).unwrap().unwrap();
     assert_eq!(conv.character_id, None);
+}
+
+#[test]
+fn images_survive_reopening_and_are_reused_across_branches() {
+    let (dir, store) = fresh();
+    let conv = store.create_conversation(None).unwrap().id;
+    let attachment = store
+        .insert_attachment(&conv, "image/png", b"\x89PNG\r\n\x1a\npersisted image")
+        .unwrap();
+    let mut original = node(&conv, "image-user", None, NodeRole::User, 1);
+    original.attachments = vec![attachment.clone()];
+    store.insert_node(&original).unwrap();
+    let mut edited = node(&conv, "edited-image-user", None, NodeRole::User, 2);
+    edited.attachments = vec![attachment.clone()];
+    store.insert_node(&edited).unwrap();
+    drop(store);
+    let reopened = Store::open(&dir.path().join("nekochat.db")).unwrap();
+    for id in ["image-user", "edited-image-user"] {
+        assert_eq!(
+            reopened.get_node(&conv, id).unwrap().unwrap().attachments,
+            vec![attachment.clone()]
+        );
+        assert_eq!(
+            reopened.path_to(&conv, Some(id)).unwrap()[0].attachments,
+            vec![attachment.clone()]
+        );
+    }
+    assert_eq!(
+        reopened
+            .get_attachment(&conv, &attachment.id)
+            .unwrap()
+            .unwrap()
+            .1,
+        b"\x89PNG\r\n\x1a\npersisted image"
+    );
+    let other = reopened.create_conversation(None).unwrap().id;
+    let mut wrong = node(&other, "wrong", None, NodeRole::User, 3);
+    wrong.attachments = vec![attachment.clone()];
+    assert!(reopened.insert_node(&wrong).is_err());
+    assert!(reopened.nodes(&other).unwrap().is_empty());
+    assert_eq!(
+        reopened.get_conversation(&other).unwrap().unwrap().leaf_id,
+        None
+    );
+}
+
+#[test]
+fn clearing_scrubs_unused_and_referenced_image_bytes_from_database_and_wal() {
+    let (dir, store) = fresh();
+    let conv = store.create_conversation(None).unwrap().id;
+    let marker = b"UNIQUE_PRIVATE_IMAGE_BLOB_MARKER_418731";
+    let attachment = store.insert_attachment(&conv, "image/png", marker).unwrap();
+    let unused = store.insert_attachment(&conv, "image/gif", marker).unwrap();
+    let mut message = node(&conv, "image-node", None, NodeRole::User, 1);
+    message.attachments = vec![attachment.clone()];
+    store.insert_node(&message).unwrap();
+    store.clear_conversation(&conv).unwrap();
+    assert!(
+        store
+            .get_attachment(&conv, &attachment.id)
+            .unwrap()
+            .is_none()
+    );
+    assert!(store.get_attachment(&conv, &unused.id).unwrap().is_none());
+    drop(store);
+    for filename in ["nekochat.db", "nekochat.db-wal"] {
+        if let Ok(bytes) = std::fs::read(dir.path().join(filename)) {
+            assert!(
+                !contains(&bytes, marker),
+                "{filename} retains private image bytes"
+            );
+        }
+    }
 }

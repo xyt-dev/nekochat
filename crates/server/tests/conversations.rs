@@ -72,6 +72,7 @@ fn node(conv: &str, id: &str, parent: Option<&str>, created_at: i64) -> Node {
         status: NodeStatus::Complete,
         metrics: None,
         created_at,
+        attachments: vec![],
     }
 }
 
@@ -95,9 +96,15 @@ async fn characters_endpoint_only_exposes_public_role_fields() {
     );
     assert_eq!(
         keys(&v["characters"][0]),
-        ["id", "display_name", "background"]
-            .map(String::from)
-            .into()
+        [
+            "id",
+            "display_name",
+            "background",
+            "vision",
+            "uses_chatgpt_plan"
+        ]
+        .map(String::from)
+        .into()
     );
     assert_eq!(
         app.client
@@ -227,6 +234,7 @@ async fn conversation_view_exposes_role_snapshot_not_private_configuration() {
             "parent_id",
             "role",
             "content",
+            "attachments",
             "reasoning",
             "character_id",
             "character_name",

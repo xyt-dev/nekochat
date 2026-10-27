@@ -8,9 +8,12 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
+use base64::Engine;
 use futures_util::{StreamExt, stream};
 use nekochat_core::{Metrics, Price, ReasoningSpec, ReasoningStyle, Usage};
-use nekochat_gateway::{ChatMessage, ChatRequest, ChatRole, GatewayError, Provider, StreamEvent};
+use nekochat_gateway::{
+    ChatImage, ChatMessage, ChatRequest, ChatRole, GatewayError, Provider, StreamEvent,
+};
 use nekochat_resources::{ResourceCatalog, ResourceChunk, ResourceRef};
 use nekochat_store::{
     Character, Conversation, DEFAULT_TITLE, ListedModel, Node, NodeRole, NodeStatus, Store,
@@ -44,6 +47,7 @@ pub struct TurnRequest {
     pub character_id: String,
     pub content: Option<String>,
     pub node_id: Option<String>,
+    pub attachment_ids: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -77,6 +81,7 @@ pub type TurnStream = futures_util::stream::BoxStream<'static, TurnEvent>;
 struct Anchor {
     parent: Option<String>,
     content: String,
+    attachment_ids: Vec<String>,
     /// Id of the existing user message answered again; `None` stores `content` as a new one.
     existing: Option<String>,
 }
@@ -119,6 +124,7 @@ pub async fn start_turn(
         character_id,
         content,
         node_id,
+        attachment_ids,
     } = req;
     let target_id = match action {
         Action::Send => None,
@@ -163,34 +169,74 @@ pub async fn start_turn(
         .parameters
         .validate_for_protocol(&model.spec.protocol)
         .map_err(ApiError::bad_request)?;
-    let provider = state
-        .provider(&model.spec.provider)
-        .ok_or_else(|| ApiError::bad_request("模型的提供商不在配置中"))?
-        .clone();
+    let provider = state.authenticated_provider(&model.spec.provider).await?;
     let effort = resolve_effort(
         &model.spec.reasoning,
         character.spec.parameters.effort.clone(),
     )?;
+    let content = content.unwrap_or_default();
     let anchor = match action {
         Action::Send => Anchor {
             parent: conv.leaf_id.clone(),
-            content: non_empty(content.ok_or_else(|| ApiError::bad_request("缺少消息内容"))?)?,
+            content,
+            attachment_ids: attachment_ids.unwrap_or_default(),
             existing: None,
         },
-        Action::Edit => Anchor {
-            parent: user_node(target)?.parent_id,
-            content: non_empty(content.ok_or_else(|| ApiError::bad_request("缺少消息内容"))?)?,
-            existing: None,
-        },
+        Action::Edit => {
+            let node = user_node(target)?;
+            Anchor {
+                parent: node.parent_id,
+                content,
+                attachment_ids: attachment_ids
+                    .unwrap_or_else(|| node.attachments.into_iter().map(|a| a.id).collect()),
+                existing: None,
+            }
+        }
         Action::Regenerate => {
             let node = user_node(target)?;
             Anchor {
                 parent: node.parent_id,
                 content: node.content,
+                attachment_ids: node.attachments.into_iter().map(|a| a.id).collect(),
                 existing: Some(node.id),
             }
         }
     };
+    if anchor.attachment_ids.len() > 5 {
+        return Err(ApiError::bad_request("每条消息最多 5 张图片"));
+    }
+    let unique: std::collections::HashSet<_> = anchor.attachment_ids.iter().collect();
+    if unique.len() != anchor.attachment_ids.len() {
+        return Err(ApiError::bad_request("图片不能重复"));
+    }
+    if anchor.content.trim().is_empty() && anchor.attachment_ids.is_empty() {
+        return Err(ApiError::bad_request("消息内容或图片不能为空"));
+    }
+    let store = state.store.clone();
+    let check_conv = conv.id.clone();
+    let check_ids = anchor.attachment_ids.clone();
+    let check_parent = anchor.parent.clone();
+    let has_images = blocking(move || {
+        match store.attachment_metadata(&check_conv, &check_ids) {
+            Ok(_) => {}
+            Err(StoreError::NotFound) => return Ok(None),
+            Err(error) => return Err(error),
+        }
+        Ok(Some(
+            !check_ids.is_empty()
+                || store
+                    .path_to(&check_conv, check_parent.as_deref())?
+                    .iter()
+                    .any(|node| !node.attachments.is_empty()),
+        ))
+    })
+    .await?
+    .ok_or_else(|| ApiError::bad_request("图片不存在或不属于当前对话"))?;
+    if has_images && !model.spec.vision {
+        return Err(ApiError::bad_request(
+            "当前角色不支持图片输入，请选择支持图片的角色",
+        ));
+    }
 
     let prompt = state
         .resources
@@ -244,13 +290,6 @@ fn user_node(node: Option<Node>) -> Result<Node, ApiError> {
         .ok_or_else(|| ApiError::bad_request("节点不存在或不是用户消息"))
 }
 
-fn non_empty(content: String) -> Result<String, ApiError> {
-    if content.trim().is_empty() {
-        return Err(ApiError::bad_request("消息内容不能为空"));
-    }
-    Ok(content)
-}
-
 /// Builds the upstream context, stores the new user message and titles a fresh conversation.
 fn prepare(
     store: &Store,
@@ -259,7 +298,14 @@ fn prepare(
     character: &Character,
     resource_prompt: &str,
 ) -> Result<Prepared, StoreError> {
-    let mut messages = context(store, &conv, anchor.parent.as_deref(), &anchor.content)?;
+    let attachments = store.attachment_metadata(&conv.id, &anchor.attachment_ids)?;
+    let mut messages = context(
+        store,
+        &conv,
+        anchor.parent.as_deref(),
+        &anchor.content,
+        &anchor.attachment_ids,
+    )?;
     let prompt = [character.spec.system_prompt.as_str(), resource_prompt]
         .into_iter()
         .filter(|part| !part.is_empty())
@@ -271,6 +317,7 @@ fn prepare(
             ChatMessage {
                 role: ChatRole::System,
                 content: prompt,
+                images: Vec::new(),
             },
         );
     }
@@ -295,6 +342,7 @@ fn prepare(
                 parent_id: anchor.parent,
                 role: NodeRole::User,
                 content: anchor.content,
+                attachments,
                 reasoning: None,
                 model_id: None,
                 model_label: None,
@@ -331,6 +379,7 @@ fn context(
     conv: &Conversation,
     parent: Option<&str>,
     user_text: &str,
+    attachment_ids: &[String],
 ) -> Result<Vec<ChatMessage>, StoreError> {
     let mut messages = Vec::new();
     for node in store.path_to(&conv.id, parent)? {
@@ -342,13 +391,39 @@ fn context(
         messages.push(ChatMessage {
             role,
             content: node.content,
+            images: images(
+                store,
+                &conv.id,
+                node.attachments
+                    .iter()
+                    .map(|attachment| attachment.id.as_str()),
+            )?,
         });
     }
     messages.push(ChatMessage {
         role: ChatRole::User,
         content: user_text.to_owned(),
+        images: images(store, &conv.id, attachment_ids.iter().map(String::as_str))?,
     });
     Ok(messages)
+}
+
+fn images<'a>(
+    store: &Store,
+    conv: &str,
+    ids: impl IntoIterator<Item = &'a str>,
+) -> Result<Vec<ChatImage>, StoreError> {
+    ids.into_iter()
+        .map(|id| {
+            let (attachment, bytes) = store
+                .get_attachment(conv, id)?
+                .ok_or(StoreError::NotFound)?;
+            Ok(ChatImage {
+                media_type: attachment.media_type,
+                base64: base64::engine::general_purpose::STANDARD.encode(bytes),
+            })
+        })
+        .collect()
 }
 
 /// Cost in USD of `u` at `price` (USD per million tokens); `None` unless all three prices are set.
@@ -589,6 +664,7 @@ impl Turn {
             parent_id: Some(prepared.reply_parent),
             role: NodeRole::Assistant,
             content: progress.content,
+            attachments: Vec::new(),
             reasoning: Some(progress.reasoning).filter(|r| !r.is_empty()),
             model_id: Some(model.id),
             model_label: Some(label.clone()),
@@ -661,6 +737,8 @@ impl Turn {
                         nekochat_gateway::stream_chat(&self.http, &self.provider, &req).await,
                     nekochat_core::Protocol::Responses =>
                         nekochat_gateway::stream_responses(&self.http, &self.provider, &req).await,
+                    nekochat_core::Protocol::ChatgptResponses =>
+                        nekochat_gateway::stream_chatgpt(&self.http, &self.provider, &req).await,
                 }
             } => {
                 match connected {

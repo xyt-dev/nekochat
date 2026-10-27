@@ -35,13 +35,15 @@ const COMMANDS: Command[] = [
 
 export function Composer() {
   let textarea!: HTMLTextAreaElement;
+  let fileInput!: HTMLInputElement;
+  const commands = [...COMMANDS, { name: "/upload", hint: "上传图片（支持粘贴或拖放）", run: () => fileInput.click() }];
   const [selected, setSelected] = createSignal(0);
   const [dismissed, setDismissed] = createSignal(false);
 
   const matches = createMemo(() => {
     const text = store.composerText();
     if (!/^\/\S*$/.test(text)) return [];
-    return COMMANDS.filter((c) => c.name.startsWith(text));
+    return commands.filter((c) => c.name.startsWith(text));
   });
   const popupOpen = () => matches().length > 0 && !dismissed();
 
@@ -67,14 +69,21 @@ export function Composer() {
 
   const send = async () => {
     const text = store.composerText();
-    if (!text.trim() || generating()) return;
+    const attachments = store.composerAttachments();
+    if ((!text.trim() && attachments.length === 0) || generating() || store.uploadingImages() > 0) return;
+    if (attachments.length > 0 && !store.character()?.vision) {
+      toast("当前角色不支持图片输入，请选择支持图片的角色");
+      return;
+    }
     const editing = store.editing();
     store.setComposerText("");
+    store.setComposerAttachments([]);
     const ok = await store.runTurn(
-      editing ? { action: "edit", node_id: editing.nodeId, content: text } : { action: "send", content: text },
+      editing ? { action: "edit", node_id: editing.nodeId, content: text, attachment_ids: attachments.map((item) => item.id) } : { action: "send", content: text, attachment_ids: attachments.map((item) => item.id) },
     );
     if (!ok && store.composerText() === "") {
       store.setComposerText(text);
+      if (store.composerAttachments().length === 0) store.setComposerAttachments(attachments);
       if (editing) store.setEditing(editing);
     }
   };
@@ -112,11 +121,25 @@ export function Composer() {
     } else if (e.key === "Escape" && store.editing()) {
       store.setEditing(null);
       store.setComposerText("");
+      store.setComposerAttachments([]);
     }
   };
 
   return (
-    <div class="composer-wrap">
+    <div class="composer-wrap"
+      onDragOver={(event) => { if (event.dataTransfer?.types.includes("Files")) event.preventDefault(); }}
+      onDrop={(event) => {
+        if (!event.dataTransfer?.files.length) return;
+        event.preventDefault();
+        void store.uploadImages(Array.from(event.dataTransfer.files));
+      }}
+    >
+      <input ref={fileInput} type="file" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={(event) => {
+          void store.uploadImages(Array.from(event.currentTarget.files ?? []));
+          event.currentTarget.value = "";
+        }}
+      />
       <Show when={store.editing()}>
         <div class="editing-bar">
           <span>编辑消息：发送后会产生一个新分支</span>
@@ -125,6 +148,7 @@ export function Composer() {
             onClick={() => {
               store.setEditing(null);
               store.setComposerText("");
+              store.setComposerAttachments([]);
             }}
           >
             取消
@@ -132,6 +156,17 @@ export function Composer() {
         </div>
       </Show>
       <div class="composer">
+        <Show when={store.composerAttachments().length > 0 || store.uploadingImages() > 0}>
+          <div class="attachment-draft">
+            <For each={store.composerAttachments()}>{(attachment) => (
+              <div class="attachment-preview">
+                <img src={attachment.url} alt="待发送的图片" decoding="async" />
+                <button type="button" aria-label="移除图片" onClick={() => store.setComposerAttachments((list) => list.filter((item) => item.id !== attachment.id))}>×</button>
+              </div>
+            )}</For>
+            <Show when={store.uploadingImages() > 0}><span role="status">图片上传中…</span></Show>
+          </div>
+        </Show>
         <Show when={popupOpen()}>
           <div class="popup slash-popup">
             <For each={matches()}>
@@ -157,9 +192,21 @@ export function Composer() {
           value={store.composerText()}
           onInput={(e) => store.setComposerText(e.currentTarget.value)}
           onKeyDown={onKeyDown}
+          onPaste={(event) => {
+            const files = Array.from(event.clipboardData?.items ?? [])
+              .filter((item) => item.kind === "file")
+              .map((item) => item.getAsFile()).filter((file): file is File => file !== null);
+            if (files.length === 0) return;
+            event.preventDefault();
+            void store.uploadImages(files);
+          }}
         />
         <div class="composer-tools">
           <CharacterPicker />
+          <button type="button" title="上传图片（也可粘贴或拖放）" aria-label="上传图片" onClick={() => fileInput.click()}>图片</button>
+          <Show when={store.character()?.uses_chatgpt_plan}>
+            <small class="chatgpt-disclosure">Using ChatGPT plan · <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">Manage usage</a></small>
+          </Show>
           <Show
             when={generating()}
             fallback={
@@ -167,7 +214,7 @@ export function Composer() {
                 type="button"
                 class="send"
                 title="发送（Enter）"
-                disabled={!store.composerText().trim()}
+                disabled={(!store.composerText().trim() && store.composerAttachments().length === 0) || store.uploadingImages() > 0}
                 onClick={() => void send()}
               >
                 ↑

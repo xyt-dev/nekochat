@@ -28,12 +28,12 @@ pub fn supported(provider: &Provider, id: &str) -> bool {
 
 #[derive(Serialize)]
 pub struct ModelDefaults {
-    display_name: String,
-    protocol: Protocol,
-    reasoning: ReasoningSpec,
-    vision: bool,
-    context_window: Option<i64>,
-    price: Price,
+    pub(crate) display_name: String,
+    pub(crate) protocol: Protocol,
+    pub(crate) reasoning: ReasoningSpec,
+    pub(crate) vision: bool,
+    pub(crate) context_window: Option<i64>,
+    pub(crate) price: Price,
 }
 
 pub fn defaults(provider: &Provider, id: &str) -> Option<ModelDefaults> {
@@ -80,6 +80,7 @@ pub fn defaults(provider: &Provider, id: &str) -> Option<ModelDefaults> {
         result.protocol = Protocol::Responses;
         if id == "gpt-6-luna" {
             result.display_name = "GPT 6 Luna".into();
+            result.vision = true;
             result.reasoning = ReasoningSpec {
                 style: ReasoningStyle::Effort,
                 levels: ["low", "medium", "high"]

@@ -40,6 +40,19 @@ impl GenerationParameters {
 
     pub fn validate_for_protocol(&self, protocol: &Protocol) -> Result<(), &'static str> {
         self.validate()?;
+        if protocol == &Protocol::ChatgptResponses
+            && (self.temperature.is_some()
+                || self.top_p.is_some()
+                || self.max_output_tokens.is_some()
+                || self.seed.is_some()
+                || self.frequency_penalty.is_some()
+                || self.presence_penalty.is_some()
+                || !self.stop.is_empty())
+        {
+            return Err(
+                "ChatGPT 订阅仅支持思考档位，不支持采样、最大输出、seed、penalty 或 stop 参数",
+            );
+        }
         if protocol == &Protocol::Responses
             && (self.seed.is_some()
                 || self.frequency_penalty.is_some()
@@ -69,6 +82,8 @@ fn default_background_opacity() -> f64 {
 pub enum Protocol {
     ChatCompletions,
     Responses,
+    /// Official Sign in with ChatGPT plan usage via public Responses, not the legacy Codex backend.
+    ChatgptResponses,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

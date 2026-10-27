@@ -50,27 +50,29 @@ export function ModelEditor(props: {
     <h3 id="model-editor-title">{props.modelId ? "编辑模型" : "上架模型"}</h3>
     <form onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy()} class="admin-form-grid">
-        <label>提供商<select name="model-provider" value={provider()} onChange={(event) => setProvider(event.currentTarget.value)} required><For each={props.providers}>{(item) => <option value={item.key}>{item.label} · {item.key}</option>}</For></select></label>
+        <label>提供商<select name="model-provider" value={provider()} onChange={(event) => { const key = event.currentTarget.value; setProvider(key); if (key === "chatgpt-subscription") { setProtocol("chatgpt_responses"); setCached(""); setUncached(""); setOutput(""); } }} required><For each={props.providers}>{(item) => <option value={item.key} disabled={item.connected === false}>{item.label} · {item.key}{item.connected === false ? "（未连接）" : ""}</option>}</For></select></label>
         <label>上游模型 ID<input name="upstream-id" required value={upstream()} onInput={(event) => setUpstream(event.currentTarget.value)} /></label>
         <label>显示名<input name="display-name" required value={name()} onInput={(event) => setName(event.currentTarget.value)} /></label>
         <label>排序（小数值在前）<input name="model-sort" type="number" step="1" required value={sort()} onInput={(event) => setSort(event.currentTarget.value)} /></label>
-        <label>协议<select name="model-protocol" value={protocol()} onChange={(event) => {
+        <label>协议<select name="model-protocol" value={protocol()} disabled={provider() === "chatgpt-subscription"} onChange={(event) => {
           const next = event.currentTarget.value as ModelSpec["protocol"];
           setProtocol(next);
-          if (next === "responses" && style() === "deepseek") {
+          if (next !== "chat_completions" && style() === "deepseek") {
             setStyle("effort"); setLevels("low, medium, high"); setDefaultLevel("high");
           }
-        }}><option value="chat_completions">Chat Completions</option><option value="responses">Responses</option><option disabled>Messages（尚未接入）</option><option disabled>Gemini（尚未接入）</option></select></label>
-        <label>思考方式<select name="reasoning-style" value={style()} onChange={(event) => setStyle(event.currentTarget.value as ModelSpec["reasoning"]["style"])}><option value="none">无思考</option><option value="effort">reasoning_effort</option><option value="deepseek" disabled={protocol() === "responses"}>DeepSeek thinking</option></select></label>
+        }}><option value="chat_completions">Chat Completions</option><option value="responses">Responses（API key）</option><option value="chatgpt_responses" disabled={provider() !== "chatgpt-subscription"}>ChatGPT Responses（官方订阅）</option><option disabled>Messages（尚未接入）</option><option disabled>Gemini（尚未接入）</option></select></label>
+        <label>思考方式<select name="reasoning-style" value={style()} onChange={(event) => setStyle(event.currentTarget.value as ModelSpec["reasoning"]["style"])}><option value="none">无思考</option><option value="effort">reasoning_effort</option><option value="deepseek" disabled={protocol() !== "chat_completions"}>DeepSeek thinking</option></select></label>
         <Show when={style() !== "none"}>
           <label>思考档位（逗号分隔）<input name="reasoning-levels" value={levels()} onInput={(event) => setLevels(event.currentTarget.value)} placeholder="low, medium, high" /></label>
           <label>默认思考档位<select name="reasoning-default" value={defaultLevel()} onChange={(event) => setDefaultLevel(event.currentTarget.value)}><option value="">无默认档位</option><For each={levelList()}>{(level) => <option value={level}>{level}</option>}</For></select></label>
         </Show>
         <label>上下文窗口（token，留空为未知）<input name="context-window" type="number" min="1" step="1" value={context()} onInput={(event) => setContext(event.currentTarget.value)} /></label>
         <label class="admin-check"><input name="vision" type="checkbox" checked={vision()} onChange={(event) => setVision(event.currentTarget.checked)} />支持图片输入</label>
-        <label>缓存输入（USD / 百万 token）<input name="price-cached" type="number" min="0" step="any" value={cached()} onInput={(event) => setCached(event.currentTarget.value)} /></label>
-        <label>无缓存输入（USD / 百万 token）<input name="price-uncached" type="number" min="0" step="any" value={uncached()} onInput={(event) => setUncached(event.currentTarget.value)} /></label>
-        <label>输出（USD / 百万 token）<input name="price-output" type="number" min="0" step="any" value={output()} onInput={(event) => setOutput(event.currentTarget.value)} /></label>
+        <Show when={provider() !== "chatgpt-subscription"} fallback={<p class="admin-note">ChatGPT 订阅费用未知，不使用 API token 单价；能力与思考档位必须来自实际账号模型目录。</p>}>
+          <label>缓存输入（USD / 百万 token）<input name="price-cached" type="number" min="0" step="any" value={cached()} onInput={(event) => setCached(event.currentTarget.value)} /></label>
+          <label>无缓存输入（USD / 百万 token）<input name="price-uncached" type="number" min="0" step="any" value={uncached()} onInput={(event) => setUncached(event.currentTarget.value)} /></label>
+          <label>输出（USD / 百万 token）<input name="price-output" type="number" min="0" step="any" value={output()} onInput={(event) => setOutput(event.currentTarget.value)} /></label>
+        </Show>
       </fieldset>
       <p class="admin-note">支持 Chat Completions 与 Responses 原生协议。未知参数请按提供商文档填写；价格留空表示未知，不等于免费。思考 token 按输出单价计费，输出计数不重复包含思考。</p>
       <Show when={error()}><p role="alert" class="admin-error">{error()}</p></Show>

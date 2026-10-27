@@ -54,3 +54,29 @@ fn responses_rejects_parameters_its_native_api_does_not_accept() {
             .is_ok()
     );
 }
+
+#[test]
+fn subscription_responses_rejects_all_unsupported_generation_fields() {
+    for body in [
+        r#"{"temperature":0.7}"#,
+        r#"{"top_p":0.9}"#,
+        r#"{"max_output_tokens":2048}"#,
+        r#"{"seed":1}"#,
+        r#"{"frequency_penalty":0}"#,
+        r#"{"presence_penalty":0}"#,
+        r#"{"stop":["END"]}"#,
+    ] {
+        let parameters: GenerationParameters = serde_json::from_str(body).unwrap();
+        assert!(
+            parameters
+                .validate_for_protocol(&nekochat_core::Protocol::ChatgptResponses)
+                .is_err()
+        );
+    }
+    let parameters: GenerationParameters = serde_json::from_str(r#"{"effort":"high"}"#).unwrap();
+    assert!(
+        parameters
+            .validate_for_protocol(&nekochat_core::Protocol::ChatgptResponses)
+            .is_ok()
+    );
+}

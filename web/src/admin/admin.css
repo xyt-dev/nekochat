@@ -92,6 +92,11 @@
 .admin-editor h4 { margin-top: 24px; }
 .admin-editor .admin-form-grid { margin: 16px 0; }
 .admin-nav { flex-wrap: wrap; }
+.admin-oauth-pending { border-top: 1px solid var(--nk-border); margin-top: 16px; padding-top: 12px; }
+.admin-oauth-pending input { width: 100%; }
+.admin-chatgpt-welcome { max-width: min(560px, calc(100vw - 40px)); max-height: 85vh; border: 1px solid var(--nk-border); border-radius: 10px; padding: 0; background: var(--nk-surface); color: var(--nk-text); }
+.admin-chatgpt-welcome::backdrop { background: rgb(0 0 0 / 55%); }
+.admin-chatgpt-welcome > .admin-card { margin: 0; border: 0; }
 @media (max-width: 680px) {
   .admin-header { padding: 12px 16px; flex-wrap: wrap; }
   .admin-header > .admin-actions { width: 100%; justify-content: space-between; }

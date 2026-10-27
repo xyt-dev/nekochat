@@ -1,7 +1,9 @@
 pub mod api;
 pub mod assets;
+pub mod attachments;
 pub mod auth;
 pub mod chat;
+pub mod codex;
 pub mod config;
 mod model_defaults;
 pub mod state;
@@ -56,7 +58,28 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
         )
         .route("/api/conversations/{id}/leaf", put(user::set_leaf))
         .route("/api/conversations/{id}/turns", post(chat::post_turn))
+        .route(
+            "/api/conversations/{id}/attachments",
+            post(attachments::upload).layer(axum::extract::DefaultBodyLimit::max(
+                attachments::MAX_IMAGE_BYTES,
+            )),
+        )
+        .route(
+            "/api/conversations/{id}/attachments/{attachment_id}",
+            get(attachments::read),
+        )
+        .route(
+            "/api/conversations/{id}/attachments/{attachment_id}/metadata",
+            get(attachments::metadata),
+        )
         .route("/api/admin/session", post(auth::admin_login))
+        .route("/api/admin/chatgpt", get(codex::status))
+        .route("/api/admin/chatgpt/start", post(codex::start))
+        .route("/api/admin/chatgpt/callback", post(codex::callback))
+        .route("/api/admin/chatgpt/cancel", post(codex::cancel))
+        .route("/api/admin/chatgpt/logout", post(codex::logout))
+        .route("/api/admin/chatgpt/select", post(codex::select))
+        .route("/api/admin/chatgpt/acknowledge", post(codex::acknowledge))
         .route("/api/admin/providers", get(admin::list_providers))
         .route("/api/admin/stats", get(api::monitoring::stats))
         .route("/api/admin/quotas", get(api::monitoring::quotas))

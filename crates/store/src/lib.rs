@@ -1,5 +1,6 @@
 //! SQLite persistence for nekochat.
 
+mod attachments;
 mod catalog;
 mod tree;
 mod usage;
@@ -11,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
+pub use attachments::Attachment;
 pub use catalog::{Character, CharacterSpec, ListedModel, ModelSpec, SettingKey};
 pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
@@ -18,7 +20,7 @@ pub use usage_stats::{AllowanceWindow, ModelAllowance, ModelUsageStats, UsagePoi
 
 const SCHEMA: &str = include_str!("schema.sql");
 /// The schema version this code writes and understands.
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -81,6 +83,21 @@ impl Store {
                  ALTER TABLE nodes ADD COLUMN character_id TEXT;
                  ALTER TABLE nodes ADD COLUMN character_name TEXT;
                  PRAGMA user_version = 2;
+                 COMMIT;",
+            )?;
+        }
+        if version < 3 {
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE attachments (
+                   id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                   media_type TEXT NOT NULL, bytes BLOB NOT NULL, created_at INTEGER NOT NULL);
+                 CREATE INDEX attachments_conversation ON attachments(conversation_id);
+                 CREATE TABLE node_attachments (
+                   node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                   attachment_id TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
+                   position INTEGER NOT NULL, PRIMARY KEY(node_id,attachment_id), UNIQUE(node_id,position));
+                 PRAGMA user_version = 3;
                  COMMIT;",
             )?;
         }

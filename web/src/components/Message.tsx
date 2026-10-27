@@ -1,4 +1,4 @@
-import { type Accessor, createSignal, type JSX, onCleanup, Show } from "solid-js";
+import { type Accessor, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import type { Metrics, NodeStatus, NodeView } from "../api";
 import { type LiveTurn, store } from "../store";
 import { siblingsOf } from "../tree";
@@ -52,11 +52,19 @@ export function UserMessage(props: { node: NodeView }) {
   const edit = () => {
     store.setEditing({ nodeId: props.node.id });
     store.setComposerText(props.node.content);
+    store.setComposerAttachments(props.node.attachments);
     document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus();
   };
   return (
     <MessageShell class="msg-user">
       <div class="bubble">{props.node.content}</div>
+      <Show when={props.node.attachments.length > 0}>
+        <div class="message-attachments"><For each={props.node.attachments}>{(attachment) => (
+          <a href={attachment.url} target="_blank" rel="noopener noreferrer" title="查看原图">
+            <img src={attachment.url} alt="用户上传的图片" loading="lazy" decoding="async" />
+          </a>
+        )}</For></div>
+      </Show>
       <div class="msg-actions">
         <SiblingNav node={props.node} />
         <button type="button" class="act hover-only" onClick={edit}>

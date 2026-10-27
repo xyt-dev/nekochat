@@ -37,14 +37,16 @@ export function CharacterEditor(props: {
   const [error, setError] = createSignal("");
   const model = createMemo(() => props.models.find((item) => item.id === modelId()));
   const nativeNumberFields = createMemo(() => NUMBER_FIELDS.filter((field) =>
-    model()?.protocol !== "responses" || !["seed", "frequency_penalty", "presence_penalty"].includes(field.key)));
+    model()?.protocol !== "chatgpt_responses" && (model()?.protocol !== "responses" || !["seed", "frequency_penalty", "presence_penalty"].includes(field.key))));
   const missingPacks = createMemo(() => packs().filter((id) => !props.packs.some((pack) => pack.id === id)));
   function bindModel(id: string) {
     setModelId(id);
     if (!props.models.find((item) => item.id === id)?.reasoning.levels.includes(effort())) setEffort("");
-    if (props.models.find((item) => item.id === id)?.protocol === "responses") {
-      setNumbers((current) => ({ ...current, seed: "", frequency_penalty: "", presence_penalty: "" }));
-      setStop("");
+    const protocol = props.models.find((item) => item.id === id)?.protocol;
+    if (protocol === "chatgpt_responses") {
+      setNumbers(Object.fromEntries(NUMBER_FIELDS.map(({ key }) => [key, ""])) as Record<NumberKey, string>); setStop("");
+    } else if (protocol === "responses") {
+      setNumbers((current) => ({ ...current, seed: "", frequency_penalty: "", presence_penalty: "" })); setStop("");
     }
   }
   async function upload(file: File) {
@@ -102,7 +104,7 @@ export function CharacterEditor(props: {
           <label>实际绑定模型<select name="character-model" value={modelId()} onChange={(event) => bindModel(event.currentTarget.value)}>
             <option value="">未绑定（不在聊天列表显示）</option>
             <Show when={modelId() && !model()}><option value={modelId()} disabled>原绑定模型已下架</option></Show>
-            <For each={props.models}>{(item) => <option value={item.id}>{props.providers.find((provider) => provider.key === item.provider)?.label ?? item.provider} · {item.display_name} · {item.upstream_id}</option>}</For>
+            <For each={props.models}>{(item) => <option value={item.id} disabled={props.providers.find((provider) => provider.key === item.provider)?.connected === false}>{props.providers.find((provider) => provider.key === item.provider)?.label ?? item.provider} · {item.display_name} · {item.upstream_id}</option>}</For>
           </select></label>
           <label>排序<input name="character-sort" type="number" step="1" required value={sort()} onInput={(event) => setSort(event.currentTarget.value)} /></label>
           <label class="admin-check"><input name="character-enabled" type="checkbox" checked={enabled()} onChange={(event) => setEnabled(event.currentTarget.checked)} />启用角色</label>
@@ -114,7 +116,7 @@ export function CharacterEditor(props: {
           <label>思考档位<select name="character-effort" value={effort()} disabled={!model()?.reasoning.levels.length} onChange={(event) => setEffort(event.currentTarget.value)}><option value="">模型默认{model()?.reasoning.default ? `（${model()!.reasoning.default}）` : ""}</option><For each={model()?.reasoning.levels ?? []}>{(level) => <option value={level}>{level}</option>}</For></select></label>
           <For each={nativeNumberFields()}>{(field) => <label>{field.label}<input name={`character-${field.key}`} type="number" min={field.min} max={field.max} step={field.step} placeholder="服务端默认" value={numbers()[field.key]} onInput={(event) => { const value = event.currentTarget.value; setNumbers((current) => ({ ...current, [field.key]: value })); }} /></label>}</For>
         </div>
-        <Show when={model()?.protocol !== "responses"} fallback={<p class="admin-note">Responses 不支持 seed、penalty、stop；切换到该协议模型时会清空这些参数。</p>}><label>Stop（每行一个停止字符串）<textarea name="character-stop" rows="3" value={stop()} onInput={(event) => setStop(event.currentTarget.value)} /></label></Show>
+        <Show when={model()?.protocol === "chat_completions"} fallback={<p class="admin-note">{model()?.protocol === "chatgpt_responses" ? "ChatGPT 订阅仅接受思考档位，不支持采样、最大输出、seed、penalty、stop；切换绑定时清空这些参数。" : "Responses 不支持 seed、penalty、stop；切换绑定时清空这些参数。"}</p>}><label>Stop（每行一个停止字符串）<textarea name="character-stop" rows="3" value={stop()} onInput={(event) => setStop(event.currentTarget.value)} /></label></Show>
         <h4>可选背景</h4><p class="admin-note">默认为无背景。仅可上传本站图片或选择下方本地素材；单层透明装饰，无滤镜或动画。</p>
         <label>上传背景（≤ 5 MiB）<input name="character-background" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label>
         <Show when={localImageUrl(background())}>{(url) => <div class="admin-background-preview"><img src={url()} alt="角色背景预览" loading="lazy" decoding="async" style={{ opacity: opacity() }} /><button type="button" onClick={() => { setBackground(""); setOpacity(0.15); }}>清除背景</button></div>}</Show>

@@ -75,6 +75,7 @@ pub struct AppState {
     pub sessions: Sessions,
     pub running: RunningTurns,
     pub resources: Arc<nekochat_resources::ResourceCatalog>,
+    pub codex: Arc<crate::codex::CodexAccount>,
 }
 
 /// Upper bound for establishing an upstream connection.
@@ -90,7 +91,7 @@ impl AppState {
     /// Like `new`, with explicit upstream timeouts. No overall timeout: replies stream for long.
     pub fn with_timeouts(
         config: Config,
-        providers: Vec<Provider>,
+        mut providers: Vec<Provider>,
         store: Store,
         connect: Duration,
         read: Duration,
@@ -102,6 +103,8 @@ impl AppState {
             .expect("HTTP client with timeouts only");
         let resources = nekochat_resources::ResourceCatalog::load(&config.data_dir.join("skills"))
             .expect("loading validated local resource packs");
+        let codex = Arc::new(crate::codex::CodexAccount::new(&config.data_dir));
+        providers.push(crate::codex::provider());
         AppState {
             store: Arc::new(store),
             http,
@@ -110,11 +113,38 @@ impl AppState {
             sessions: Sessions::default(),
             running: RunningTurns::default(),
             resources: Arc::new(resources),
+            codex,
         }
     }
 
     pub fn provider(&self, key: &str) -> Option<&Provider> {
+        if key == crate::codex::PROVIDER_KEY && !self.codex.connected() {
+            return None;
+        }
         self.providers.iter().find(|p| p.key == key)
+    }
+
+    /// Resolve a request-local credential; access tokens never enter persistent Provider metadata.
+    pub async fn authenticated_provider(
+        &self,
+        key: &str,
+    ) -> Result<Provider, crate::api::ApiError> {
+        let mut provider = self
+            .providers
+            .iter()
+            .find(|provider| provider.key == key)
+            .cloned()
+            .ok_or_else(crate::api::ApiError::not_found)?;
+        if key == crate::codex::PROVIDER_KEY {
+            provider.api_key = self
+                .codex
+                .access_token(&self.http)
+                .await
+                .map_err(|message| {
+                    crate::api::ApiError::new(axum::http::StatusCode::BAD_GATEWAY, message)
+                })?;
+        }
+        Ok(provider)
     }
 
     /// Claims `conv_id` for a new turn; `None` while another turn there is running.

@@ -40,7 +40,7 @@
 在 `config.toml` 设置 `admin_password` 后，访问 `http://127.0.0.1:10000/admin`。未设置管理密码时管理 API 不开放；管理密码独立于可选的网页访问密码。
 
 - **角色卡**：绑定实际模型、生成参数、提示词、公开显示名、可选本地半透明背景，以及角色可用的资源包。前端只选择整套角色，不再选择或显示底层模型、提供商、思考等级。管理员修改配置后下一轮生效；用户切换角色保留消息树，旧回复保留当时的角色名称。
-- **模型**：按提供商刷新上游模型目录，选择上架哪些模型，设置显示名、排序、思考档位与默认档、图片能力、上下文窗口，以及每百万 token 的美元价格。API key 仍只在服务端环境变量中管理，网页不能查看或修改。支持 Chat Completions（DeepSeek 等）和原生 Responses（OpenCode Go 的 GPT 等）；Messages / Gemini 尚未接入。Responses 不接受 seed、penalty、stop 或 DeepSeek thinking 参数，不能靠错误协议冒充支持。
+- **模型**：按提供商刷新上游模型目录，选择上架哪些模型，设置显示名、排序、思考档位与默认档、图片能力、上下文窗口，以及每百万 token 的美元价格。API key 仍只在服务端环境变量中管理，网页不能查看或修改。支持 Chat Completions、标准 Responses，以及通过 OAuth 使用官方 ChatGPT 订阅的 Responses；Messages / Gemini 尚未接入。标准 Responses 不接受 seed、penalty、stop 或 DeepSeek thinking；官方订阅当前只允许思考档位，不能设置输出上限、temperature、top_p 等不受支持参数。
 - **统计**：按时间、提供商和模型查看费用与 token 用量；图表颜色区分「提供商 + 模型」，可分别查看缓存输入、无缓存输入、思考和输出。输出数不含思考，图中的总计包含这四类。费用保留调用当时的记录，改价或下架不会改写历史。
 - **未知费用**：未设置价格且上游未返回费用的请求标记为未定价，不当作免费。部分已知时显示已知费用和未定价请求数。
 - **额度**：DeepSeek 查询官方余额，按原币种显示；OpenCode Go 根据本机记录的 `opencode.allowance` 估算最近 5 小时、7 天、30 天的用量。它不是账户的权威余额，不包含其他客户端的调用，滚动窗口也不代表服务商实际重置时刻。缺失额度计数或限额时显示未知，不伪造剩余数。
@@ -48,6 +48,28 @@
 官方 `api.deepseek.com` / `opencode.ai` 地址可自动识别监控类型；自定义代理地址需要在提供商的 `monitoring` 中指定。OpenCode 默认按 Go 计划，可配置 `plan = "go_plus"`，或用 `monthly_limits` 按上游模型 ID 覆盖月额度；5 小时与每周额度分别按月额度的 20% / 50% 估算。示例见 `config.example.toml`。
 
 额度与余额接口来源：[OpenCode Go](https://opencode.ai/v2/docs/console/go/)、[DeepSeek 余额](https://api-docs.deepseek.com/api/get-user-balance)。价格和计划可能变化，上架前请核对服务商当期信息。
+
+## 图片输入
+
+输入框支持直接粘贴 PNG、拖放图片、点击「图片」按钮或输入 `/upload`。支持 PNG / JPEG / WebP / GIF，单张至多 8 MiB、每条消息至多 5 张；可以只发图片，发送前可预览或移除。
+
+图片保存在本站 SQLite 中，随消息树保存；编辑、重新生成与切换分支会带上对应图片，模型收到真正的多模态输入，不只是文件名。清空或删除对话会删除该对话全部图片（含上传后未发送的图片）。读取图片需要当前网页访问权限，不使用外链或公共缓存。
+
+角色须绑定已确认支持视觉的模型；不支持图片的角色会在发送前提示，服务端也会拒绝，不会悄悄丢图后当作纯文字调用。Go 的 `gpt-6-luna` 已完成真实识图验证；其余未知能力不要盲目勾选。当前上传入口只接受图片。
+
+## 连接官方 ChatGPT 账号
+
+1. 打开 `/admin` → **模型管理** → **连接官方ChatGPT账号（订阅）**，点击 **Continue with ChatGPT**。
+2. 本人在 OpenAI 页面登录并同意 ChatGPT plan usage。这里使用官方 SIWC 动态注册与公开 `api.openai.com/v1`，不代理网页 Cookie，也不借用 pi / Codex 保存的其他应用凭证。
+3. 本机浏览器会回到临时 `127.0.0.1` 回调。远程浏览器若打不开回调，请把地址栏完整的最终回调 URL 粘贴到管理端「完整回调 URL」后完成授权，或使用 SSH 转发相应端口。不要分享、截图或记录该 URL。
+4. 连接后在提供商中选 **ChatGPT 订阅（官方账号）**，刷新实际账号模型目录、选择上架，再在角色管理中绑定。不会自动替换原有 GPT娘、其他角色或默认配置。
+
+授权凭证保存在 `<data_dir>/chatgpt-account.json`，采用私密 `0600` 权限与原子替换；支持账号/工作区选择、自动刷新、取消和退出。退出清除当前会话令牌，保留注册映射和稳定主机标识，便于下次重新授权。同一数据目录只运行一个服务实例，不把同一轮换令牌交给多个进程同时刷新。
+
+使用官方订阅的角色会在输入框旁显示 **Using ChatGPT plan · 管理用量**；首次连接有确认说明。token 统计单独按提供商记录，未知余额、额度与金钱成本保持未知；达到订阅限额不会自动改用 API key。OpenAI 的套餐、工作区与应用权限仍然有效，OAuth 技术接入不等于允许公开共享或转售订阅。
+
+官方参考：[Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source)、[模型与推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)、[UI 要求](https://developers.openai.com/siwc/ui-ux-guidelines)。
+
 
 ## 本地 skill 资源包
 
@@ -57,7 +79,7 @@
 
 管理员在角色编辑器中勾选资源包。服务端仅把已勾选包的静态说明和表情目录放进该角色的提示词；模型按描述输出 `[sticker:名字]`，服务端精确解析成本站图片。未授权、未知、歧义或近轮重复的表情不会随机替代，半截标记不发到前端。身份 `self` / `neutral` 和频率由管理端设置。
 
-大肥鱼身份提示词可参考上游 `src/index.ts` 的 `PERSONA.self.skill`；GPT 娘在原仓库中有形象与互动方向资料，但没有独立的完整性格提示词，需据此适配。GPT 娘绑定 GPT 服务时要选 Responses 协议，不要把角色名称当成模型身份或把它实际绑到 DeepSeek 后冒称 GPT。两张角色卡均可由管理员继续编辑，原有默认角色无需改动。
+大肥鱼身份提示词可参考上游 `src/index.ts` 的 `PERSONA.self.skill`；GPT 娘在原仓库中有形象与互动方向资料，但没有独立的完整性格提示词，需据此适配。GPT 娘使用 Go GPT 时选标准 Responses，使用官方 ChatGPT 账号时选官方订阅协议；不要把角色名称当成实际模型身份。两张角色卡均可由管理员继续编辑，原有默认角色无需改动。
 
 自定义包放在 `<data_dir>/skills/<pack_id>/`，每包包含 `SKILL.md`、`pack.json`、`stickers.json` 和 `assets/`，重启后加载。这里的 skill 是**只读资源包**，不是可执行插件，不给模型命令或任意文件访问。背景图也只接受本地上传或本地包素材，默认不设背景。
 

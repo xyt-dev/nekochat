@@ -1,4 +1,4 @@
-export interface Provider { key: string; label: string }
+export interface Provider { key: string; label: string; connected?: boolean }
 export interface CharacterParameters {
   effort?: string | null; temperature?: number | null; top_p?: number | null;
   max_output_tokens?: number | null; seed?: number | null;
@@ -18,7 +18,7 @@ export interface ResourcePack {
 export interface Settings { default_model_id: string | null; default_character_id: string | null }
 export interface ModelDefaults {
   display_name: string;
-  protocol: "chat_completions" | "responses";
+  protocol: "chat_completions" | "responses" | "chatgpt_responses";
   reasoning: { style: "none" | "effort" | "deepseek"; levels: string[]; default: string | null };
   vision: boolean;
   context_window: number | null;
@@ -48,6 +48,13 @@ export interface ProviderQuota {
   models: { upstream_id: string; model_label: string; windows: QuotaWindow[] }[];
 }
 export interface Quotas { as_of_ms: number; providers: ProviderQuota[] }
+export interface ChatgptStatus {
+  connected: boolean; active_client_id: string | null;
+  accounts: { client_id: string; label: string; connected: boolean }[];
+  pending: boolean; expires_at: number | null; error: string | null;
+  welcome_required: boolean; usage_url: string;
+}
+export interface ChatgptAuthorization { authorization_url: string; expires_at: number; loopback_available: boolean }
 export class AdminError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
@@ -69,6 +76,13 @@ export interface AdminApi {
   saveSettings(settings: Settings): Promise<Settings>;
   stats(from: number, to: number, bucket: number): Promise<Stats>;
   quotas(): Promise<Quotas>;
+  chatgptStatus(): Promise<ChatgptStatus>;
+  chatgptStart(clientId: string | null): Promise<ChatgptAuthorization>;
+  chatgptCallback(redirectUrl: string): Promise<ChatgptStatus>;
+  chatgptCancel(): Promise<void>;
+  chatgptLogout(): Promise<ChatgptStatus>;
+  chatgptSelect(clientId: string): Promise<ChatgptStatus>;
+  chatgptAcknowledge(): Promise<void>;
 }
 
 /** Admin requests never join the chat access-password queue or retain a password. */
@@ -109,9 +123,16 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     saveSettings: (settings: Settings) => request<Settings>("/settings", "PUT", settings),
     stats: (from: number, to: number, bucket: number) => request<Stats>(`/stats?${new URLSearchParams({ from_ms: String(from), to_ms: String(to), bucket_ms: String(bucket) })}`),
     quotas: () => request<Quotas>("/quotas"),
+    chatgptStatus: () => request<ChatgptStatus>("/chatgpt"),
+    chatgptStart: (clientId: string | null) => request<ChatgptAuthorization>("/chatgpt/start", "POST", { client_id: clientId }),
+    chatgptCallback: (redirectUrl: string) => request<ChatgptStatus>("/chatgpt/callback", "POST", { redirect_url: redirectUrl }),
+    chatgptCancel: () => request<void>("/chatgpt/cancel", "POST"),
+    chatgptLogout: () => request<ChatgptStatus>("/chatgpt/logout", "POST"),
+    chatgptSelect: (clientId: string) => request<ChatgptStatus>("/chatgpt/select", "POST", { client_id: clientId }),
+    chatgptAcknowledge: () => request<void>("/chatgpt/acknowledge", "POST"),
   };
 }
 export const emptyModel = (provider: string, upstream_id = "", defaults: ModelDefaults | null = null): ModelSpec => ({
   provider, upstream_id, sort: 0,
-  ...(defaults ?? { display_name: upstream_id, protocol: "chat_completions", reasoning: { style: "none", levels: [], default: null }, vision: false, context_window: null, price: { cached_in: null, uncached_in: null, output: null } }),
+  ...(defaults ?? { display_name: upstream_id, protocol: provider === "chatgpt-subscription" ? "chatgpt_responses" : "chat_completions", reasoning: { style: "none", levels: [], default: null }, vision: false, context_window: null, price: { cached_in: null, uncached_in: null, output: null } }),
 });

@@ -11,11 +11,14 @@ name = "nekochat"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 nekochat-core = { path = "../core" }
 nekochat-store = { path = "../store" }
 nekochat-gateway = { path = "../gateway" }
 nekochat-resources = { path = "../resources" }
 uuid.workspace = true
+sha2 = "0.10"
+jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
 anyhow.workspace = true
 axum.workspace = true
 axum-extra.workspace = true
@@ -38,3 +41,5 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 reqwest = { workspace = true, features = ["cookies"] }
 tempfile.workspace = true
+rand = "0.8"
+rsa = "0.9"

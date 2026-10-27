@@ -43,6 +43,8 @@ pub struct Node {
     pub parent_id: Option<String>,
     pub role: NodeRole,
     pub content: String,
+    #[serde(default)]
+    pub attachments: Vec<crate::Attachment>,
     pub reasoning: Option<String>,
     pub model_id: Option<String>,
     pub model_label: Option<String>,
@@ -130,6 +132,7 @@ fn node_from_row(r: &Row) -> rusqlite::Result<(Node, Option<String>)> {
             parent_id: r.get(2)?,
             role: r.get(3)?,
             content: r.get(4)?,
+            attachments: Vec::new(),
             reasoning: r.get(5)?,
             model_id: r.get(6)?,
             model_label: r.get(7)?,
@@ -144,8 +147,9 @@ fn node_from_row(r: &Row) -> rusqlite::Result<(Node, Option<String>)> {
     ))
 }
 
-fn decode_node((mut node, metrics): (Node, Option<String>)) -> Result<Node> {
+fn decode_node(conn: &Connection, (mut node, metrics): (Node, Option<String>)) -> Result<Node> {
     node.metrics = metrics.as_deref().map(serde_json::from_str).transpose()?;
+    node.attachments = crate::attachments::node_attachments(conn, &node.conversation_id, &node.id)?;
     Ok(node)
 }
 
@@ -266,6 +270,24 @@ impl Store {
                 "parent belongs to another conversation".into(),
             ));
         }
+        if node.attachments.len() > 5 {
+            return Err(StoreError::Conflict(
+                "at most five images per message".into(),
+            ));
+        }
+        for attachment in &node.attachments {
+            if tx
+                .query_row(
+                    "SELECT 1 FROM attachments WHERE id=?1 AND conversation_id=?2",
+                    params![attachment.id, node.conversation_id],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_none()
+            {
+                return Err(StoreError::NotFound);
+            }
+        }
         tx.execute(
             &format!(
                 "INSERT INTO nodes ({NODE_COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"
@@ -287,6 +309,12 @@ impl Store {
                 node.character_name
             ],
         )?;
+        for (position, attachment) in node.attachments.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO node_attachments(node_id,attachment_id,position) VALUES(?1,?2,?3)",
+                params![node.id, attachment.id, position as i64],
+            )?;
+        }
         tx.execute(
             "UPDATE conversations SET leaf_id = ?2, updated_at = ?3 WHERE id = ?1",
             params![node.conversation_id, node.id, now_ms()],
@@ -296,15 +324,15 @@ impl Store {
     }
 
     pub fn get_node(&self, conv_id: &str, node_id: &str) -> Result<Option<Node>> {
-        self.conn()
-            .query_row(
-                &format!("SELECT {NODE_COLS} FROM nodes WHERE id = ?1 AND conversation_id = ?2"),
-                params![node_id, conv_id],
-                node_from_row,
-            )
-            .optional()?
-            .map(decode_node)
-            .transpose()
+        let conn = self.conn();
+        conn.query_row(
+            &format!("SELECT {NODE_COLS} FROM nodes WHERE id = ?1 AND conversation_id = ?2"),
+            params![node_id, conv_id],
+            node_from_row,
+        )
+        .optional()?
+        .map(|row| decode_node(&conn, row))
+        .transpose()
     }
 
     pub fn set_leaf(&self, conv_id: &str, node_id: Option<&str>) -> Result<()> {
@@ -365,7 +393,9 @@ impl Store {
                 .join(", ")
         ))?;
         let rows = stmt.query_map(params![node_id, conv_id], node_from_row)?;
-        let path = rows.map(|r| decode_node(r?)).collect::<Result<Vec<_>>>()?;
+        let path = rows
+            .map(|r| decode_node(&conn, r?))
+            .collect::<Result<Vec<_>>>()?;
         if path.is_empty() {
             return Err(StoreError::NotFound);
         }
@@ -378,7 +408,7 @@ impl Store {
             "SELECT {NODE_COLS} FROM nodes WHERE conversation_id = ?1 ORDER BY created_at, id"
         ))?;
         let rows = stmt.query_map([conv_id], node_from_row)?;
-        rows.map(|r| decode_node(r?)).collect()
+        rows.map(|r| decode_node(&conn, r?)).collect()
     }
 
     pub fn delete_conversation(&self, id: &str) -> Result<()> {
@@ -413,6 +443,7 @@ impl Store {
             [id],
         )?;
         tx.execute("DELETE FROM nodes WHERE conversation_id = ?1", [id])?;
+        tx.execute("DELETE FROM attachments WHERE conversation_id = ?1", [id])?;
         tx.commit()?;
         scrub(&conn)
     }

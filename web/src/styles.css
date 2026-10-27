@@ -1046,3 +1046,12 @@ div.nk-math {
     justify-content: flex-end;
   }
 }
+
+.composer { flex-wrap: wrap; }
+.attachment-draft { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; padding: 4px; }
+.attachment-preview { position: relative; }
+.attachment-preview img { display: block; width: 80px; height: 80px; border-radius: 6px; object-fit: cover; }
+.attachment-preview button { position: absolute; top: 0; right: 0; padding: 0 5px; border-radius: 4px; background: var(--nk-surface); }
+.message-attachments { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 100%; margin-top: 8px; }
+.message-attachments img { display: block; max-width: min(320px, 75vw); max-height: 240px; width: auto; height: auto; object-fit: contain; border-radius: 8px; }
+.chatgpt-disclosure { color: var(--nk-text-faint); font-size: 11px; }

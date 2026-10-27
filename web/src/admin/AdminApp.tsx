@@ -13,6 +13,7 @@ function ThemeSelect() {
 
 function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
   const [tab, setTab] = createSignal("monitor");
+  const [providers, setProviders] = createSignal(props.providers);
   const [characters, setCharacters] = createSignal<Character[]>([]);
   const [models, setModels] = createSignal<ListedModel[]>([]);
   const [packs, setPacks] = createSignal<ResourcePack[]>([]);
@@ -21,8 +22,8 @@ function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
   const [error, setError] = createSignal("");
   const [loading, setLoading] = createSignal(false);
   async function reload() {
-    const [nextCharacters, nextModels, nextSettings, nextPacks] = await Promise.all([props.api.characters(), props.api.models(), props.api.settings(), props.api.resourcePacks()]);
-    setCharacters(nextCharacters); setModels(nextModels); setSettings(nextSettings); setPacks(nextPacks); setReady(true);
+    const [nextCharacters, nextModels, nextSettings, nextPacks, nextProviders] = await Promise.all([props.api.characters(), props.api.models(), props.api.settings(), props.api.resourcePacks(), props.api.providers()]);
+    setCharacters(nextCharacters); setModels(nextModels); setSettings(nextSettings); setPacks(nextPacks); setProviders(nextProviders); setReady(true);
   }
   async function initialize() {
     setError(""); setLoading(true);
@@ -37,8 +38,8 @@ function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
         <Match when={tab() !== "monitor"}>
           <Show when={ready()} fallback={<p role="status">{loading() ? "正在加载管理配置…" : "配置加载失败，请重试。"}</p>}>
             <Switch>
-              <Match when={tab() === "models"}><Models api={props.api} providers={props.providers} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
-              <Match when={tab() === "roles"}><Roles api={props.api} providers={props.providers} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
+              <Match when={tab() === "models"}><Models api={props.api} providers={providers()} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
+              <Match when={tab() === "roles"}><Roles api={props.api} providers={providers()} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
               <Match when={tab() === "resources"}><ResourcePacks packs={packs()} /></Match>
             </Switch>
           </Show>

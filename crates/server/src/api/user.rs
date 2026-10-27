@@ -34,6 +34,8 @@ pub struct PickerCharacter {
     id: String,
     display_name: String,
     background: Option<Background>,
+    vision: bool,
+    uses_chatgpt_plan: bool,
 }
 
 #[derive(Serialize)]
@@ -66,6 +68,14 @@ pub async fn available_characters(state: &AppState) -> Result<CharactersView, Ap
             id: c.id,
             display_name: c.spec.display_name,
             background: c.spec.background,
+            vision: models
+                .iter()
+                .find(|m| Some(&m.id) == c.spec.model_id.as_ref())
+                .is_some_and(|m| m.spec.vision),
+            uses_chatgpt_plan: models
+                .iter()
+                .find(|m| Some(&m.id) == c.spec.model_id.as_ref())
+                .is_some_and(|m| m.spec.protocol == nekochat_core::Protocol::ChatgptResponses),
         })
         .collect();
     let default_character_id = default_id
@@ -155,6 +165,7 @@ pub struct NodeView {
     parent_id: Option<String>,
     role: NodeRole,
     content: String,
+    attachments: Vec<nekochat_store::Attachment>,
     reasoning: Option<String>,
     character_id: Option<String>,
     character_name: Option<String>,
@@ -170,6 +181,7 @@ impl From<Node> for NodeView {
             parent_id: n.parent_id,
             role: n.role,
             content: n.content,
+            attachments: n.attachments,
             reasoning: n.reasoning,
             character_id: n.character_id,
             character_name: n.character_name,

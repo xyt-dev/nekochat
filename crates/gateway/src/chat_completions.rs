@@ -12,11 +12,25 @@ use crate::{ChatRequest, GatewayError, Provider, StreamEvent, USER_AGENT};
 
 /// Builds the request body. Never includes `tools`.
 pub fn build_body(req: &ChatRequest) -> Value {
-    let messages: Vec<Value> = req
-        .messages
-        .iter()
-        .map(|m| json!({"role": role_name(m.role), "content": m.content}))
-        .collect();
+    let messages: Vec<Value> =
+        req.messages
+            .iter()
+            .map(|m| {
+                let content = if m.images.is_empty() {
+                    json!(m.content)
+                } else {
+                    let mut parts = Vec::with_capacity(m.images.len() + 1);
+                    if !m.content.is_empty() {
+                        parts.push(json!({"type":"text","text":m.content}));
+                    }
+                    parts.extend(m.images.iter().map(
+                        |image| json!({"type":"image_url","image_url":{"url":image.data_url()}}),
+                    ));
+                    json!(parts)
+                };
+                json!({"role": role_name(m.role), "content": content})
+            })
+            .collect();
     let mut b = json!({
         "model": req.model,
         "messages": messages,

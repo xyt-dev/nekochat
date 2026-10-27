@@ -1,10 +1,12 @@
 //! Provider-protocol layer: streams one completion from an upstream provider.
 
 mod chat_completions;
+mod chatgpt;
 mod http;
 mod responses;
 
 pub use chat_completions::{build_body, list_models, parse_usage, stream_chat};
+pub use chatgpt::stream_chatgpt;
 pub use responses::stream_responses;
 
 use nekochat_core::{GenerationParameters, ReasoningStyle, Usage};
@@ -32,6 +34,19 @@ pub enum ChatRole {
 pub struct ChatMessage {
     pub role: ChatRole,
     pub content: String,
+    pub images: Vec<ChatImage>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatImage {
+    pub media_type: String,
+    pub base64: String,
+}
+
+impl ChatImage {
+    pub fn data_url(&self) -> String {
+        format!("data:{};base64,{}", self.media_type, self.base64)
+    }
 }
 
 #[derive(Clone, Debug)]

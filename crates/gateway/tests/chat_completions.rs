@@ -120,14 +120,17 @@ fn body_serializes_messages() {
         ChatMessage {
             role: ChatRole::System,
             content: "s".into(),
+            images: vec![],
         },
         ChatMessage {
             role: ChatRole::User,
             content: "u".into(),
+            images: vec![],
         },
         ChatMessage {
             role: ChatRole::Assistant,
             content: "a".into(),
+            images: vec![],
         },
     ];
     let r = ChatRequest {

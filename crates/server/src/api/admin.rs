@@ -17,6 +17,7 @@ use crate::state::AppState;
 pub struct ProviderSummary {
     key: String,
     label: String,
+    connected: bool,
 }
 
 pub async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderSummary>> {
@@ -27,6 +28,7 @@ pub async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderS
             .map(|p| ProviderSummary {
                 key: p.key.clone(),
                 label: p.label.clone(),
+                connected: state.provider(&p.key).is_some(),
             })
             .collect(),
     )
@@ -44,11 +46,32 @@ pub async fn provider_models(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Result<Json<Vec<UpstreamModel>>, ApiError> {
+    if key == crate::codex::PROVIDER_KEY {
+        let upstream = crate::codex::catalog(&state).await?;
+        let store = state.store.clone();
+        let listed: HashMap<String, String> = blocking(move || store.list_models())
+            .await?
+            .into_iter()
+            .filter(|model| model.spec.provider == crate::codex::PROVIDER_KEY)
+            .map(|model| (model.spec.upstream_id, model.id))
+            .collect();
+        return Ok(Json(
+            upstream
+                .into_iter()
+                .map(|model| UpstreamModel {
+                    listed_model_id: listed.get(&model.slug).cloned(),
+                    supported: true,
+                    defaults: Some(model.defaults()),
+                    upstream_id: model.slug,
+                })
+                .collect(),
+        ));
+    }
     let provider = state.provider(&key).ok_or_else(ApiError::not_found)?;
     let upstream = nekochat_gateway::list_models(&state.http, provider)
         .await
-        .map_err(|e| {
-            tracing::warn!(provider = %key, "listing upstream models failed: {}", match e {
+        .map_err(|error| {
+            tracing::warn!(provider = %key, "listing upstream models failed: {}", match error {
                 nekochat_gateway::GatewayError::Http { status, .. } => format!("HTTP {status}"),
                 _ => "transport or protocol error".into(),
             });
@@ -81,10 +104,47 @@ pub async fn list_models(
     Ok(Json(blocking(move || store.list_models()).await?))
 }
 
-fn check_spec(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
+async fn check_spec(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
     let provider = state
         .provider(&spec.provider)
         .ok_or_else(|| ApiError::bad_request("提供商不在配置中"))?;
+    if spec.provider == crate::codex::PROVIDER_KEY {
+        if spec.protocol != nekochat_core::Protocol::ChatgptResponses {
+            return Err(ApiError::bad_request(
+                "ChatGPT 订阅必须使用 ChatGPT Responses 协议",
+            ));
+        }
+        let catalog = crate::codex::catalog(state).await?;
+        let advertised = catalog
+            .iter()
+            .find(|model| model.slug == spec.upstream_id)
+            .ok_or_else(|| ApiError::bad_request("此模型不在当前 ChatGPT 账号目录中"))?
+            .defaults();
+        if spec.vision && !advertised.vision
+            || spec.reasoning.style != advertised.reasoning.style
+            || spec
+                .reasoning
+                .levels
+                .iter()
+                .any(|effort| !advertised.reasoning.levels.contains(effort))
+        {
+            return Err(ApiError::bad_request(
+                "模型能力或思考档位必须来自当前 ChatGPT 账号目录",
+            ));
+        }
+        if spec.price.cached_in.is_some()
+            || spec.price.uncached_in.is_some()
+            || spec.price.output.is_some()
+        {
+            return Err(ApiError::bad_request(
+                "ChatGPT 订阅费用未知，不能设置为 API token 单价",
+            ));
+        }
+    } else if spec.protocol == nekochat_core::Protocol::ChatgptResponses {
+        return Err(ApiError::bad_request(
+            "ChatGPT Responses 仅用于官方订阅账号",
+        ));
+    }
     if !model_defaults::supported(provider, &spec.upstream_id) {
         return Err(ApiError::bad_request("此模型需要尚未接入的上游协议"));
     }
@@ -102,8 +162,10 @@ fn check_spec(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
     if native_protocol.is_some_and(|protocol| protocol != spec.protocol) {
         return Err(ApiError::bad_request("所选协议与提供商的该模型端点不匹配"));
     }
-    if spec.protocol == nekochat_core::Protocol::Responses
-        && spec.reasoning.style == ReasoningStyle::DeepSeek
+    if matches!(
+        spec.protocol,
+        nekochat_core::Protocol::Responses | nekochat_core::Protocol::ChatgptResponses
+    ) && spec.reasoning.style == ReasoningStyle::DeepSeek
     {
         return Err(ApiError::bad_request(
             "Responses 不支持 DeepSeek thinking 模式",
@@ -158,7 +220,7 @@ pub async fn create_model(
     State(state): State<AppState>,
     JsonBody(spec): JsonBody<ModelSpec>,
 ) -> Result<(StatusCode, Json<ListedModel>), ApiError> {
-    check_spec(&state, &spec)?;
+    check_spec(&state, &spec).await?;
     let store = state.store.clone();
     let model = blocking(move || store.insert_model(&spec)).await?;
     Ok((StatusCode::CREATED, Json(model)))
@@ -169,7 +231,7 @@ pub async fn update_model(
     Path(id): Path<String>,
     JsonBody(spec): JsonBody<ModelSpec>,
 ) -> Result<Json<ListedModel>, ApiError> {
-    check_spec(&state, &spec)?;
+    check_spec(&state, &spec).await?;
     let store = state.store.clone();
     Ok(Json(
         blocking(move || store.update_model(&id, &spec)).await?,

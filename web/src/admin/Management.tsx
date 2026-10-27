@@ -2,6 +2,7 @@ import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 import { emptyModel, errorMessage, type AdminApi, type Character, type ListedModel, type ModelSpec, type Provider, type ResourcePack, type Settings, type UpstreamModel } from "./api";
 import { ModelEditor } from "./ModelEditor";
 import { CharacterEditor } from "./CharacterEditor";
+import { ChatgptConnection } from "./ChatgptConnection";
 
 export interface CatalogProps {
   api: AdminApi; providers: Provider[]; models: ListedModel[]; characters: Character[]; packs: ResourcePack[];
@@ -13,7 +14,7 @@ export function Roles(props: CatalogProps) {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   const [notice, setNotice] = createSignal("");
-  const available = (character: Character) => character.enabled && props.models.some((model) => model.id === character.model_id);
+  const available = (character: Character) => character.enabled && props.models.some((model) => model.id === character.model_id && props.providers.some((provider) => provider.key === model.provider && provider.connected !== false));
   async function mutate(action: () => Promise<unknown>, message: string) {
     setBusy(true); setError(""); setNotice("");
     try { await action(); await props.reload(); setNotice(message); }
@@ -75,7 +76,8 @@ export function Models(props: CatalogProps) {
   }
   onMount(() => void refreshDirectory());
   return <section aria-labelledby="models-title">
-    <div class="admin-section-heading"><div><h2 id="models-title">模型上架</h2><p class="admin-note">API key 仅在服务器配置中管理，此处不展示或修改凭证。</p></div><button type="button" class="primary" disabled={!props.providers.length || busy()} onClick={() => setEditor({ modelId: null, spec: emptyModel(provider()) })}>手动上架</button></div>
+    <ChatgptConnection api={props.api} onChanged={props.reload} />
+    <div class="admin-section-heading"><div><h2 id="models-title">模型上架</h2><p class="admin-note">API key 仅在服务器配置中管理；ChatGPT 订阅通过上方官方账号授权单独连接。</p></div><button type="button" class="primary" disabled={!props.providers.length || busy()} onClick={() => setEditor({ modelId: null, spec: emptyModel(provider()) })}>手动上架</button></div>
     <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show><Show when={notice()}><p role="status">{notice()}</p></Show>
     <label class="admin-default">默认模型<select name="default-model" disabled={busy()} value={props.settings.default_model_id ?? ""} onChange={(event) => { const value = event.currentTarget.value || null; void mutate(() => props.api.saveSettings({ ...props.settings, default_model_id: value }), "默认模型已更新"); }}><option value="">无默认模型</option><For each={props.models}>{(model) => <option value={model.id}>{props.providers.find((item) => item.key === model.provider)?.label ?? model.provider} · {model.display_name}</option>}</For></select></label>
     <Show when={editor()} keyed>{(draft) => <ModelEditor api={props.api} providers={props.providers} modelId={draft.modelId} initial={draft.spec} onSaved={async () => { await props.reload(); setEditor(null); setNotice("模型已保存"); }} onCancel={() => setEditor(null)} />}</Show>

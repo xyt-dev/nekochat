@@ -12,6 +12,35 @@ use serde_json::{Value, json};
 use crate::http::{check_status, endpoint, role_name, transport};
 use crate::{ChatRequest, GatewayError, Provider, StreamEvent, USER_AGENT};
 
+pub(crate) fn input_messages(messages: &[crate::ChatMessage]) -> Vec<Value> {
+    messages
+        .iter()
+        .map(|message| {
+            let content = if message.images.is_empty() {
+                json!(message.content)
+            } else {
+                let mut parts = Vec::with_capacity(message.images.len() + 1);
+                if !message.content.is_empty() {
+                    parts.push(json!({"type":"input_text","text":message.content}));
+                }
+                parts.extend(
+                    message
+                        .images
+                        .iter()
+                        .map(|image| json!({"type":"input_image","image_url":image.data_url()})),
+                );
+                json!(parts)
+            };
+            let role = if message.role == crate::ChatRole::System {
+                "developer"
+            } else {
+                role_name(message.role)
+            };
+            json!({"role":role,"content":content})
+        })
+        .collect()
+}
+
 fn body(request: &ChatRequest<'_>) -> Result<Value, GatewayError> {
     request
         .parameters
@@ -22,11 +51,7 @@ fn body(request: &ChatRequest<'_>) -> Result<Value, GatewayError> {
             "Responses 不支持 DeepSeek thinking 模式".into(),
         ));
     }
-    let input: Vec<_> = request
-        .messages
-        .iter()
-        .map(|message| json!({"role":role_name(message.role),"content":message.content}))
-        .collect();
+    let input = input_messages(request.messages);
     let mut body = json!({"model":request.model,"input":input,"stream":true,"store":false});
     if let Some(effort) = request.effort {
         body["reasoning"] = json!({"effort":effort,"summary":"auto"});
@@ -50,7 +75,7 @@ fn body(request: &ChatRequest<'_>) -> Result<Value, GatewayError> {
     Ok(body)
 }
 
-fn usage(value: &Value) -> Usage {
+pub(crate) fn usage(value: &Value) -> Usage {
     if value.pointer("/opencode/tokens").is_some() {
         return crate::parse_usage(value);
     }
@@ -107,8 +132,14 @@ pub async fn stream_responses(
         builder = builder.header(header.as_str(), request.session_id);
     }
     let response = check_status(builder.send().await.map_err(transport)?).await?;
+    Ok(event_stream(response))
+}
+
+pub(crate) fn event_stream(
+    response: reqwest::Response,
+) -> BoxStream<'static, Result<StreamEvent, GatewayError>> {
     let events = response.bytes_stream().eventsource();
-    Ok(stream::unfold(
+    stream::unfold(
         (events, VecDeque::new(), false),
         |(mut events, mut pending, done)| async move {
             let mut done = done;
@@ -208,5 +239,5 @@ pub async fn stream_responses(
             }
         },
     )
-    .boxed())
+    .boxed()
 }

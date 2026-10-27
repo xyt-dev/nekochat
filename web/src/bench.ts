@@ -53,6 +53,7 @@ function fakeConversation(): { nodes: NodeView[]; leaf: string } {
       id,
       parent_id: parent,
       role: user ? "user" : "assistant",
+      attachments: [],
       content: user ? `第 ${i / 2 + 1} 个问题：求根公式怎么推？顺便给段代码。` : REPLY + (i % 10 === 1 ? "\n![猫猫搓手](/api/resources/nekowhale/4a44767ab58b.gif)\n" : i % 10 === 3 ? "\n![喝药](/api/resources/nekowhale-gpt/222876e49285.gif)\n" : ""),
       reasoning: user ? null : "先配方，再讨论判别式。",
       character_id: user ? null : "bench-character",
