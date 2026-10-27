@@ -2,6 +2,7 @@ pub mod api;
 pub mod auth;
 pub mod chat;
 pub mod config;
+mod model_defaults;
 pub mod state;
 pub mod web;
 
@@ -47,6 +48,8 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
         .route("/api/conversations/{id}/turns", post(chat::post_turn))
         .route("/api/admin/session", post(auth::admin_login))
         .route("/api/admin/providers", get(admin::list_providers))
+        .route("/api/admin/stats", get(api::monitoring::stats))
+        .route("/api/admin/quotas", get(api::monitoring::quotas))
         .route(
             "/api/admin/providers/{key}/models",
             get(admin::provider_models),

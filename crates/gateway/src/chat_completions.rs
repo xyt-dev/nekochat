@@ -64,8 +64,14 @@ pub fn parse_usage(v: &Value) -> Usage {
             uncached_in: u(t, "/input") + u(t, "/cache_write_5m") + u(t, "/cache_write_1h"),
             reasoning,
             output: u(t, "/output").saturating_sub(reasoning),
-            upstream_cost_usd: v.get("cost").and_then(Value::as_f64),
-            allowance_usd: v.pointer("/opencode/allowance").and_then(Value::as_f64),
+            upstream_cost_usd: v
+                .get("cost")
+                .and_then(Value::as_f64)
+                .filter(|v| v.is_finite() && *v >= 0.0),
+            allowance_usd: v
+                .pointer("/opencode/allowance")
+                .and_then(Value::as_f64)
+                .filter(|v| v.is_finite() && *v >= 0.0),
         };
     }
     let (cached_in, uncached_in) = if v.get("prompt_cache_hit_tokens").is_some() {
@@ -207,14 +213,31 @@ pub async fn list_models(
         .models_url
         .clone()
         .unwrap_or_else(|| endpoint(&p.base_url, "/models"));
-    let resp = http
+    let mut resp = http
         .get(url)
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .bearer_auth(&p.api_key)
+        .timeout(std::time::Duration::from_secs(15))
         .send()
         .await
         .map_err(transport)?;
-    let v: Value = check_status(resp).await?.json().await.map_err(transport)?;
+    if !resp.status().is_success() {
+        return Err(GatewayError::Http {
+            status: resp.status().as_u16(),
+            message: "model catalog request failed".into(),
+        });
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(transport)? {
+        if body.len() + chunk.len() > 2 * 1024 * 1024 {
+            return Err(GatewayError::Protocol(
+                "model catalog response too large".into(),
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    let v: Value = serde_json::from_slice(&body)
+        .map_err(|_| GatewayError::Protocol("invalid model catalog JSON".into()))?;
     let data = v
         .get("data")
         .and_then(Value::as_array)

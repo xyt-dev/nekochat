@@ -11,6 +11,10 @@ key = "deepseek"
 label = "DeepSeek 官方"
 base_url = "https://api.deepseek.com"
 api_key_env = "DEEPSEEK_API_KEY"
+# 官方地址自动识别余额类型。代理地址请显式启用并指定余额接口：
+# [providers.monitoring]
+# kind = "deepseek"
+# balance_url = "https://api.deepseek.com/user/balance"
 
 [[providers]]
 key = "opencode-go"
@@ -19,3 +23,10 @@ base_url = "https://opencode.ai/inference/go/openai/v1"
 models_url = "https://opencode.ai/inference/v1/models"
 api_key_env = "OPENCODE_API_KEY"
 session_header = "x-opencode-session"
+#
+# 官方地址默认按 Go 计划估算；Go Plus 或自定义限额可取消注释：
+# [providers.monitoring]
+# kind = "opencode_go"
+# plan = "go_plus"
+# monthly_limits = { "glm-5.2" = 180.0 }
+# 仅根据本机调用估算最近 5h/7d/30d，不包含其他客户端用量。

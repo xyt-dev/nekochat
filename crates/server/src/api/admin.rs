@@ -10,6 +10,7 @@ use nekochat_store::{Character, ListedModel, ModelSpec, SettingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::api::{ApiError, JsonBody, blocking};
+use crate::model_defaults::{self, ModelDefaults};
 use crate::state::AppState;
 
 #[derive(Serialize)]
@@ -35,6 +36,8 @@ pub async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderS
 pub struct UpstreamModel {
     upstream_id: String,
     listed_model_id: Option<String>,
+    supported: bool,
+    defaults: Option<ModelDefaults>,
 }
 
 pub async fn provider_models(
@@ -45,7 +48,10 @@ pub async fn provider_models(
     let upstream = nekochat_gateway::list_models(&state.http, provider)
         .await
         .map_err(|e| {
-            tracing::warn!(provider = %key, error = %e, "listing upstream models failed");
+            tracing::warn!(provider = %key, "listing upstream models failed: {}", match e {
+                nekochat_gateway::GatewayError::Http { status, .. } => format!("HTTP {status}"),
+                _ => "transport or protocol error".into(),
+            });
             ApiError::new(StatusCode::BAD_GATEWAY, "获取上游模型列表失败")
         })?;
     let store = state.store.clone();
@@ -60,6 +66,8 @@ pub async fn provider_models(
             .into_iter()
             .map(|upstream_id| UpstreamModel {
                 listed_model_id: listed.get(&upstream_id).cloned(),
+                supported: model_defaults::supported(provider, &upstream_id),
+                defaults: model_defaults::defaults(provider, &upstream_id),
                 upstream_id,
             })
             .collect(),
@@ -74,8 +82,28 @@ pub async fn list_models(
 }
 
 fn check_spec(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
-    if state.provider(&spec.provider).is_none() {
-        return Err(ApiError::bad_request("提供商不在配置中"));
+    let provider = state
+        .provider(&spec.provider)
+        .ok_or_else(|| ApiError::bad_request("提供商不在配置中"))?;
+    if !model_defaults::supported(provider, &spec.upstream_id) {
+        return Err(ApiError::bad_request("此模型需要尚未接入的上游协议"));
+    }
+    if spec.upstream_id.trim().is_empty() || spec.display_name.trim().is_empty() {
+        return Err(ApiError::bad_request("模型ID和显示名称不能为空"));
+    }
+    if spec.context_window.is_some_and(|v| v <= 0) {
+        return Err(ApiError::bad_request("上下文长度必须是正整数"));
+    }
+    if [
+        &spec.price.cached_in,
+        &spec.price.uncached_in,
+        &spec.price.output,
+    ]
+    .into_iter()
+    .flatten()
+    .any(|v| !v.is_finite() || *v < 0.0)
+    {
+        return Err(ApiError::bad_request("价格必须是有限非负数或空值"));
     }
     check_reasoning(&spec.reasoning)
 }

@@ -1,6 +1,7 @@
 //! JSON API: error type and router.
 
 pub mod admin;
+pub mod monitoring;
 pub mod user;
 
 use std::borrow::Cow;

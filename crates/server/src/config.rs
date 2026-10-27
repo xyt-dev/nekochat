@@ -1,5 +1,6 @@
 //! Server configuration file loading and startup checks.
 
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 
@@ -16,6 +17,44 @@ pub struct ProviderEntry {
     pub api_key_env: String,
     #[serde(default)]
     pub session_header: Option<String>,
+    #[serde(default)]
+    pub monitoring: Option<Monitoring>,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MonitoringKind {
+    Deepseek,
+    OpencodeGo,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GoPlan {
+    #[default]
+    Go,
+    GoPlus,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct Monitoring {
+    pub kind: MonitoringKind,
+    #[serde(default)]
+    pub balance_url: Option<String>,
+    #[serde(default)]
+    pub plan: GoPlan,
+    #[serde(default, deserialize_with = "monthly_limits")]
+    pub monthly_limits: HashMap<String, f64>,
+}
+
+fn monthly_limits<'de, D: Deserializer<'de>>(d: D) -> Result<HashMap<String, f64>, D::Error> {
+    let limits = HashMap::<String, f64>::deserialize(d)?;
+    if limits.values().any(|v| !v.is_finite() || *v < 0.0) {
+        return Err(serde::de::Error::custom(
+            "monthly_limits must be finite and nonnegative",
+        ));
+    }
+    Ok(limits)
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]

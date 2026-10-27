@@ -3,6 +3,7 @@
 mod catalog;
 mod tree;
 mod usage;
+mod usage_stats;
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -13,6 +14,7 @@ use rusqlite::Connection;
 pub use catalog::{Character, ListedModel, ModelSpec, SettingKey};
 pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
+pub use usage_stats::{AllowanceWindow, ModelAllowance, ModelUsageStats, UsagePoint, UsageTotals};
 
 const SCHEMA: &str = include_str!("schema.sql");
 /// The schema version this code writes and understands.

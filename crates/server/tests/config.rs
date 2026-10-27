@@ -24,6 +24,7 @@ fn cfg_with_one_provider() -> Config {
         models_url: None,
         api_key_env: "DEEPSEEK_API_KEY".into(),
         session_header: None,
+        monitoring: None,
     });
     c
 }

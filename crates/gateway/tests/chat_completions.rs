@@ -123,6 +123,15 @@ fn usage_opencode() {
 }
 
 #[test]
+fn negative_billing_values_are_unknown_not_credit() {
+    let usage = parse_usage(&json!({
+        "cost": -1.0,
+        "opencode": {"allowance": -2.0, "tokens": {"input": 1, "output": 0}}
+    }));
+    assert_eq!((usage.upstream_cost_usd, usage.allowance_usd), (None, None));
+}
+
+#[test]
 fn usage_deepseek() {
     let u = parse_usage(
         &json!({"prompt_tokens":1204,"prompt_cache_hit_tokens":896,"prompt_cache_miss_tokens":308,

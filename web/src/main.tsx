@@ -1,12 +1,10 @@
-import { render } from "solid-js/web";
-import "katex/dist/katex.min.css";
+// Keep management and chat application graphs separate; only themes/layout are shared.
 import "./themes";
 import "./styles.css";
-import { App } from "./App";
 
 const root = document.getElementById("root")!;
-const bench = import.meta.env.DEV && new URLSearchParams(location.search).has("bench");
-
-render(() => <App offline={bench} />, root);
-
-if (bench) void import("./bench").then((m) => m.runBench());
+if (location.pathname === "/admin" || location.pathname.startsWith("/admin/")) {
+  void import("./admin/AdminApp").then(({ mountAdmin }) => mountAdmin(root));
+} else {
+  void import("./chat").then(({ mountChat }) => mountChat(root));
+}

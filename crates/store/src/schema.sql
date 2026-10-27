@@ -18,3 +18,4 @@ CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY, at_ms INTEGER NOT NULL
   reasoning INTEGER NOT NULL, output INTEGER NOT NULL, cost_usd REAL, upstream_cost_usd REAL,
   allowance_usd REAL, purpose TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS usage_by_time ON usage(at_ms);
+CREATE INDEX IF NOT EXISTS usage_by_model_time ON usage(provider, upstream_id, at_ms, id);

@@ -45,10 +45,10 @@ function previewDots(css: string): [string, string, string] {
   return [pick("bg"), pick("accent"), pick("text")];
 }
 
-export async function loadCustomThemes(): Promise<void> {
+export async function loadCustomThemes(fetchThemes = api.themes): Promise<void> {
   let list;
   try {
-    list = await api.themes();
+    list = await fetchThemes();
   } catch {
     return;
   }
