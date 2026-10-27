@@ -29,7 +29,7 @@
 - [x] 实现独立 ChatGPT 订阅提供商和真实账号模型目录请求，管理端可上架并绑定角色；不自动改现有角色绑定。
 - [x] 官方订阅 Responses 复用标准流事件与多模态输入；严格完成/错误/用量处理，以 OAuth bearer 调用公开 API，无旧 Codex 后台端点或账号专属伪造请求头。
 - [x] 实际管理页发起官方 PKCE/nonce/state/direct-scope 授权、拒绝错误回调400、取消授权；未认证管理请求401，浏览器无错误。
-- [ ] 本人完成 OpenAI 授权后，验证实际订阅模型目录与真实官方推理；目前没有授权，不声称已连通。
+- [x] 本人完成 OpenAI 授权；已取得实际账号模型目录，并保留用户配置的 `GPT酱 → chatgpt-subscription / gpt-6.1-sol / high`，完成一次真实官方订阅图片推理。
 
 ## 集成验收
 - [x] 集成路由/协议分发/认证，迁移所有构造器和调用方；必要回归107例通过、workspace/tests类型检查及生产构建通过，未重复全套测试。
@@ -38,7 +38,8 @@
 ## 实际交付状态
 - 10000最终release服务已启用并保持运行；本次隔离10001实例、临时配置与浏览器验证页已清理。
 - 公开角色仍为用户配置的 `test`、`大肥鱼`、`GPT酱`，未覆盖用户对角色名称等配置的修改。
-- Go `gpt-6-luna` 视觉能力已真实验证，并对现有该模型开启视觉标记。未把其他模型的未知能力伪造成已验证。
-- 管理端已有「连接官方ChatGPT账号（订阅）」和模型目录入口；只有官方账号授权/官方真实推理仍等待本人操作。
+- Go `gpt-6-luna` 视觉能力已在隔离实例真实验证，启用对应视觉元数据；未把其他模型的未知能力伪造成已验证。
+- 官方订阅现已真实连通：浏览器原生粘贴 PNG，经 `GPT酱` 的官方 `gpt-6.1-sol` 正确识别紫色圆形/橙色三角形，状态 complete，4730无缓存输入/23输出。界面显示 Using ChatGPT plan 与 Manage usage，控制台无错误。
+- 官方自建验证对话和图片已删除；正式实例用量记录保留。保留用户自行选择的模型、角色名称、人设、资源包和 high 参数，没有自动覆盖为其他模型。
 
-Sources: https://github.com/earendil-works/pi/tree/main/packages/ai/src/auth ; https://developers.openai.com/codex/auth
+Sources: https://github.com/earendil-works/pi/tree/main/packages/ai/src/auth ; https://developers.openai.com/siwc/token-sharing-open-source ; https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference
