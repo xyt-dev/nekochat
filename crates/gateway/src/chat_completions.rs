@@ -7,20 +7,8 @@ use futures_util::stream::{self, BoxStream, StreamExt};
 use nekochat_core::{ReasoningStyle, Usage};
 use serde_json::{Value, json};
 
-use crate::{ChatRequest, ChatRole, GatewayError, Provider, StreamEvent, USER_AGENT};
-
-fn endpoint(base_url: &str, path: &str) -> String {
-    let base = base_url.strip_suffix('/').unwrap_or(base_url);
-    format!("{base}{path}")
-}
-
-fn role_name(r: ChatRole) -> &'static str {
-    match r {
-        ChatRole::System => "system",
-        ChatRole::User => "user",
-        ChatRole::Assistant => "assistant",
-    }
-}
+use crate::http::{check_status, endpoint, role_name, transport};
+use crate::{ChatRequest, GatewayError, Provider, StreamEvent, USER_AGENT};
 
 /// Builds the request body. Never includes `tools`.
 pub fn build_body(req: &ChatRequest) -> Value {
@@ -134,26 +122,6 @@ fn chunk_events(v: &Value, out: &mut VecDeque<StreamEvent>) {
     if let Some(us) = v.get("usage").filter(|x| x.is_object()) {
         out.push_back(StreamEvent::Usage(parse_usage(us)));
     }
-}
-
-fn transport(e: reqwest::Error) -> GatewayError {
-    GatewayError::Transport(e.to_string())
-}
-
-async fn check_status(resp: reqwest::Response) -> Result<reqwest::Response, GatewayError> {
-    let status = resp.status();
-    if status.is_success() {
-        return Ok(resp);
-    }
-    let text = resp.text().await.unwrap_or_default();
-    let message = serde_json::from_str::<Value>(&text)
-        .ok()
-        .and_then(|v| v.pointer("/error/message")?.as_str().map(str::to_owned))
-        .unwrap_or_else(|| text.chars().take(500).collect());
-    Err(GatewayError::Http {
-        status: status.as_u16(),
-        message,
-    })
 }
 
 /// POSTs `{base_url}/chat/completions` and streams parsed events.

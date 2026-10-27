@@ -18,7 +18,7 @@ export interface ResourcePack {
 export interface Settings { default_model_id: string | null; default_character_id: string | null }
 export interface ModelDefaults {
   display_name: string;
-  protocol: "chat_completions";
+  protocol: "chat_completions" | "responses";
   reasoning: { style: "none" | "effort" | "deepseek"; levels: string[]; default: string | null };
   vision: boolean;
   context_window: number | null;

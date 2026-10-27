@@ -25,3 +25,32 @@ fn parameter_ranges_are_enforced() {
     .unwrap();
     assert!(parameters.validate().is_ok());
 }
+
+#[test]
+fn responses_rejects_parameters_its_native_api_does_not_accept() {
+    for body in [
+        r#"{"seed":1}"#,
+        r#"{"frequency_penalty":0}"#,
+        r#"{"presence_penalty":0}"#,
+        r#"{"stop":["END"]}"#,
+    ] {
+        let parameters: GenerationParameters = serde_json::from_str(body).unwrap();
+        assert!(
+            parameters
+                .validate_for_protocol(&nekochat_core::Protocol::ChatCompletions)
+                .is_ok()
+        );
+        assert!(
+            parameters
+                .validate_for_protocol(&nekochat_core::Protocol::Responses)
+                .is_err()
+        );
+    }
+    let parameters: GenerationParameters =
+        serde_json::from_str(r#"{"effort":"high","max_output_tokens":2048}"#).unwrap();
+    assert!(
+        parameters
+            .validate_for_protocol(&nekochat_core::Protocol::Responses)
+            .is_ok()
+    );
+}

@@ -18,8 +18,7 @@ pub fn supported(provider: &Provider, id: &str) -> bool {
     if !official_host(&provider.base_url, "opencode.ai") {
         return true;
     }
-    !(id.starts_with("gpt-")
-        || id.starts_with("claude-")
+    !(id.starts_with("claude-")
         || id.starts_with("gemini-")
         || id.starts_with("grok-")
         || id.starts_with("muse-")
@@ -76,6 +75,21 @@ pub fn defaults(provider: &Provider, id: &str) -> Option<ModelDefaults> {
     }
     if !official_host(&provider.base_url, "opencode.ai") || !supported(provider, id) {
         return None;
+    }
+    if id.starts_with("gpt-") {
+        result.protocol = Protocol::Responses;
+        if id == "gpt-6-luna" {
+            result.display_name = "GPT 6 Luna".into();
+            result.reasoning = ReasoningSpec {
+                style: ReasoningStyle::Effort,
+                levels: ["low", "medium", "high"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
+                default: Some("high".into()),
+            };
+        }
+        return Some(result);
     }
     let (name, price) = match id {
         "glm-5.3-flash" => ("GLM 5.3 Flash", Some((0.03, 0.15, 0.50))),

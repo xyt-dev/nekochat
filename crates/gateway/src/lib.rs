@@ -1,8 +1,11 @@
 //! Provider-protocol layer: streams one completion from an upstream provider.
 
 mod chat_completions;
+mod http;
+mod responses;
 
 pub use chat_completions::{build_body, list_models, parse_usage, stream_chat};
+pub use responses::stream_responses;
 
 use nekochat_core::{GenerationParameters, ReasoningStyle, Usage};
 

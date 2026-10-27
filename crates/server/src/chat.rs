@@ -149,11 +149,6 @@ pub async fn start_turn(
     let character = character
         .filter(|c| c.spec.enabled)
         .ok_or_else(|| ApiError::bad_request("角色不可用"))?;
-    character
-        .spec
-        .parameters
-        .validate()
-        .map_err(ApiError::bad_request)?;
     let model_id = character
         .spec
         .model_id
@@ -163,6 +158,11 @@ pub async fn start_turn(
     let model = blocking(move || store.get_model(&model_id))
         .await?
         .ok_or_else(|| ApiError::bad_request("角色绑定模型未上架"))?;
+    character
+        .spec
+        .parameters
+        .validate_for_protocol(&model.spec.protocol)
+        .map_err(ApiError::bad_request)?;
     let provider = state
         .provider(&model.spec.provider)
         .ok_or_else(|| ApiError::bad_request("模型的提供商不在配置中"))?
@@ -655,7 +655,14 @@ impl Turn {
         let mut upstream = tokio::select! {
             biased;
             end = out.stopped() => return end,
-            connected = nekochat_gateway::stream_chat(&self.http, &self.provider, &req) => {
+            connected = async {
+                match self.model.spec.protocol {
+                    nekochat_core::Protocol::ChatCompletions =>
+                        nekochat_gateway::stream_chat(&self.http, &self.provider, &req).await,
+                    nekochat_core::Protocol::Responses =>
+                        nekochat_gateway::stream_responses(&self.http, &self.provider, &req).await,
+                }
+            } => {
                 match connected {
                     Ok(upstream) => upstream,
                     Err(e) => return End::Failed(e),

@@ -36,10 +36,16 @@ export function CharacterEditor(props: {
   const [uploading, setUploading] = createSignal(false);
   const [error, setError] = createSignal("");
   const model = createMemo(() => props.models.find((item) => item.id === modelId()));
+  const nativeNumberFields = createMemo(() => NUMBER_FIELDS.filter((field) =>
+    model()?.protocol !== "responses" || !["seed", "frequency_penalty", "presence_penalty"].includes(field.key)));
   const missingPacks = createMemo(() => packs().filter((id) => !props.packs.some((pack) => pack.id === id)));
   function bindModel(id: string) {
     setModelId(id);
     if (!props.models.find((item) => item.id === id)?.reasoning.levels.includes(effort())) setEffort("");
+    if (props.models.find((item) => item.id === id)?.protocol === "responses") {
+      setNumbers((current) => ({ ...current, seed: "", frequency_penalty: "", presence_penalty: "" }));
+      setStop("");
+    }
   }
   async function upload(file: File) {
     setError(""); setUploading(true);
@@ -106,9 +112,9 @@ export function CharacterEditor(props: {
         <h4>服务端生成参数（不向聊天端公开）</h4><p class="admin-note">留空使用服务端模型默认值。参数直接用于下一轮生成，不接受任意 JSON、工具或文件执行配置。</p>
         <div class="admin-form-grid">
           <label>思考档位<select name="character-effort" value={effort()} disabled={!model()?.reasoning.levels.length} onChange={(event) => setEffort(event.currentTarget.value)}><option value="">模型默认{model()?.reasoning.default ? `（${model()!.reasoning.default}）` : ""}</option><For each={model()?.reasoning.levels ?? []}>{(level) => <option value={level}>{level}</option>}</For></select></label>
-          <For each={NUMBER_FIELDS}>{(field) => <label>{field.label}<input name={`character-${field.key}`} type="number" min={field.min} max={field.max} step={field.step} placeholder="服务端默认" value={numbers()[field.key]} onInput={(event) => { const value = event.currentTarget.value; setNumbers((current) => ({ ...current, [field.key]: value })); }} /></label>}</For>
+          <For each={nativeNumberFields()}>{(field) => <label>{field.label}<input name={`character-${field.key}`} type="number" min={field.min} max={field.max} step={field.step} placeholder="服务端默认" value={numbers()[field.key]} onInput={(event) => { const value = event.currentTarget.value; setNumbers((current) => ({ ...current, [field.key]: value })); }} /></label>}</For>
         </div>
-        <label>Stop（每行一个停止字符串）<textarea name="character-stop" rows="3" value={stop()} onInput={(event) => setStop(event.currentTarget.value)} /></label>
+        <Show when={model()?.protocol !== "responses"} fallback={<p class="admin-note">Responses 不支持 seed、penalty、stop；切换到该协议模型时会清空这些参数。</p>}><label>Stop（每行一个停止字符串）<textarea name="character-stop" rows="3" value={stop()} onInput={(event) => setStop(event.currentTarget.value)} /></label></Show>
         <h4>可选背景</h4><p class="admin-note">默认为无背景。仅可上传本站图片或选择下方本地素材；单层透明装饰，无滤镜或动画。</p>
         <label>上传背景（≤ 5 MiB）<input name="character-background" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label>
         <Show when={localImageUrl(background())}>{(url) => <div class="admin-background-preview"><img src={url()} alt="角色背景预览" loading="lazy" decoding="async" style={{ opacity: opacity() }} /><button type="button" onClick={() => { setBackground(""); setOpacity(0.15); }}>清除背景</button></div>}</Show>

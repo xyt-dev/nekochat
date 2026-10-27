@@ -37,6 +37,19 @@ impl GenerationParameters {
         }
         Ok(())
     }
+
+    pub fn validate_for_protocol(&self, protocol: &Protocol) -> Result<(), &'static str> {
+        self.validate()?;
+        if protocol == &Protocol::Responses
+            && (self.seed.is_some()
+                || self.frequency_penalty.is_some()
+                || self.presence_penalty.is_some()
+                || !self.stop.is_empty())
+        {
+            return Err("Responses 不支持 seed、penalty 或 stop 参数，请清空这些字段");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -55,6 +68,7 @@ fn default_background_opacity() -> f64 {
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     ChatCompletions,
+    Responses,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

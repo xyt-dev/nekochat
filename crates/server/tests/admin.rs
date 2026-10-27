@@ -78,12 +78,18 @@ async fn provider_models_mark_listed() {
         .json()
         .await
         .unwrap();
+    let rows = models.as_array().unwrap();
+    assert!(
+        rows.iter()
+            .find(|model| model["upstream_id"] == "m1")
+            .unwrap()["listed_model_id"]
+            .is_null()
+    );
     assert_eq!(
-        models,
-        json!([
-            {"upstream_id": "m1", "listed_model_id": null},
-            {"upstream_id": "m2", "listed_model_id": id},
-        ])
+        rows.iter()
+            .find(|model| model["upstream_id"] == "m2")
+            .unwrap()["listed_model_id"],
+        id
     );
 
     let all: Value = app
@@ -340,4 +346,48 @@ async fn character_crud_round_trip() {
         .await
         .unwrap();
     assert_eq!(r.status(), 404);
+}
+
+#[tokio::test]
+async fn native_gpt_protocol_and_role_parameter_constraints_are_enforced() {
+    let app = admin_app(Some("https://opencode.ai/inference/go/openai/v1".into())).await;
+    let mut model = spec(PROVIDER_KEY, "gpt-6-luna");
+    let wrong = app
+        .client
+        .post(app.url("/api/admin/models"))
+        .json(&model)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(wrong.status(), 400);
+    model["protocol"] = json!("responses");
+    model["reasoning"] = json!({"style":"effort","levels":["high"],"default":"high"});
+    let listed: Value = app
+        .client
+        .post(app.url("/api/admin/models"))
+        .json(&model)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let mut role = json!({"name":"GPT role","display_name":"GPT 娘","model_id":listed["id"],"parameters":{"seed":42}});
+    let rejected = app
+        .client
+        .post(app.url("/api/admin/characters"))
+        .json(&role)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rejected.status(), 400);
+    role["parameters"] = json!({"effort":"high","max_output_tokens":512});
+    let accepted = app
+        .client
+        .post(app.url("/api/admin/characters"))
+        .json(&role)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(accepted.status(), 201);
 }

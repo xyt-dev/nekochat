@@ -88,6 +88,27 @@ fn check_spec(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> {
     if !model_defaults::supported(provider, &spec.upstream_id) {
         return Err(ApiError::bad_request("此模型需要尚未接入的上游协议"));
     }
+    let native_protocol = if model_defaults::official_host(&provider.base_url, "opencode.ai") {
+        Some(if spec.upstream_id.starts_with("gpt-") {
+            nekochat_core::Protocol::Responses
+        } else {
+            nekochat_core::Protocol::ChatCompletions
+        })
+    } else if model_defaults::official_host(&provider.base_url, "api.deepseek.com") {
+        Some(nekochat_core::Protocol::ChatCompletions)
+    } else {
+        None
+    };
+    if native_protocol.is_some_and(|protocol| protocol != spec.protocol) {
+        return Err(ApiError::bad_request("所选协议与提供商的该模型端点不匹配"));
+    }
+    if spec.protocol == nekochat_core::Protocol::Responses
+        && spec.reasoning.style == ReasoningStyle::DeepSeek
+    {
+        return Err(ApiError::bad_request(
+            "Responses 不支持 DeepSeek thinking 模式",
+        ));
+    }
     if spec.upstream_id.trim().is_empty() || spec.display_name.trim().is_empty() {
         return Err(ApiError::bad_request("模型ID和显示名称不能为空"));
     }
@@ -206,7 +227,6 @@ async fn check_character(state: &AppState, body: &CharacterSpec) -> Result<(), A
     if body.name.trim().is_empty() || body.display_name.trim().is_empty() {
         return Err(ApiError::bad_request("内部名称和公开名称不能为空"));
     }
-    body.parameters.validate().map_err(ApiError::bad_request)?;
     if !["self", "neutral"].contains(&body.sticker_identity.as_str())
         || !["rare", "normal", "often"].contains(&body.sticker_frequency.as_str())
     {
@@ -238,9 +258,15 @@ async fn check_character(state: &AppState, body: &CharacterSpec) -> Result<(), A
         if state.provider(&model.spec.provider).is_none() {
             return Err(ApiError::bad_request("模型的提供商不在配置中"));
         }
+        body.parameters
+            .validate_for_protocol(&model.spec.protocol)
+            .map_err(ApiError::bad_request)?;
         crate::chat::resolve_effort(&model.spec.reasoning, body.parameters.effort.clone())?;
-    } else if body.parameters.effort.is_some() {
-        return Err(ApiError::bad_request("设置思考参数前请先绑定模型"));
+    } else {
+        body.parameters.validate().map_err(ApiError::bad_request)?;
+        if body.parameters.effort.is_some() {
+            return Err(ApiError::bad_request("设置思考参数前请先绑定模型"));
+        }
     }
     Ok(())
 }
