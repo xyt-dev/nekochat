@@ -30,7 +30,7 @@ export function ResourcePacks(props: { packs: ResourcePack[] }) {
     <p class="admin-note">内置资源随程序提供。额外资源包由管理员放入服务器 data_dir/skills 下的包目录，重启加载。此处不接收任意文件路径，不下载网络素材或执行脚本。</p>
     <div class="admin-card-list"><For each={props.packs} fallback={<p class="admin-empty">尚未加载本地资源包</p>}>{(pack) => <article class="admin-card" data-pack-id={pack.id}>
       <h3>{pack.name} <small class="admin-badge">{pack.sticker_count} 张</small></h3><p class="mono">{pack.id}</p><p>{pack.description}</p>
-      <details><summary>来源、授权与署名</summary><pre class="admin-resource-text">{pack.attribution}</pre></details>
+      <details><summary>描述</summary><pre class="admin-resource-text">{pack.attribution}</pre></details>
       <details><summary>静态 SKILL 指引（不执行）</summary><pre class="admin-resource-text">{pack.skill}</pre></details>
       <PackPreview pack={pack} />
     </article>}</For></div>
