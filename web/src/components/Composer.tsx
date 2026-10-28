@@ -1,7 +1,6 @@
 import { batch, createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { store } from "../store";
 import { confirmAction, toast } from "../ui";
-import { CharacterPicker } from "./Pickers";
 import { formatFileSize } from "./Files";
 
 interface Command { name: string; hint: string; run: () => void; }
@@ -216,11 +215,14 @@ export function Composer() {
           }} />
         <Show when={store.uploadingAttachments() > 0}><small class="upload-status" role="status">附件上传中…</small></Show>
         <div class="composer-tools">
-          <CharacterPicker />
-          <button type="button" title="上传图片、PDF 或文本（也可粘贴或拖放）" aria-label="上传附件" onClick={() => { rememberCaret(); fileInput.click(); }}>附件</button>
+          <button type="button" class="attachment-button" title="上传图片、PDF 或文本（也可粘贴或拖放）" aria-label="上传附件" onClick={() => { rememberCaret(); fileInput.click(); }}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8L15.1 5.5" />
+            </svg>
+          </button>
           <Show when={generating()} fallback={<button type="button" class="send" title="发送（Enter）"
             disabled={(!store.composerText().trim() && store.composerAttachments().length === 0) || store.uploadingAttachments() > 0} onClick={() => void send()}>↑</button>}>
-            <button type="button" class="send stop" title="停止生成" onClick={() => store.currentLive()?.abort.abort()}>■</button>
+            <button type="button" class="send stop" title={store.currentLive()?.stopping() ? "正在停止" : "停止生成"} disabled={store.currentLive()?.stopping()} onClick={() => void store.stopTurn()}>■</button>
           </Show>
         </div>
       </div>

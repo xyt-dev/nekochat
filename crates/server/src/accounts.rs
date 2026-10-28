@@ -49,6 +49,27 @@ pub async fn resolve(state: &AppState, jar: &CookieJar) -> Result<Option<UserPub
         .await?
         .map(|u| u.public))
 }
+
+pub(crate) async fn http_observer(
+    state: &AppState,
+    user: &CurrentUser,
+    jar: &CookieJar,
+) -> Result<std::sync::Arc<tokio_util::sync::CancellationToken>, ApiError> {
+    let cookie = jar
+        .get(USER_COOKIE)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "请重新登录"))?;
+    let cancellation = state
+        .observations
+        .register(&user.id, fingerprint(cookie.value()));
+    // Register first, then revalidate to close the session-revocation race.
+    if resolve(state, jar)
+        .await?
+        .is_none_or(|current| current.id != user.id)
+    {
+        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "请重新登录"));
+    }
+    Ok(cancellation)
+}
 async fn issue(state: &AppState, jar: CookieJar, user: &User) -> Result<CookieJar, ApiError> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|_| ApiError::internal())?;
@@ -132,24 +153,13 @@ pub async fn login(
     switch_out(&state, &jar).await?;
     Ok((issue(&state, jar, &user).await?, Json(user.public)))
 }
-async fn cancel_user(state: &AppState, id: &str) -> Result<(), ApiError> {
-    let store = state.store.clone();
-    let id = id.to_owned();
-    let convs = blocking(move || store.user_conversation_ids(&id)).await?;
-    for conv in convs {
-        state.cancel_turn(&conv);
-    }
-    Ok(())
-}
 async fn switch_out(state: &AppState, jar: &CookieJar) -> Result<(), ApiError> {
-    let previous = resolve(state, jar).await?;
     if let Some(cookie) = jar.get(USER_COOKIE) {
         let digest = fingerprint(cookie.value());
+        let revoked = digest.clone();
         let store = state.store.clone();
         blocking(move || store.revoke_user_session(&digest)).await?;
-    }
-    if let Some(user) = previous {
-        cancel_user(state, &user.id).await?;
+        state.observations.revoke_session(&revoked);
     }
     Ok(())
 }
@@ -235,7 +245,6 @@ pub async fn update_profile(
         else {
             return Err(ApiError::bad_request("原密码错误"));
         };
-        cancel_user(&state, &user.id).await?;
         Some(revision)
     } else {
         None
@@ -254,10 +263,8 @@ pub async fn update_profile(
         )
     })
     .await?;
-    if changed_password {
-        cancel_user(&state, &user.id).await?;
-    }
     let jar = if changed_password {
+        state.observations.revoke_user(&user.id);
         issue(&state, jar, &updated).await?
     } else {
         jar
@@ -402,7 +409,7 @@ pub async fn admin_update_user(
         body.avatar.as_ref(),
     )
     .await?;
-    let revoke = body.disabled == Some(true) || body.password.is_some();
+    let revoke = body.password.is_some() || body.disabled == Some(true);
     let store = state.store.clone();
     let update_id = id.clone();
     let updated = blocking(move || {
@@ -417,7 +424,7 @@ pub async fn admin_update_user(
     })
     .await?;
     if revoke {
-        cancel_user(&state, &id).await?;
+        state.observations.revoke_user(&id);
     }
     Ok(Json(updated))
 }
@@ -426,13 +433,15 @@ pub async fn admin_delete_user(
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let store = state.store.clone();
-    let lookup = id.clone();
-    let conversations = blocking(move || store.user_conversation_ids(&lookup)).await?;
-    let store = state.store.clone();
-    blocking(move || store.delete_user(&id)).await?;
+    let user_id = id.clone();
+    let conversations = blocking(move || store.delete_user(&id)).await;
+    state.observations.revoke_user(&user_id);
+    let conversations = conversations?;
     for conversation in conversations {
         state.cancel_turn(&conversation);
     }
+    let store = state.store.clone();
+    blocking(move || store.purge_deleted_pages()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 pub async fn admin_password(

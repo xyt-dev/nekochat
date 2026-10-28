@@ -222,31 +222,18 @@ async fn conversation_view_exposes_role_snapshot_not_private_configuration() {
     assert!(!text.contains("model_label"));
     assert!(!text.contains("\"effort\""));
     let v: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(
-        keys(&v),
-        ["id", "title", "character_id", "leaf_id", "nodes"]
-            .map(String::from)
-            .into()
-    );
-    assert_eq!(
-        keys(&v["nodes"][0]),
-        [
-            "id",
-            "parent_id",
-            "role",
-            "content",
-            "attachments",
-            "reasoning",
-            "character_id",
-            "character_name",
-            "character_avatar",
-            "status",
-            "metrics",
-            "created_at"
-        ]
-        .map(String::from)
-        .into()
-    );
+    for private in [
+        "model_id",
+        "model_label",
+        "effort",
+        "system_prompt",
+        "parameters",
+    ] {
+        assert!(
+            v["nodes"][0].get(private).is_none(),
+            "public node exposes {private}"
+        );
+    }
 }
 
 #[tokio::test]

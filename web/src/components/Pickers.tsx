@@ -8,18 +8,18 @@ export function CharacterPicker() {
   const [open, setOpen, root] = createPopover();
   let trigger!: HTMLButtonElement;
   return (
-    <div class="picker" ref={root} onKeyDown={(event) => {
-      if (event.key === "Escape") { setOpen(false); trigger.focus(); }
+    <div class="picker sidebar-character" ref={root} onKeyDown={(event) => {
+      if (event.key === "Escape" && open()) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.focus(); }
     }}>
-      <button ref={trigger} type="button" class="pill" aria-label="选择角色" aria-expanded={open()} aria-controls="character-options" onClick={() => {
+      <button ref={trigger} type="button" class="role-card" aria-label="选择角色" aria-expanded={open()} aria-controls="character-options" onClick={() => {
         const next = !open(); setOpen(next);
         if (next) void store.loadCharacters();
       }}>
         <Show when={store.character()}>{(character) => <Avatar name={character().display_name} url={character().avatar} />}</Show>
-        {store.character()?.display_name ?? "无可用角色"} <span class="pill-caret">▾</span>
+        <span class="role-card-name">{store.character()?.display_name ?? "无可用角色"}</span><span class="role-card-caret" aria-hidden="true">▾</span>
       </button>
       <Show when={open()}>
-        <div id="character-options" class="popup popup-right character-popup" aria-label="可用角色">
+        <div id="character-options" class="popup character-popup" aria-label="可用角色">
           <Show when={store.characters().characters.length > 0} fallback={<div class="popup-empty">请管理员配置并启用角色</div>}>
             <For each={store.characters().characters}>{(character) => (
               <button type="button" class="popup-item" aria-pressed={store.character()?.id === character.id}

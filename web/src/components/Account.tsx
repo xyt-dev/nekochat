@@ -45,9 +45,8 @@ function ProfileDialog(props: { close: () => void }) {
     }
     setBusy(true); setError("");
     try {
-      const updated = await api.profile({ username: username().trim(), avatar: avatar(), ...(password() ? { password: password(), current_password: currentPassword() } : {}) });
+      await store.saveProfile({ username: username().trim(), avatar: avatar(), ...(password() ? { password: password(), current_password: currentPassword() } : {}) });
       if (version !== store.sessionVersion()) return;
-      store.setUser(updated);
       props.close();
     } catch (failure) {
       if (version === store.sessionVersion()) setError(failure instanceof ApiError ? failure.message : "保存资料失败");

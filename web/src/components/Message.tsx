@@ -58,8 +58,8 @@ export function UserMessage(props: { node: NodeView }) {
   };
   return (
     <MessageShell class="msg-user">
-      <div class="user-label"><Avatar name={store.user()?.username ?? "用户"} url={store.user()?.avatar} /></div>
-      <div class="bubble">
+      <div class="message-avatar"><Avatar name={store.user()?.username ?? "用户"} url={store.user()?.avatar} /></div>
+      <div class="message-content"><div class="bubble">
         <Show when={props.node.content}><div class="bubble-text">{props.node.content}</div></Show>
         <Show when={props.node.attachments.length > 0}>
           <div class="message-attachments"><For each={props.node.attachments}>{(attachment) => (
@@ -78,6 +78,7 @@ export function UserMessage(props: { node: NodeView }) {
         <button type="button" class="act hover-only" onClick={edit}>
           ✎ 编辑
         </button>
+      </div>
       </div>
     </MessageShell>
   );
@@ -166,7 +167,8 @@ export function AssistantMessage(props: { node: NodeView }) {
   };
   return (
     <MessageShell class="msg-assistant">
-      <div class="character-label"><Avatar name={n().character_name ?? "助手"} url={n().character_avatar} /><span>{n().character_name ?? "助手"}</span></div>
+      <div class="message-avatar"><Avatar name={n().character_name ?? "助手"} url={n().character_avatar} /></div>
+      <div class="message-content">
       <Show when={n().reasoning || reasoningMs() !== null}>
         <Reasoning text={() => n().reasoning ?? ""} label={label} />
       </Show>
@@ -180,6 +182,7 @@ export function AssistantMessage(props: { node: NodeView }) {
         <button type="button" class="act hover-only" onClick={regenerate}>
           ↻ 重新生成
         </button>
+      </div>
       </div>
     </MessageShell>
   );
@@ -200,7 +203,8 @@ export function LiveMessage(props: { turn: LiveTurn }) {
   const generating = () => t.error() === null;
   return (
     <MessageShell class="msg-assistant">
-      <div class="character-label"><Avatar name={t.characterName() || "助手"} url={t.characterAvatar()} /><span>{t.characterName() || "助手"}</span></div>
+      <div class="message-avatar"><Avatar name={t.characterName() || "助手"} url={t.characterAvatar()} /></div>
+      <div class="message-content">
       <Show when={t.reasoningStart() !== null}>
         <Reasoning text={t.reasoning} label={label} />
       </Show>
@@ -212,6 +216,7 @@ export function LiveMessage(props: { turn: LiveTurn }) {
         <Show when={generating()}>
           <span class="generating">生成中…</span>
         </Show>
+      </div>
       </div>
     </MessageShell>
   );

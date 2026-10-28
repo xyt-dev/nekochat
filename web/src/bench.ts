@@ -137,7 +137,7 @@ function nextFrame(): Promise<number> {
 export async function runBench(): Promise<void> {
   const { nodes, leaf } = fakeConversation();
   const convId = "bench";
-  store.setConv({ id: convId, title: "压测：500 条消息", character_id: "bench-character", leaf_id: leaf, nodes });
+  store.setConv({ id: convId, title: "压测：500 条消息", character_id: "bench-character", leaf_id: leaf, nodes, active_turn_id: null });
   report("预热中…");
   await sleep(2500);
 

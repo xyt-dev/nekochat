@@ -55,6 +55,7 @@ export interface ConversationView {
   character_id: string | null;
   leaf_id: string | null;
   nodes: NodeView[];
+  active_turn_id: string | null;
 }
 
 export interface CharacterBackground {
@@ -96,8 +97,17 @@ export interface StartEvent {
   character_avatar: string | null;
 }
 
+export interface SnapshotEvent {
+  node: NodeView;
+  user_node: NodeView | null;
+  elapsed_ms: number;
+  reasoning_start_ms: number | null;
+  reasoning_end_ms: number | null;
+}
+
 export type TurnEvent =
   | { type: "start"; data: StartEvent }
+  | { type: "snapshot"; data: SnapshotEvent }
   | { type: "reasoning"; data: { t: string } }
   | { type: "text"; data: { t: string } }
   | { type: "done"; data: { node: NodeView } }
@@ -118,6 +128,13 @@ export interface UserPublic {
   avatar: string | null;
   last_character_id: string | null;
   last_conversation_id: string | null;
+}
+
+export interface ProfilePatch {
+  username?: string;
+  password?: string;
+  current_password?: string;
+  avatar?: string | null;
 }
 
 let requestEpoch = 0;
@@ -188,7 +205,7 @@ export const api = {
   authenticate: (mode: "login" | "register", username: string, password: string) =>
     json<UserPublic>(`/api/account/${mode}`, "POST", { username, password }),
   logout: () => json<void>("/api/account/session", "DELETE"),
-  profile: (body: { username?: string; password?: string; current_password?: string; avatar?: string | null }) =>
+  profile: (body: ProfilePatch) =>
     json<UserPublic>("/api/account", "PATCH", body),
   preferences: (body: { last_character_id: string | null; last_conversation_id: string | null }) =>
     json<UserPublic>("/api/account/preferences", "PUT", body),
@@ -209,6 +226,8 @@ export const api = {
   },
   deleteConversation: (id: string) => json<void>(conv(id), "DELETE"),
   clearConversation: (id: string) => json<void>(`${conv(id)}/clear`, "POST"),
+  stopTurn: (id: string, turnId: string) =>
+    json<void>(`${conv(id)}/turns/${encodeURIComponent(turnId)}/stop`, "POST"),
   setLeaf: (id: string, node_id: string, descend: boolean) =>
     json<{ leaf_id: string }>(`${conv(id)}/leaf`, "PUT", { node_id, descend }),
   themes: () => json<CustomTheme[]>("/api/themes"),
@@ -251,24 +270,41 @@ export async function* sseRecords(
   }
 }
 
-/** Consume SSE to completion, keeping stop/account aborts connected to the response body. */
+async function consumeTurn(response: Response, onEvent: (event: TurnEvent) => void): Promise<void> {
+  if (!response.body) throw new ApiError(0, "服务器没有返回内容");
+  for await (const record of sseRecords(response.body)) {
+    const type = record.event as TurnEvent["type"];
+    switch (type) {
+      case "start": case "snapshot": case "reasoning": case "text": case "done": case "error":
+        onEvent({ type, data: JSON.parse(record.data) } as TurnEvent);
+    }
+  }
+}
+
+/** This request starts a core job. Aborting its observer does not stop that job. */
 export async function postTurn(
   convId: string,
   body: TurnRequest,
   signal: AbortSignal,
-  onEvent: (ev: TurnEvent) => void,
+  onEvent: (event: TurnEvent) => void,
 ): Promise<void> {
   await request(`${conv(convId)}/turns`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
     signal,
-  }, async (r) => {
-    if (!r.body) throw new ApiError(0, "服务器没有返回内容");
-    for await (const rec of sseRecords(r.body)) {
-      const type = rec.event as TurnEvent["type"];
-      if (!["start", "reasoning", "text", "done", "error"].includes(type)) continue;
-      onEvent({ type, data: JSON.parse(rec.data) } as TurnEvent);
-    }
+  }, (response) => consumeTurn(response, onEvent));
+}
+
+/** Reattach without ever reissuing a model request. False means no active job remains. */
+export async function observeTurn(
+  convId: string,
+  signal: AbortSignal,
+  onEvent: (event: TurnEvent) => void,
+): Promise<boolean> {
+  return request(`${conv(convId)}/turns`, { signal }, async (response) => {
+    if (response.status === 204) return false;
+    await consumeTurn(response, onEvent);
+    return true;
   });
 }

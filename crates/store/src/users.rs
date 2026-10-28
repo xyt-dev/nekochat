@@ -106,31 +106,10 @@ impl Store {
         mode_in(&self.conn())
     }
     pub fn set_password_storage(&self, mode: PasswordStorage) -> Result<()> {
-        let mut conn = self.conn();
-        let tx = conn.transaction()?;
-        if mode == PasswordStorage::Hash {
-            let entries: Vec<(String, String)> = {
-                let mut stmt =
-                    tx.prepare("SELECT id,password FROM users WHERE password_storage='plain'")?;
-                stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
-                    .collect::<rusqlite::Result<_>>()?
-            };
-            for (id, password) in entries {
-                tx.execute(
-                    "UPDATE users SET password=?2,password_storage='hash' WHERE id=?1",
-                    params![id, encode_password(&password, mode)?],
-                )?;
-            }
-        }
-        tx.execute(
+        self.conn().execute(
             "UPDATE settings SET value=?1 WHERE key='password_storage'",
             [mode.as_str()],
         )?;
-        tx.commit()?;
-        // Remove old plaintext copies in freed pages and the WAL after atomic conversion.
-        if mode == PasswordStorage::Hash {
-            conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")?;
-        }
         Ok(())
     }
     pub fn create_user(&self, username: &str, password: &str) -> Result<User> {
@@ -172,19 +151,11 @@ impl Store {
                 |r| Ok((user_row(r)?, r.get::<_, String>(9)?)),
             )
             .optional()?;
-        let Some((mut user, encoded)) = found else {
+        let Some((user, encoded)) = found else {
             return Ok(None);
         };
         if !verify_password(password, &encoded, user.password_storage) {
             return Ok(None);
-        }
-        let mode = mode_in(&conn)?;
-        if mode != user.password_storage {
-            conn.execute(
-                "UPDATE users SET password=?2,password_storage=?3 WHERE id=?1",
-                params![user.id, encode_password(password, mode)?, mode.as_str()],
-            )?;
-            user.password_storage = mode;
         }
         Ok(Some(user))
     }
@@ -237,17 +208,14 @@ impl Store {
     ) -> Result<User> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
-        if tx
+        let mode = tx
             .query_row(
-                "SELECT 1 FROM users WHERE id=?1 AND (?2 IS NULL OR (disabled=0 AND credential_revision=?2))",
+                "SELECT password_storage FROM users WHERE id=?1 AND (?2 IS NULL OR (disabled=0 AND credential_revision=?2))",
                 params![id, expected_revision],
-                |_| Ok(()),
+                |r| r.get::<_, String>(0),
             )
             .optional()?
-            .is_none()
-        {
-            return Err(StoreError::NotFound);
-        }
+            .ok_or(StoreError::NotFound)?;
         if let Some(name) = username {
             tx.execute(
                 "UPDATE users SET username=?2 WHERE id=?1",
@@ -263,10 +231,14 @@ impl Store {
             })?;
         }
         if let Some(password) = password {
-            let mode = mode_in(&tx)?;
+            let mode = if mode == "hash" {
+                PasswordStorage::Hash
+            } else {
+                PasswordStorage::Plain
+            };
             tx.execute(
-                "UPDATE users SET password=?2,password_storage=?3 WHERE id=?1",
-                params![id, encode_password(password, mode)?, mode.as_str()],
+                "UPDATE users SET password=?2 WHERE id=?1",
+                params![id, encode_password(password, mode)?],
             )?;
         }
         if let Some(avatar) = avatar {
@@ -296,16 +268,28 @@ impl Store {
         tx.commit()?;
         Ok(user)
     }
-    pub fn delete_user(&self, id: &str) -> Result<()> {
+    pub fn delete_user(&self, id: &str) -> Result<Vec<String>> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
+        let conversations = {
+            let mut query = tx.prepare("SELECT id FROM conversations WHERE owner_user_id=?1")?;
+            query
+                .query_map([id], |row| row.get(0))?
+                .collect::<rusqlite::Result<Vec<String>>>()?
+        };
         tx.execute("UPDATE nodes SET parent_id=NULL WHERE conversation_id IN (SELECT id FROM conversations WHERE owner_user_id=?1)",[id])?;
         tx.execute("DELETE FROM conversations WHERE owner_user_id=?1", [id])?;
         if tx.execute("DELETE FROM users WHERE id=?1", [id])? == 0 {
             return Err(StoreError::NotFound);
         }
         tx.commit()?;
-        conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")?;
+        Ok(conversations)
+    }
+
+    /// Erase old database/WAL pages after callers have cancelled deleted conversations.
+    pub fn purge_deleted_pages(&self) -> Result<()> {
+        self.conn()
+            .execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")?;
         Ok(())
     }
     pub fn create_user_session(

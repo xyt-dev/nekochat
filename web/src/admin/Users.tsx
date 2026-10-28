@@ -37,7 +37,7 @@ function UserEditor(props: { api: AdminApi; initial: UserAdmin | null; onSaved: 
         </div>
         <p class="admin-note">密码长度为 8–1024 个 UTF-8 字节；中文等字符按实际编码字节数计算。</p>
         <Show when={initial}><AvatarInput api={props.api} name="user-avatar" value={avatar()} onChange={setAvatar} onUploading={setUploading} disabled={busy()} /></Show>
-        <p class="admin-note">{initial ? "修改用户名或头像不会分配其他账号的历史。重置密码将按当前全局存储模式保存并退出该用户的现有会话。" : "创建普通聊天账号，不授予管理权限，也不会自动取得旧对话。创建后可编辑头像。"}</p>
+        <p class="admin-note">{initial ? "修改用户名或头像不会分配其他账号的历史。重置密码沿用该账号原有的明文或哈希存储方式，并退出该用户的现有会话。" : "创建普通聊天账号，密码按当前新账号存储策略保存。不授予管理权限，也不会自动取得旧对话；创建后可编辑头像。"}</p>
       </fieldset>
       <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show>
       <div class="admin-actions"><button type="submit" class="primary" disabled={busy() || uploading()}>{busy() ? "保存中…" : initial ? "保存用户" : "创建用户"}</button><button type="button" disabled={busy() || uploading()} onClick={props.onCancel}>取消</button></div>
@@ -57,7 +57,7 @@ function PasswordView(props: { api: AdminApi; user: UserAdmin; disabled: boolean
   }
   return <div class="admin-password-view">
     <Show when={result()} fallback={<button type="button" disabled={props.disabled || busy()} onClick={() => void reveal()}>{busy() ? "查询中…" : "查看密码"}</button>}>{(value) => <>
-      <Show when={value().password !== null} fallback={<p class="admin-note">当前密码为不可恢复的哈希，无法查看原文。切换为明文后，须成功登录或重置密码才能转换；不会显示哈希。</p>}><p class="admin-password" aria-label="用户密码">{value().password}</p></Show>
+      <Show when={value().password !== null} fallback={<p class="admin-note">当前账号使用不可恢复的哈希，无法查看原文，也不会显示哈希。修改新账号策略、登录或重置密码均不会改变此账号的存储方式。</p>}><p class="admin-password" aria-label="用户密码">{value().password}</p></Show>
       <button type="button" onClick={() => { setResult(null); setError(""); }}>隐藏密码</button>
     </>}</Show>
     <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show>
@@ -91,10 +91,7 @@ export function Users(props: { api: AdminApi }) {
     finally { setBusy(false); }
   }
   function changeStorage(mode: PasswordStorage) {
-    const warning = mode === "hash"
-      ? "切换为哈希将原子转换所有已存明文密码，原文不可恢复，之后无法查看密码。确定继续？"
-      : "切换为明文不能还原已有哈希。已有哈希只会在该用户下次成功登录或管理员重置密码后转换为明文；新密码将可被管理员显式查看。确定继续？";
-    if (confirm(warning)) void mutate(async () => { await props.api.saveUserSettings(mode); return mode === "hash" ? "已切换为哈希；原有明文已不可恢复" : "已切换为明文；已有哈希等待成功登录或密码重置后转换"; });
+    void mutate(async () => { await props.api.saveUserSettings(mode); return `新账号密码存储已设为${mode === "hash" ? "哈希" : "明文"}；已有账号及其会话不变`; });
   }
   function assignLegacy(user: UserAdmin) {
     const count = settings()?.legacy_conversations ?? 0;
@@ -106,9 +103,9 @@ export function Users(props: { api: AdminApi }) {
     <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show><Show when={notice()}><p role="status">{notice()}</p></Show>
     <Show when={loading() || busy()}><p role="status">{loading() ? "正在加载用户与存储设置…" : "正在保存更改…"}</p></Show>
     <Show when={settings()}>{(current) => <section class="admin-card" aria-labelledby="password-storage-title">
-      <h3 id="password-storage-title">密码存储</h3><p>当前全局模式：<strong data-password-storage={current().password_storage}>{current().password_storage === "plain" ? "明文" : "哈希"}</strong>（新安装默认明文）</p>
-      <p class="admin-note">明文模式允许独立管理端显式查看原文。切换到哈希会不可逆地转换已存明文；切回明文不能恢复旧哈希，只有下次成功登录或重置密码时才转换。账号卡片显示各自实际存储状态。</p>
-      <div class="admin-actions" role="group" aria-label="密码存储模式"><button type="button" aria-pressed={current().password_storage === "plain"} disabled={blocked() || current().password_storage === "plain"} onClick={() => changeStorage("plain")}>切换为明文</button><button type="button" aria-pressed={current().password_storage === "hash"} disabled={blocked() || current().password_storage === "hash"} onClick={() => changeStorage("hash")}>切换为哈希</button></div>
+      <h3 id="password-storage-title">新账号密码存储</h3><p>新建账号使用：<strong data-password-storage={current().password_storage}>{current().password_storage === "plain" ? "明文" : "哈希"}</strong>（新安装默认明文）</p>
+      <p class="admin-note">仅影响此后创建的账号，包括自行注册和管理员创建。已有账号始终保留各自实际存储方式，登录或重置密码也不会转换；修改策略不会退出已有会话。明文账号允许管理员显式查看密码，哈希账号无法恢复原文。</p>
+      <div class="admin-actions" role="group" aria-label="新账号密码存储策略"><button type="button" aria-pressed={current().password_storage === "plain"} disabled={blocked() || current().password_storage === "plain"} onClick={() => changeStorage("plain")}>新账号使用明文</button><button type="button" aria-pressed={current().password_storage === "hash"} disabled={blocked() || current().password_storage === "hash"} onClick={() => changeStorage("hash")}>新账号使用哈希</button></div>
       <h4 class="admin-legacy-heading">未归属旧对话：<span data-legacy-conversations>{current().legacy_conversations}</span></h4><p class="admin-note">旧对话不会自动分给首个注册用户。请在目标用户卡片上明确分配；该操作会分配当时仍未归属的全部旧对话。</p>
     </section>}</Show>
     <Show when={editing()} keyed>{(draft) => <UserEditor api={props.api} initial={draft.initial} onCancel={() => setEditing(null)} onSaved={async () => { await reload(); setEditing(null); setNotice(draft.initial ? "用户已更新" : "用户已创建"); }} />}</Show>

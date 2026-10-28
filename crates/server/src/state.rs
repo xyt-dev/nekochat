@@ -10,11 +10,13 @@ use nekochat_store::Store;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
+use crate::generation::Generation;
+use crate::observation::Observations;
 
-/// Conversation id → cancellation token of its in-flight turn.
-pub type RunningTurns = Arc<Mutex<HashMap<String, CancellationToken>>>;
+/// Conversation id → its core-owned in-flight generation.
+pub type RunningTurns = Arc<Mutex<HashMap<String, Arc<Generation>>>>;
 
-fn lock(running: &RunningTurns) -> MutexGuard<'_, HashMap<String, CancellationToken>> {
+fn lock(running: &RunningTurns) -> MutexGuard<'_, HashMap<String, Arc<Generation>>> {
     // The map stays consistent even if a holder panicked.
     running.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -23,11 +25,20 @@ fn lock(running: &RunningTurns) -> MutexGuard<'_, HashMap<String, CancellationTo
 pub struct TurnGuard {
     running: RunningTurns,
     conv_id: String,
+    pub(crate) generation: Arc<Generation>,
 }
 
 impl Drop for TurnGuard {
     fn drop(&mut self) {
-        lock(&self.running).remove(&self.conv_id);
+        let mut running = lock(&self.running);
+        if running
+            .get(&self.conv_id)
+            .is_some_and(|current| Arc::ptr_eq(current, &self.generation))
+        {
+            running.remove(&self.conv_id);
+        }
+        drop(running);
+        self.generation.close();
     }
 }
 
@@ -74,6 +85,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub sessions: Sessions,
     pub running: RunningTurns,
+    pub(crate) observations: Observations,
     pub resources: Arc<nekochat_resources::ResourceCatalog>,
     pub codex: Arc<crate::codex::CodexAccount>,
 }
@@ -112,6 +124,7 @@ impl AppState {
             config: Arc::new(config),
             sessions: Sessions::default(),
             running: RunningTurns::default(),
+            observations: Observations::default(),
             resources: Arc::new(resources),
             codex,
         }
@@ -153,23 +166,68 @@ impl AppState {
         let Entry::Vacant(slot) = running.entry(conv_id.to_owned()) else {
             return None;
         };
-        let token = slot.insert(CancellationToken::new()).clone();
+        let generation = slot.insert(Arc::new(Generation::new())).clone();
+        let token = generation.token();
         let guard = TurnGuard {
             running: self.running.clone(),
             conv_id: conv_id.to_owned(),
+            generation,
         };
         Some((guard, token))
     }
 
-    /// Stops the conversation's running turn, if any; a cancelled turn persists nothing.
-    pub fn cancel_turn(&self, conv_id: &str) {
-        if let Some(token) = lock(&self.running).get(conv_id) {
-            token.cancel();
+    /// Reserve deletion so a concurrent start cannot escape cancellation.
+    pub(crate) fn begin_deletion(&self, conv_id: &str) -> TurnGuard {
+        let generation = Arc::new(Generation::new());
+        generation.discard();
+        if let Some(previous) = lock(&self.running).insert(conv_id.to_owned(), generation.clone()) {
+            previous.discard();
         }
+        TurnGuard {
+            running: self.running.clone(),
+            conv_id: conv_id.to_owned(),
+            generation,
+        }
+    }
+
+    /// Deleting a conversation discards the generation rather than saving a partial reply.
+    pub fn cancel_turn(&self, conv_id: &str) {
+        if let Some(generation) = self.generation(conv_id) {
+            generation.discard();
+        }
+    }
+
+    pub(crate) fn generation(&self, conv_id: &str) -> Option<Arc<Generation>> {
+        lock(&self.running).get(conv_id).cloned()
     }
 
     /// Whether a turn is generating in the conversation right now.
     pub fn turn_running(&self, conv_id: &str) -> bool {
         lock(&self.running).contains_key(conv_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn finishing_old_generation_cannot_release_a_concurrent_deletion_claim() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = serde_json::from_value(serde_json::json!({"data_dir":dir.path()})).unwrap();
+        let state = AppState::new(
+            config,
+            Vec::new(),
+            Store::open(&dir.path().join("state.db")).unwrap(),
+        );
+        let (old, cancellation) = state.begin_turn("conversation").unwrap();
+        let deletion = state.begin_deletion("conversation");
+        assert!(cancellation.is_cancelled());
+        drop(old);
+        assert!(state.turn_running("conversation"));
+        assert!(state.begin_turn("conversation").is_none());
+        drop(deletion);
+        assert!(!state.turn_running("conversation"));
+        assert!(state.begin_turn("conversation").is_some());
     }
 }

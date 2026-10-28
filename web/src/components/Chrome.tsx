@@ -4,6 +4,7 @@ import { allThemes, applyTheme, BUILTIN_THEMES, CUSTOM_GROUP, customThemes, type
 import { confirmAction, confirmRequest, toastText } from "../ui";
 import { createPopover } from "./Popover";
 import { AccountMenu } from "./Account";
+import { CharacterPicker } from "./Pickers";
 
 const DELETE_WARNING = "聊天记录、上传的图片和文件会从服务器上一起删掉，无法恢复。";
 
@@ -30,6 +31,7 @@ export function Sidebar() {
       }
     }}>
       <button type="button" class="sidebar-close" onClick={() => { store.setSidebarOpen(false); document.querySelector<HTMLButtonElement>(".menu-button")?.focus(); }}>关闭对话列表</button>
+      <CharacterPicker />
       <button type="button" class="new-chat" onClick={() => void store.newConversation()}>
         ＋ 新对话
       </button>

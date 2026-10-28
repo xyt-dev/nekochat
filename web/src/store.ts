@@ -9,9 +9,11 @@ import {
   type CharactersView,
   type NodeView,
   type PickerCharacter,
+  type ProfilePatch,
   type UserPublic,
   resetAccountRequests,
   postTurn,
+  observeTurn,
   type TurnAction,
   type TurnEvent,
 } from "./api";
@@ -37,7 +39,9 @@ export interface LiveTurn {
   reasoningEnd: Accessor<number | null>;
   /** Set when the turn failed without a stored reply. */
   error: Accessor<string | null>;
-  abort: AbortController;
+  observer: AbortController;
+  stopRequested: boolean;
+  stopping: Accessor<boolean>;
   // Write side, used by the event handler only.
   buf: { content: string; reasoning: string; dirty: boolean };
   set: {
@@ -52,6 +56,7 @@ export interface LiveTurn {
     reasoningStart: Setter<number | null>;
     reasoningEnd: Setter<number | null>;
     error: Setter<string | null>;
+    stopping: Setter<boolean>;
   };
 }
 
@@ -71,6 +76,7 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
   const [reasoningStart, setReasoningStart] = createSignal<number | null>(null);
   const [reasoningEnd, setReasoningEnd] = createSignal<number | null>(null);
   const [error, setError] = createSignal<string | null>(null);
+  const [stopping, setStopping] = createSignal(false);
   return {
     convId,
     started,
@@ -84,7 +90,9 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
     reasoningStart,
     reasoningEnd,
     error,
-    abort: new AbortController(),
+    observer: new AbortController(),
+    stopRequested: false,
+    stopping,
     buf: { content: "", reasoning: "", dirty: false },
     set: {
       started: setStarted,
@@ -98,6 +106,7 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
       reasoningStart: setReasoningStart,
       reasoningEnd: setReasoningEnd,
       error: setError,
+      stopping: setStopping,
     },
   };
 }
@@ -108,6 +117,7 @@ function createAppStore() {
   const [sessionVersion, setSessionVersion] = createSignal(0);
   let sessionEpoch = 0;
   let preferenceQueue = Promise.resolve();
+  let preferenceEpoch = 0;
   const [conversations, setConversations] = createSignal<ConversationSummary[]>([]);
   const [conv, setConv] = createSignal<ConversationView | null>(null, { equals: false });
   const [loadingConv, setLoadingConv] = createSignal(false);
@@ -141,7 +151,7 @@ function createAppStore() {
     sessionEpoch++;
     setSessionVersion(sessionEpoch);
     resetAccountRequests();
-    for (const turn of Object.values(live())) turn.abort.abort();
+    for (const turn of Object.values(live())) turn.observer.abort();
     resetAccountUi();
     resetMarkdownCache();
     loadSeq++;
@@ -169,14 +179,15 @@ function createAppStore() {
   function persistPreferences() {
     if (!user()) return;
     const epoch = sessionEpoch;
+    const version = preferenceEpoch;
     const preferences = { last_character_id: character()?.id ?? null, last_conversation_id: conv()?.id ?? null };
     preferenceQueue = preferenceQueue.catch(() => {}).then(async () => {
-      if (epoch !== sessionEpoch || !user()) return;
+      if (epoch !== sessionEpoch || version !== preferenceEpoch || !user()) return;
       try {
         const saved = await api.preferences(preferences);
-        if (epoch === sessionEpoch) setUser((current) => current ? { ...current, last_character_id: saved.last_character_id, last_conversation_id: saved.last_conversation_id } : null);
+        if (epoch === sessionEpoch && version === preferenceEpoch) setUser((current) => current ? { ...current, last_character_id: saved.last_character_id, last_conversation_id: saved.last_conversation_id } : null);
       } catch (error) {
-        if (epoch === sessionEpoch) toast(error instanceof ApiError ? error.message : "保存偏好失败");
+        if (epoch === sessionEpoch && version === preferenceEpoch) toast(error instanceof ApiError ? error.message : "保存偏好失败");
       }
     });
   }
@@ -225,6 +236,42 @@ function createAppStore() {
     finally { setSessionReady(true); }
   }
 
+  async function saveProfile(body: ProfilePatch): Promise<void> {
+    const epoch = sessionEpoch;
+    const current = conv();
+    const paused = body.password && current ? live()[current.id] : undefined;
+    // Own password changes rotate the cookie. Rebind only after fetch has applied the new cookie.
+    const passwordRotation = body.password ? Promise.withResolvers<void>() : null;
+    if (passwordRotation) {
+      // Retire queued old-cookie writes; newly queued preferences wait for PATCH's cookie.
+      preferenceEpoch++;
+      preferenceQueue = passwordRotation.promise;
+      resetAccountRequests();
+    }
+    if (paused) {
+      paused.observer.abort();
+      dropLive(paused);
+    }
+    try {
+      const saved = await api.profile(body);
+      if (epoch === sessionEpoch) setUser(saved);
+    } finally {
+      passwordRotation?.resolve();
+      if (passwordRotation && epoch === sessionEpoch) persistPreferences();
+      if (paused && current && epoch === sessionEpoch && conv()?.id === current.id) {
+        try {
+          const view = await api.conversation(current.id);
+          if (epoch === sessionEpoch && conv()?.id === current.id) {
+            setConv(view);
+            if (view.active_turn_id) attachTurn(view);
+          }
+        } catch (error) {
+          if (epoch === sessionEpoch) toast(error instanceof ApiError ? error.message : "重新连接回复失败");
+        }
+      }
+    }
+  }
+
   function chooseCharacter(item: PickerCharacter) {
     setCharacterId(item.id);
     persistPreferences();
@@ -258,6 +305,9 @@ function createAppStore() {
   async function openConversation(id: string | null, persist = true, preserveDraft = false) {
     if (!user()) return;
     const seq = ++loadSeq;
+    // Navigating detaches observers, never the core-owned jobs.
+    for (const turn of Object.values(live())) turn.observer.abort();
+    setLive({});
     uploadDraftVersion++;
     if (!preserveDraft) {
       setComposerAttachments([]);
@@ -279,6 +329,7 @@ function createAppStore() {
       if (seq === loadSeq) {
         setConv(view);
         if (persist) persistPreferences();
+        if (view.active_turn_id) attachTurn(view);
       }
     } catch (e) {
       if (seq !== loadSeq) return;
@@ -342,8 +393,8 @@ function createAppStore() {
   async function deleteConversation(id: string) {
     const epoch = sessionEpoch;
     try {
-      live()[id]?.abort.abort();
       await api.deleteConversation(id);
+      live()[id]?.observer.abort();
       if (epoch !== sessionEpoch) return;
       setLive((l) => {
         const { [id]: _, ...rest } = l;
@@ -359,8 +410,12 @@ function createAppStore() {
   async function clearConversation(id: string) {
     const epoch = sessionEpoch;
     try {
-      live()[id]?.abort.abort();
+      if (live()[id] && !live()[id].error()) {
+        toast("请先停止生成，再清空对话");
+        return;
+      }
       await api.clearConversation(id);
+      live()[id]?.observer.abort();
       if (epoch !== sessionEpoch) return;
       setLive((l) => {
         const { [id]: _, ...rest } = l;
@@ -424,6 +479,38 @@ function createAppStore() {
           c.character_id = character_id;
         });
         turn.set.started(true);
+        updateConv(turn.convId, (c) => { c.active_turn_id = assistant_node_id; });
+        if (turn.stopRequested) void requestStop(turn);
+        break;
+      }
+      case "snapshot": {
+        const { node, user_node, elapsed_ms, reasoning_start_ms, reasoning_end_ms } = ev.data;
+        const before = turn.assistantId();
+        if (before && before !== node.id) {
+          turn.stopRequested = false;
+          turn.set.stopping(false);
+        }
+        batch(() => {
+          turn.set.assistantId(node.id);
+          turn.set.parentId(node.parent_id);
+          turn.set.characterId(node.character_id ?? "");
+          turn.set.characterName(node.character_name ?? "");
+          turn.set.characterAvatar(node.character_avatar);
+          turn.buf.content = node.content;
+          turn.buf.reasoning = node.reasoning ?? "";
+          turn.buf.dirty = true;
+          flushLive(turn);
+          const began = performance.now() - elapsed_ms;
+          turn.set.reasoningStart(reasoning_start_ms === null ? null : began + reasoning_start_ms);
+          turn.set.reasoningEnd(reasoning_end_ms === null ? null : began + reasoning_end_ms);
+          turn.set.started(true);
+          updateConv(turn.convId, (c) => {
+            if (user_node) addNode(c, user_node);
+            c.leaf_id = node.parent_id;
+            c.active_turn_id = node.id;
+          });
+        });
+        if (turn.stopRequested) void requestStop(turn);
         break;
       }
       case "reasoning":
@@ -457,6 +544,7 @@ function createAppStore() {
         updateConv(turn.convId, (c) => {
           addNode(c, node);
           c.leaf_id = node.id;
+          c.active_turn_id = null;
         });
         dropLive(turn);
       } else {
@@ -503,7 +591,80 @@ function createAppStore() {
     });
   }
 
-  /** Starts a turn; returns `false` when it was refused before streaming began. */
+  function attached(turn: LiveTurn, epoch: number): boolean {
+    return epoch === sessionEpoch && !turn.observer.signal.aborted && live()[turn.convId] === turn;
+  }
+
+  function attachTurn(view: ConversationView) {
+    if (!view.active_turn_id) return;
+    const turn = createLiveTurn(view.id, view.leaf_id);
+    turn.set.assistantId(view.active_turn_id);
+    setLive((list) => ({ ...list, [view.id]: turn }));
+    void watchTurn(turn, sessionEpoch);
+  }
+
+  /** Observation retries are GET-only. They can never start a second model call. */
+  async function watchTurn(turn: LiveTurn, epoch: number): Promise<void> {
+    while (attached(turn, epoch)) {
+      let settled = false;
+      try {
+        await observeTurn(turn.convId, turn.observer.signal, (event) => {
+          if (!attached(turn, epoch)) return;
+          if (event.type === "done" || event.type === "error") settled = true;
+          handleTurnEvent(turn, event);
+        });
+        if (!attached(turn, epoch) || settled) break;
+        // The core may have finished between the history snapshot and the observation request.
+        const view = await api.conversation(turn.convId);
+        if (!attached(turn, epoch)) break;
+        setConv(view);
+        if (!view.active_turn_id) {
+          dropLive(turn);
+          break;
+        }
+      } catch (error) {
+        if (!attached(turn, epoch)) break;
+        if (error instanceof ApiError && error.status > 0) {
+          dropLive(turn);
+          toast(error.message);
+          if (error.status === 404) {
+            setConv(null);
+            void loadConversations();
+          }
+          break;
+        }
+      }
+      if (attached(turn, epoch)) {
+        const { promise, resolve } = Promise.withResolvers<void>();
+        setTimeout(resolve, 1000);
+        await promise;
+      }
+    }
+    if (epoch === sessionEpoch && !turn.observer.signal.aborted) void loadConversations();
+  }
+
+  async function requestStop(turn: LiveTurn): Promise<void> {
+    const id = turn.assistantId();
+    if (!id) return; // A stop clicked before start is sent as soon as the core identifies the turn.
+    try {
+      await api.stopTurn(turn.convId, id);
+    } catch (error) {
+      if (live()[turn.convId] !== turn || turn.observer.signal.aborted) return;
+      turn.stopRequested = false;
+      turn.set.stopping(false);
+      toast(error instanceof ApiError ? error.message : "停止失败");
+    }
+  }
+
+  async function stopTurn(): Promise<void> {
+    const turn = currentLive();
+    if (!turn || turn.stopping()) return;
+    turn.stopRequested = true;
+    turn.set.stopping(true);
+    await requestStop(turn);
+  }
+
+  /** Starts one core job; losing its HTTP observer must not fabricate an interrupted reply. */
   async function runTurn(action: TurnAction): Promise<boolean> {
     if (!user()) return false;
     const epoch = sessionEpoch;
@@ -524,72 +685,46 @@ function createAppStore() {
       toast("该对话正在生成回复");
       return false;
     }
-    const convId = c.id;
-    const turn = createLiveTurn(convId, action.action === "regenerate" ? action.node_id : null);
-    setLive((l) => ({ ...l, [convId]: turn }));
+    const turn = createLiveTurn(c.id, action.action === "regenerate" ? action.node_id : null);
+    setLive((list) => ({ ...list, [turn.convId]: turn }));
     setEditing(null);
     let settled = false;
     try {
-      await postTurn(convId, { ...action, character_id: selected.id }, turn.abort.signal, (ev) => {
-        if (epoch !== sessionEpoch) return;
-        if (ev.type === "done" || ev.type === "error") settled = true;
-        handleTurnEvent(turn, ev);
+      await postTurn(turn.convId, { ...action, character_id: selected.id }, turn.observer.signal, (event) => {
+        if (!attached(turn, epoch)) return;
+        if (event.type === "done" || event.type === "error") settled = true;
+        handleTurnEvent(turn, event);
       });
-      if (epoch !== sessionEpoch) return true;
-      if (!settled) {
-        finishTurn(turn, null, "连接中断，回复未完成");
-        setTimeout(() => void reloadConversation(convId), 1500);
-      }
-    } catch (e) {
-      if (epoch !== sessionEpoch) return true;
-      if (turn.abort.signal.aborted) {
-        stopped(turn);
-        return true;
-      }
-      if (!turn.started()) {
+    } catch (error) {
+      if (!attached(turn, epoch)) return true;
+      if (!turn.started() && error instanceof ApiError && error.status > 0) {
         dropLive(turn);
-        toast(e instanceof ApiError ? e.message : "发送失败");
+        toast(error.message);
         return false;
       }
-      finishTurn(turn, null, "连接中断，回复未完成");
-      setTimeout(() => void reloadConversation(convId), 1500);
+      if (!turn.started()) {
+        try {
+          const view = await api.conversation(turn.convId);
+          if (!attached(turn, epoch)) return true;
+          setConv(view);
+          if (!view.active_turn_id) {
+            dropLive(turn);
+            toast("未确认发送成功，输入已保留；请检查对话后重试");
+            return false;
+          }
+          turn.set.assistantId(view.active_turn_id);
+        } catch {
+          if (attached(turn, epoch)) {
+            dropLive(turn);
+            toast("连接不可用，输入已保留");
+          }
+          return false;
+        }
+      }
     }
-    if (epoch === sessionEpoch) void loadConversations();
+    if (attached(turn, epoch) && !settled) await watchTurn(turn, epoch);
+    if (epoch === sessionEpoch && !turn.observer.signal.aborted) void loadConversations();
     return true;
-  }
-
-  /** The user stopped generating: keep what arrived locally; the server stores it as interrupted. */
-  function stopped(turn: LiveTurn) {
-    flushLive(turn);
-    if (turn.started() && (turn.buf.content || turn.buf.reasoning)) {
-      const node: NodeView = {
-        id: turn.assistantId(),
-        parent_id: turn.parentId(),
-        role: "assistant",
-        attachments: [],
-        content: turn.buf.content,
-        reasoning: turn.buf.reasoning || null,
-        character_id: turn.characterId(),
-        character_name: turn.characterName(),
-        character_avatar: turn.characterAvatar(),
-        status: "interrupted",
-        metrics: null,
-        created_at: Date.now(),
-      };
-      batch(() => {
-        updateConv(turn.convId, (c) => {
-          addNode(c, node);
-          c.leaf_id = node.id;
-        });
-        dropLive(turn);
-      });
-    } else {
-      dropLive(turn);
-    }
-    // Pick up the stored version (with metrics) once the server has saved it.
-    setTimeout(() => {
-      if (!live()[turn.convId]) void reloadConversation(turn.convId);
-    }, 1500);
   }
 
   return {
@@ -600,6 +735,7 @@ function createAppStore() {
     bootstrapSession,
     authenticate,
     logout,
+    saveProfile,
     resetSession,
     conversations,
     conv,
@@ -634,6 +770,7 @@ function createAppStore() {
     clearConversation,
     moveLeaf,
     runTurn,
+    stopTurn,
     createLiveTurn,
     handleTurnEvent,
   };

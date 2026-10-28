@@ -175,7 +175,7 @@ async fn every_conversation_and_attachment_id_boundary_is_user_scoped() {
 }
 
 #[tokio::test]
-async fn plain_hash_plain_conversion_is_explicit_and_relogin_restores_preferences() {
+async fn new_account_policy_preserves_existing_modes_sessions_and_relogin_preferences() {
     let app = spawn_app(TestCfg {
         anonymous: true,
         admin_password: Some("admin-test-only".into()),
@@ -243,8 +243,17 @@ async fn plain_hash_plain_conversion_is_explicit_and_relogin_restores_preference
                 .status(),
             200
         );
+        let session: Value = user_client
+            .get(app.url("/api/account/session"))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(session["id"], id);
     }
-    let hidden: Value = app
+    let unchanged: Value = app
         .client
         .post(&password_url)
         .send()
@@ -253,8 +262,8 @@ async fn plain_hash_plain_conversion_is_explicit_and_relogin_restores_preference
         .json()
         .await
         .unwrap();
-    assert!(hidden["password"].is_null());
-    assert_eq!(hidden["password_storage"], "hash");
+    assert_eq!(unchanged["password"], "account-test-password");
+    assert_eq!(unchanged["password_storage"], "plain");
     let (logout_guard, logout_cancel) = app.state.begin_turn(&conv.id).unwrap();
     assert_eq!(
         user_client
@@ -265,7 +274,7 @@ async fn plain_hash_plain_conversion_is_explicit_and_relogin_restores_preference
             .status(),
         204
     );
-    assert!(logout_cancel.is_cancelled());
+    assert!(!logout_cancel.is_cancelled());
     drop(logout_guard);
     assert_eq!(
         user_client
@@ -311,7 +320,7 @@ async fn plain_hash_plain_conversion_is_explicit_and_relogin_restores_preference
             .status(),
         200
     );
-    assert!(cancellation.is_cancelled());
+    assert!(!cancellation.is_cancelled());
     let session: Value = user_client
         .get(app.url("/api/account/session"))
         .send()
@@ -337,6 +346,18 @@ async fn plain_hash_plain_conversion_is_explicit_and_relogin_restores_preference
             .status(),
         200
     );
+    assert!(!cancellation.is_cancelled());
+    let reset_password: Value = app
+        .client
+        .post(&password_url)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(reset_password["password_storage"], "plain");
+    assert_eq!(reset_password["password"], "reset-test-password");
     assert_eq!(
         login(&app, &user_client, "mode-user", "reset-test-password")
             .await
@@ -352,6 +373,7 @@ async fn plain_hash_plain_conversion_is_explicit_and_relogin_restores_preference
             .status(),
         204
     );
+    assert!(cancellation.is_cancelled());
     assert!(app.store.get_conversation(&conv.id).unwrap().is_none());
     assert_eq!(
         user_client

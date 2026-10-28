@@ -90,7 +90,7 @@ async fn role_parameters_are_server_owned_and_shared_service_is_transport_indepe
     .unwrap();
     let mut completed = false;
     while let Some(event) = events.next().await {
-        if let TurnEvent::Done(node) = event {
+        if let TurnEvent::Done(node) = event.as_ref() {
             assert_eq!(node.character_name.as_deref(), Some("Alternate role"));
             completed = true;
         }

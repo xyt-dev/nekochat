@@ -231,14 +231,6 @@ impl Store {
             .collect::<rusqlite::Result<_>>()?)
     }
 
-    pub fn user_conversation_ids(&self, user_id: &str) -> Result<Vec<String>> {
-        let conn = self.conn();
-        let mut stmt = conn.prepare("SELECT id FROM conversations WHERE owner_user_id=?1")?;
-        Ok(stmt
-            .query_map([user_id], |row| row.get(0))?
-            .collect::<rusqlite::Result<_>>()?)
-    }
-
     pub fn create_conversation(&self, character_id: Option<&str>) -> Result<Conversation> {
         let now = now_ms();
         let conv = Conversation {

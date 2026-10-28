@@ -2,16 +2,17 @@
 
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
+use axum_extra::extract::CookieJar;
 use base64::Engine;
 use futures_util::{StreamExt, stream};
-use nekochat_core::{Metrics, Price, ReasoningSpec, ReasoningStyle, Usage};
+use nekochat_core::{Price, ReasoningSpec, ReasoningStyle, Usage};
 use nekochat_gateway::{
     ChatImage, ChatMessage, ChatRequest, ChatRole, GatewayError, Provider, StreamEvent,
 };
@@ -20,20 +21,17 @@ use nekochat_store::{
     Character, Conversation, DEFAULT_TITLE, ListedModel, Node, NodeRole, NodeStatus, Store,
     StoreError, UsagePurpose, UsageRecord, new_id, now_ms,
 };
-use serde::Deserialize;
-use serde_json::json;
-use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
+use serde::{Deserialize, Serialize};
 
 use crate::accounts::CurrentUser;
 use crate::api::user::NodeView;
 use crate::api::{ApiError, JsonBody, blocking};
+use crate::generation::Generation;
 use crate::state::{AppState, TurnGuard};
+use tokio_util::sync::CancellationToken;
 
-/// Idle interval between SSE comment lines; each write lets hyper notice a vanished client.
+/// Keeps an observer response alive; disconnecting it never owns the generation lifetime.
 const KEEP_ALIVE: Duration = Duration::from_secs(1);
-/// Events buffered between the generation task and the SSE response.
-const EVENT_BUFFER: usize = 64;
 /// A fresh conversation is titled with this many leading characters of its first message.
 const TITLE_CHARS: usize = 30;
 
@@ -71,14 +69,21 @@ pub enum TurnEvent {
     },
     Reasoning(String),
     Chunk(ResourceChunk),
-    Done(Node),
+    Snapshot {
+        node: Arc<Node>,
+        start: Option<Arc<TurnEvent>>,
+        elapsed_ms: u64,
+        reasoning_start_ms: Option<u64>,
+        reasoning_end_ms: Option<u64>,
+    },
+    Done(Arc<Node>),
     Error {
         message: String,
-        node: Option<Node>,
+        node: Option<Arc<Node>>,
     },
 }
 
-pub type TurnStream = futures_util::stream::BoxStream<'static, TurnEvent>;
+pub type TurnStream = futures_util::stream::BoxStream<'static, Arc<TurnEvent>>;
 
 /// The turn's user message.
 struct Anchor {
@@ -106,15 +111,72 @@ struct Prepared {
 pub async fn post_turn(
     State(state): State<AppState>,
     Extension(user): Extension<CurrentUser>,
+    jar: CookieJar,
     Path(conv_id): Path<String>,
     JsonBody(req): JsonBody<TurnRequest>,
 ) -> Result<Response, ApiError> {
-    let events = start_turn(state, user.id, conv_id, req)
-        .await?
-        .map(|event| Ok::<_, Infallible>(http_event(event)));
-    Ok(Sse::new(events)
+    let cancellation = crate::accounts::http_observer(&state, &user, &jar).await?;
+    // Accepted preparation belongs to core even if the HTTP handler or its login goes away.
+    let prepared = tokio::spawn(start_turn(state, user.id, conv_id, req));
+    let events = tokio::select! {
+        biased;
+        () = cancellation.cancelled() => return Err(ApiError::new(StatusCode::UNAUTHORIZED, "请重新登录")),
+        result = prepared => result.map_err(|_| ApiError::internal())??,
+    };
+    Ok(observer_response(events, cancellation))
+}
+
+/// An observer can attach to an existing core-owned turn without starting another model call.
+pub async fn observe_turn(
+    State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
+    jar: CookieJar,
+    Path(conv_id): Path<String>,
+) -> Result<Response, ApiError> {
+    crate::accounts::require_conversation(&state, &user, &conv_id).await?;
+    let Some(generation) = state.generation(&conv_id) else {
+        return Ok(StatusCode::NO_CONTENT.into_response());
+    };
+    let cancellation = crate::accounts::http_observer(&state, &user, &jar).await?;
+    Ok(observer_response(generation.observe(true), cancellation))
+}
+
+fn observer_response(events: TurnStream, cancellation: Arc<CancellationToken>) -> Response {
+    let events = stream::unfold(
+        (events, cancellation),
+        |(mut events, cancellation)| async move {
+            let event = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => None,
+                event = events.next() => event,
+            }?;
+            Some((
+                Ok::<_, Infallible>(http_event(event.as_ref())),
+                (events, cancellation),
+            ))
+        },
+    );
+    Sse::new(events)
         .keep_alive(KeepAlive::new().interval(KEEP_ALIVE))
-        .into_response())
+        .into_response()
+}
+
+pub async fn stop_turn(
+    State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
+    Path((conv_id, turn_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    crate::accounts::require_conversation(&state, &user, &conv_id).await?;
+    if let Some(generation) = state.generation(&conv_id) {
+        if generation.id != turn_id {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "该回复已结束，不能停止其他回复",
+            ));
+        }
+        generation.stop();
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Starts one guarded turn without an HTTP request or SSE dependency.
@@ -146,15 +208,16 @@ pub async fn start_turn(
             Some(node_id.ok_or_else(|| ApiError::bad_request("缺少消息节点"))?)
         }
     };
+    // Reserve the user's UUID before the assistant claim, preserving parent-first tie ordering.
+    let user_node_id = (!matches!(&action, Action::Regenerate)).then(new_id);
     // Claim first: the running turn saves its reply before releasing the claim, so the leaf and
     // title read below are never older than that reply.
-    let (guard, cancel) = state
+    let (guard, _) = state
         .begin_turn(&conv_id)
         .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"))?;
     let store = state.store.clone();
     let (conv, character, target, actor_user_id) = blocking(move || {
-        // The account may have been disabled/reassigned between the first check and claim.
-        // Once claimed, account invalidation can cancel this turn reliably.
+        // The account or conversation may have been removed before the claim.
         store.require_conversation_owner(&conv_id, &actor_user_id)?;
         let target = match target_id {
             Some(node_id) => store.get_node(&conv_id, &node_id)?,
@@ -269,10 +332,10 @@ pub async fn start_turn(
         )
         .map_err(|_| ApiError::bad_request("角色资源包不可用"))?;
     let store = state.store.clone();
-    let selected = character.clone();
-    let prepared = blocking(move || {
-        store.set_user_preferences(&actor_user_id, Some(&selected.id), Some(&conv.id))?;
-        prepare(&store, conv, anchor, &selected, &prompt)
+    let (prepared, character) = blocking(move || {
+        store.set_user_preferences(&actor_user_id, Some(&character.id), Some(&conv.id))?;
+        let prepared = prepare(&store, conv, anchor, &character, &prompt, user_node_id)?;
+        Ok((prepared, character))
     })
     .await?;
     let turn = Turn {
@@ -283,17 +346,13 @@ pub async fn start_turn(
         model,
         effort,
         prepared,
-        assistant_id: new_id(),
+        assistant_id: guard.generation.id.clone(),
         character,
         resources: state.resources,
     };
-    let (tx, rx) = mpsc::channel(EVENT_BUFFER);
-    tokio::spawn(turn.run(Outbox { tx, cancel }, guard));
-    Ok(stream::unfold(
-        rx,
-        |mut rx| async move { rx.recv().await.map(|ev| (ev, rx)) },
-    )
-    .boxed())
+    let events = guard.generation.observe(false);
+    tokio::spawn(turn.run(guard));
+    Ok(events)
 }
 
 /// The effort to request: a listed level, the model's default for `null`, none for models
@@ -323,6 +382,7 @@ fn prepare(
     anchor: Anchor,
     character: &Character,
     resource_prompt: &str,
+    user_node_id: Option<String>,
 ) -> Result<Prepared, StoreError> {
     let attachments = store.attachment_metadata(&conv.id, &anchor.attachment_ids)?;
     let mut messages = context(
@@ -363,7 +423,7 @@ fn prepare(
         Some(id) => (None, id),
         None => {
             let node = Node {
-                id: new_id(),
+                id: user_node_id.expect("send/edit reserves a user node before its generation"),
                 conversation_id: conv.id.clone(),
                 parent_id: anchor.parent,
                 role: NodeRole::User,
@@ -480,7 +540,7 @@ pub fn cost_usd(price: &Price, u: &Usage) -> Option<f64> {
     )
 }
 
-fn sticker_markdown(resource: &ResourceRef) -> String {
+pub(crate) fn sticker_markdown(resource: &ResourceRef) -> String {
     let Some(url) = crate::assets::resource_url(&resource.pack_id, &resource.asset_id) else {
         return String::new();
     };
@@ -506,124 +566,124 @@ fn recent_refs(content: &str) -> Vec<String> {
         .collect()
 }
 
-fn http_event(value: TurnEvent) -> Event {
-    let (name, data) = match value {
+fn http_event(value: &TurnEvent) -> Event {
+    #[derive(Serialize)]
+    struct Text<'a> {
+        t: &'a str,
+    }
+    #[derive(Serialize)]
+    struct WithNode<'a> {
+        node: NodeView<'a>,
+    }
+    #[derive(Serialize)]
+    struct Start<'a> {
+        user_node: Option<NodeView<'a>>,
+        assistant_node_id: &'a str,
+        character_id: &'a str,
+        character_name: &'a str,
+        character_avatar: &'a Option<String>,
+    }
+    #[derive(Serialize)]
+    struct Snapshot<'a> {
+        node: NodeView<'a>,
+        user_node: Option<NodeView<'a>>,
+        elapsed_ms: u64,
+        reasoning_start_ms: Option<u64>,
+        reasoning_end_ms: Option<u64>,
+    }
+    #[derive(Serialize)]
+    struct Error<'a> {
+        message: &'a str,
+        node: Option<NodeView<'a>>,
+    }
+    fn encode(name: &str, value: impl Serialize) -> Event {
+        Event::default()
+            .event(name)
+            .json_data(value)
+            .expect("public events have JSON-serializable fields")
+    }
+    match value {
         TurnEvent::Start {
             user_node,
             assistant_node_id,
             character_id,
             character_name,
             character_avatar,
-        } => (
+        } => encode(
             "start",
-            json!({"user_node": user_node.map(NodeView::from), "assistant_node_id":assistant_node_id, "character_id":character_id,"character_name":character_name,"character_avatar":character_avatar}),
+            Start {
+                user_node: user_node.as_ref().map(NodeView::from),
+                assistant_node_id,
+                character_id,
+                character_name,
+                character_avatar,
+            },
         ),
-        TurnEvent::Reasoning(t) => ("reasoning", json!({"t":t})),
-        TurnEvent::Chunk(ResourceChunk::Text(t)) => ("text", json!({"t":t})),
-        TurnEvent::Chunk(ResourceChunk::Sticker(resource)) => {
-            ("text", json!({"t":sticker_markdown(&resource)}))
+        TurnEvent::Snapshot {
+            node,
+            start,
+            elapsed_ms,
+            reasoning_start_ms,
+            reasoning_end_ms,
+        } => {
+            let user_node = match start.as_deref() {
+                Some(TurnEvent::Start { user_node, .. }) => user_node.as_ref().map(NodeView::from),
+                _ => None,
+            };
+            encode(
+                "snapshot",
+                Snapshot {
+                    node: NodeView::from(node.as_ref()),
+                    user_node,
+                    elapsed_ms: *elapsed_ms,
+                    reasoning_start_ms: *reasoning_start_ms,
+                    reasoning_end_ms: *reasoning_end_ms,
+                },
+            )
         }
-        TurnEvent::Done(node) => ("done", json!({"node":NodeView::from(node)})),
-        TurnEvent::Error { message, node } => (
-            "error",
-            json!({"message":message,"node":node.map(NodeView::from)}),
+        TurnEvent::Reasoning(text) => encode("reasoning", Text { t: text }),
+        TurnEvent::Chunk(ResourceChunk::Text(text)) => encode("text", Text { t: text }),
+        TurnEvent::Chunk(ResourceChunk::Sticker(resource)) => encode(
+            "text",
+            Text {
+                t: &sticker_markdown(resource),
+            },
         ),
-    };
-    Event::default().event(name).data(data.to_string())
+        TurnEvent::Done(node) => encode(
+            "done",
+            WithNode {
+                node: NodeView::from(node.as_ref()),
+            },
+        ),
+        TurnEvent::Error { message, node } => encode(
+            "error",
+            Error {
+                message,
+                node: node.as_deref().map(NodeView::from),
+            },
+        ),
+    }
 }
 
-/// How a generation ended.
+/// HTTP observer loss is intentionally not an end condition.
 enum End {
-    /// The upstream finished normally.
     Done,
-    /// The upstream failed, before or during the reply.
     Failed(GatewayError),
-    /// The SSE client went away.
-    Disconnected,
-    /// The conversation was deleted or cleared.
-    Cancelled,
+    Stopped,
+    Deleted,
 }
 
 impl End {
-    /// Status of the reply to keep; `None` when nothing may be kept.
     fn status(&self) -> Option<NodeStatus> {
         match self {
-            End::Done => Some(NodeStatus::Complete),
-            End::Failed(_) => Some(NodeStatus::Error),
-            End::Disconnected => Some(NodeStatus::Interrupted),
-            End::Cancelled => None,
+            Self::Done => Some(NodeStatus::Complete),
+            Self::Failed(_) => Some(NodeStatus::Error),
+            Self::Stopped => Some(NodeStatus::Interrupted),
+            Self::Deleted => None,
         }
     }
 }
 
-/// The turn's SSE side and its cancellation.
-struct Outbox {
-    tx: mpsc::Sender<TurnEvent>,
-    cancel: CancellationToken,
-}
-
-impl Outbox {
-    async fn send(&self, event: TurnEvent) -> Result<(), End> {
-        tokio::select! {
-            biased;
-            () = self.cancel.cancelled() => Err(End::Cancelled),
-            sent = self.tx.send(event) => sent.map_err(|_| End::Disconnected),
-        }
-    }
-
-    /// Resolves once the turn must stop, whatever the upstream does.
-    async fn stopped(&self) -> End {
-        tokio::select! {
-            biased;
-            () = self.cancel.cancelled() => End::Cancelled,
-            () = self.tx.closed() => End::Disconnected,
-        }
-    }
-}
-
-/// What has streamed so far.
-#[derive(Default)]
-struct Progress {
-    content: String,
-    reasoning: String,
-    usage: Option<Usage>,
-    /// Arrival of the first and of the latest reasoning/text delta.
-    first: Option<Instant>,
-    last: Option<Instant>,
-    /// Arrival of the first reasoning delta and of the first text delta.
-    first_reasoning: Option<Instant>,
-    first_text: Option<Instant>,
-}
-
-impl Progress {
-    fn metrics(&self, t0: Instant, end: Instant) -> Metrics {
-        let tokens_per_sec = match (&self.usage, self.first, self.last) {
-            (Some(u), Some(first), Some(last)) => {
-                let span = last - first;
-                // Spans below the millisecond resolution of the other metrics count as zero.
-                (span.as_millis() > 0).then(|| (u.output + u.reasoning) as f64 / span.as_secs_f64())
-            }
-            _ => None,
-        };
-        Metrics {
-            ttft_ms: self.first.map(|first| millis(first - t0)),
-            total_ms: millis(end - t0),
-            tokens_per_sec,
-            usage: self.usage.clone().unwrap_or_default(),
-            reasoning_ms: self.first_reasoning.and_then(|start| {
-                self.first_text
-                    .or(self.last)
-                    .map(|end| millis(end.saturating_duration_since(start)))
-            }),
-        }
-    }
-}
-
-fn millis(d: Duration) -> u64 {
-    u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
-}
-
-/// A validated turn, ready to stream.
 struct Turn {
     store: Arc<Store>,
     http: reqwest::Client,
@@ -638,12 +698,8 @@ struct Turn {
 }
 
 impl Turn {
-    /// `out` outlives `guard`: once the SSE stream ends, the conversation is free again.
-    async fn run(self, out: Outbox, guard: TurnGuard) {
-        self.drive(&out, guard).await;
-    }
-
-    async fn drive(mut self, out: &Outbox, guard: TurnGuard) {
+    async fn run(mut self, guard: TurnGuard) {
+        let generation = &guard.generation;
         let start = TurnEvent::Start {
             user_node: self.prepared.user_node.take(),
             assistant_node_id: self.assistant_id.clone(),
@@ -651,86 +707,54 @@ impl Turn {
             character_name: self.character.spec.display_name.clone(),
             character_avatar: self.character.spec.avatar.clone(),
         };
-        if out.send(start).await.is_err() {
-            // Nothing generated yet, so nothing to keep.
-            return;
-        }
-        let t0 = Instant::now();
-        let mut progress = Progress::default();
-        let end = self.stream(out, &mut progress).await;
-        let finished = Instant::now();
-
-        let Some(status) = end.status().filter(|_| !out.cancel.is_cancelled()) else {
-            tracing::info!(conversation = %self.prepared.conv_id, "turn cancelled");
+        generation.start(
+            Node {
+                id: self.assistant_id.clone(),
+                conversation_id: self.prepared.conv_id.clone(),
+                parent_id: Some(self.prepared.reply_parent.clone()),
+                role: NodeRole::Assistant,
+                content: String::new(),
+                attachments: Vec::new(),
+                reasoning: None,
+                model_id: None,
+                model_label: None,
+                effort: None,
+                character_id: Some(self.character.id.clone()),
+                character_name: Some(self.character.spec.display_name.clone()),
+                character_avatar: self.character.spec.avatar.clone(),
+                status: NodeStatus::Interrupted,
+                metrics: None,
+                created_at: now_ms(),
+            },
+            start,
+        );
+        let end = self.stream(generation).await;
+        let Some(status) = end.status().filter(|_| !generation.discarded()) else {
             return;
         };
-        let metrics = progress.metrics(t0, finished);
-        let u = &metrics.usage;
-        tracing::info!(
-            conversation = %self.prepared.conv_id,
-            node = %self.assistant_id,
-            model = %self.model.id,
-            status = ?status,
-            cached_in = u.cached_in,
-            uncached_in = u.uncached_in,
-            reasoning = u.reasoning,
-            output = u.output,
-            "turn finished"
-        );
-        if let End::Failed(e) = &end {
-            let (kind, http_status) = match e {
+        if let End::Failed(error) = &end {
+            let (kind, http_status) = match error {
                 GatewayError::Http { status, .. } => ("http", Some(*status)),
                 GatewayError::Transport(_) => ("transport", None),
                 GatewayError::Protocol(_) => ("protocol", None),
             };
-            tracing::warn!(
-                conversation = %self.prepared.conv_id,
-                model = %self.model.id,
-                kind,
-                http_status,
-                "upstream error"
-            );
+            tracing::warn!(conversation = %self.prepared.conv_id, kind, http_status, "upstream error");
         }
-
-        let Turn {
-            store,
-            provider,
-            model,
-            label,
-            effort,
-            prepared,
-            assistant_id,
-            character,
-            ..
-        } = self;
-        let has_output = !progress.content.is_empty() || !progress.reasoning.is_empty();
-        let node = (status == NodeStatus::Complete || has_output).then(|| Node {
-            id: assistant_id,
-            conversation_id: prepared.conv_id.clone(),
-            parent_id: Some(prepared.reply_parent),
-            role: NodeRole::Assistant,
-            content: progress.content,
-            attachments: Vec::new(),
-            reasoning: Some(progress.reasoning).filter(|r| !r.is_empty()),
-            model_id: Some(model.id),
-            model_label: Some(label.clone()),
-            effort,
-            character_id: Some(character.id),
-            character_name: Some(character.spec.display_name),
-            character_avatar: character.spec.avatar,
-            status,
-            metrics: Some(metrics),
-            created_at: now_ms(),
-        });
-        let record = progress.usage.map(|usage| UsageRecord {
+        let (node, usage) =
+            generation.finalize(status, self.model.id, self.label.clone(), self.effort);
+        if let Some(node) = &node {
+            tracing::info!(conversation = %self.prepared.conv_id, node = %node.id, status = ?node.status, "turn finished");
+        }
+        let record = usage.map(|usage| UsageRecord {
             at_ms: now_ms(),
-            provider: provider.key,
-            upstream_id: model.spec.upstream_id,
-            model_label: label,
-            cost_usd: cost_usd(&model.spec.price, &usage),
+            provider: self.provider.key,
+            upstream_id: self.model.spec.upstream_id,
+            model_label: self.label,
+            cost_usd: cost_usd(&self.model.spec.price, &usage),
             usage,
             purpose: UsagePurpose::Chat,
         });
+        let store = self.store;
         let saved = blocking(move || {
             if let Some(node) = &node {
                 store.insert_node(node)?;
@@ -741,32 +765,29 @@ impl Turn {
             Ok(node)
         })
         .await;
-        if saved.is_err() {
-            tracing::warn!(conversation = %prepared.conv_id, "saving the turn failed");
+        // Deletion wins even if it raced with final persistence.
+        if generation.discarded() {
+            return;
         }
-        drop(guard);
-
-        let last = match end {
-            End::Done => match saved {
+        let terminal = match end {
+            End::Done | End::Stopped => match saved {
                 Ok(Some(node)) => TurnEvent::Done(node),
                 _ => TurnEvent::Error {
                     message: "保存回复失败".into(),
                     node: None,
                 },
             },
-            End::Failed(e) => TurnEvent::Error {
-                message: e.to_string(),
+            End::Failed(error) => TurnEvent::Error {
+                message: error.to_string(),
                 node: saved.ok().flatten(),
             },
-            End::Disconnected | End::Cancelled => return,
+            End::Deleted => return,
         };
-        // A client that left meanwhile simply misses it.
-        let _ = out.tx.send(last).await;
+        generation.finish(terminal);
+        // The guard stays claimed through persistence and publication of the terminal event.
     }
 
-    /// Forwards upstream deltas into `progress` and the SSE until the upstream ends or the turn
-    /// must stop. Returning drops the upstream response, which aborts it.
-    async fn stream(&self, out: &Outbox, progress: &mut Progress) -> End {
+    async fn stream(&self, generation: &Generation) -> End {
         let req = ChatRequest {
             model: &self.model.spec.upstream_id,
             messages: &self.prepared.messages,
@@ -777,21 +798,16 @@ impl Turn {
         };
         let mut upstream = tokio::select! {
             biased;
-            end = out.stopped() => return end,
+            () = generation.cancelled() => return cancelled(generation),
             connected = async {
                 match self.model.spec.protocol {
-                    nekochat_core::Protocol::ChatCompletions =>
-                        nekochat_gateway::stream_chat(&self.http, &self.provider, &req).await,
-                    nekochat_core::Protocol::Responses =>
-                        nekochat_gateway::stream_responses(&self.http, &self.provider, &req).await,
-                    nekochat_core::Protocol::ChatgptResponses =>
-                        nekochat_gateway::stream_chatgpt(&self.http, &self.provider, &req).await,
+                    nekochat_core::Protocol::ChatCompletions => nekochat_gateway::stream_chat(&self.http, &self.provider, &req).await,
+                    nekochat_core::Protocol::Responses => nekochat_gateway::stream_responses(&self.http, &self.provider, &req).await,
+                    nekochat_core::Protocol::ChatgptResponses => nekochat_gateway::stream_chatgpt(&self.http, &self.provider, &req).await,
                 }
-            } => {
-                match connected {
-                    Ok(upstream) => upstream,
-                    Err(e) => return End::Failed(e),
-                }
+            } => match connected {
+                Ok(upstream) => upstream,
+                Err(error) => return End::Failed(error),
             }
         };
         let mut filter = match self.resources.filter(
@@ -799,67 +815,51 @@ impl Turn {
             &self.prepared.recent_resources,
         ) {
             Ok(filter) => filter,
-            Err(e) => return End::Failed(GatewayError::Protocol(e.to_string())),
+            Err(error) => return End::Failed(GatewayError::Protocol(error.to_string())),
         };
         loop {
             let item = tokio::select! {
                 biased;
-                end = out.stopped() => return end,
+                () = generation.cancelled() => return cancelled(generation),
                 item = upstream.next() => item,
             };
-            let now = Instant::now();
             let chunks = match item {
                 None => {
-                    if let Err(end) = emit_chunks(out, progress, filter.finish()).await {
-                        return end;
+                    for chunk in filter.finish() {
+                        generation.chunk(chunk);
                     }
                     return End::Done;
                 }
-                Some(Err(e)) => {
-                    if let Err(end) = emit_chunks(out, progress, filter.finish()).await {
-                        return end;
+                Some(Err(error)) => {
+                    for chunk in filter.finish() {
+                        generation.chunk(chunk);
                     }
-                    return End::Failed(e);
+                    return End::Failed(error);
                 }
-                Some(Ok(StreamEvent::Usage(u))) => {
-                    progress.usage = Some(u);
+                Some(Ok(StreamEvent::Usage(usage))) => {
+                    generation.usage(usage);
                     continue;
                 }
-                Some(Ok(StreamEvent::Reasoning(t))) => {
-                    progress.first_reasoning.get_or_insert(now);
-                    progress.reasoning.push_str(&t);
-                    if let Err(end) = out.send(TurnEvent::Reasoning(t)).await {
-                        return end;
-                    }
-                    Vec::new()
+                Some(Ok(StreamEvent::Reasoning(text))) => {
+                    generation.reasoning(text);
+                    continue;
                 }
-                Some(Ok(StreamEvent::Text(t))) => {
-                    progress.first_text.get_or_insert(now);
-                    filter.push(&t)
+                Some(Ok(StreamEvent::Text(text))) => {
+                    generation.text_arrived();
+                    filter.push(&text)
                 }
             };
-            progress.first.get_or_insert(now);
-            progress.last = Some(now);
-            if let Err(end) = emit_chunks(out, progress, chunks).await {
-                return end;
+            for chunk in chunks {
+                generation.chunk(chunk);
             }
         }
     }
 }
 
-async fn emit_chunks(
-    out: &Outbox,
-    progress: &mut Progress,
-    chunks: Vec<ResourceChunk>,
-) -> Result<(), End> {
-    for chunk in chunks {
-        match &chunk {
-            ResourceChunk::Text(t) => progress.content.push_str(t),
-            ResourceChunk::Sticker(resource) => {
-                progress.content.push_str(&sticker_markdown(resource))
-            }
-        }
-        out.send(TurnEvent::Chunk(chunk)).await?;
+fn cancelled(generation: &Generation) -> End {
+    if generation.discarded() {
+        End::Deleted
+    } else {
+        End::Stopped
     }
-    Ok(())
 }

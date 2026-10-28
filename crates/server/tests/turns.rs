@@ -574,7 +574,7 @@ async fn empty_assistant_replies_are_skipped_in_context() {
 }
 
 #[tokio::test]
-async fn client_disconnect_persists_interrupted_partial() {
+async fn client_disconnect_leaves_core_generation_running_to_completion() {
     let f = fixture(MockScript {
         status: 200,
         chunks: vec![
@@ -606,11 +606,14 @@ async fn client_disconnect_persists_interrupted_partial() {
         if let Some(reply) = reply
             && f.idle()
         {
-            assert_eq!(reply.status, NodeStatus::Interrupted);
-            assert_eq!(reply.content, "第一段");
+            assert_eq!(reply.status, NodeStatus::Complete);
+            assert_eq!(reply.content, "第一段第二段");
             break;
         }
-        assert!(Instant::now() < deadline, "no interrupted reply within 3 s");
+        assert!(
+            Instant::now() < deadline,
+            "core did not complete the detached reply within 3 s"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
@@ -659,11 +662,12 @@ async fn delete_during_stream_stops_and_leaves_nothing() {
 }
 
 #[tokio::test]
-async fn clear_during_stream_stops_and_keeps_conversation() {
+async fn clear_during_stream_requires_explicit_stop_then_clears_history() {
     let f = fixture(slow_script()).await;
     let conv = f.create_conv().await;
     let mut sse = SseReader::new(f.post(&conv, f.send_body("清空我")).await);
-    assert_eq!(sse.next().await.unwrap().0, "start");
+    let start = sse.next().await.unwrap();
+    let id = start.1["assistant_node_id"].as_str().unwrap();
 
     let r = f
         .app
@@ -672,13 +676,37 @@ async fn clear_during_stream_stops_and_keeps_conversation() {
         .send()
         .await
         .unwrap();
-    assert_eq!(r.status(), 204);
+    assert_eq!(r.status(), 409);
+    assert!(!f.idle());
+    assert_eq!(
+        f.app
+            .client
+            .post(
+                f.app
+                    .url(&format!("/api/conversations/{conv}/turns/{id}/stop"))
+            )
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
     tokio::time::timeout(Duration::from_secs(3), async {
         while sse.next().await.is_some() {}
     })
     .await
     .expect("SSE did not end within 3 s");
     assert!(f.idle());
+    assert_eq!(
+        f.app
+            .client
+            .post(f.app.url(&format!("/api/conversations/{conv}/clear")))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
     let v = f.conversation(&conv).await;
     assert_eq!(v["leaf_id"], Value::Null);
     assert_eq!(v["nodes"], json!([]));
@@ -1511,4 +1539,212 @@ async fn encrypted_pdf_is_rejected_even_when_empty_password_would_auto_decrypt()
         let error: Value = response.json().await.unwrap();
         assert!(error["error"].as_str().unwrap().contains("加密"));
     }
+}
+
+#[tokio::test]
+async fn reconnect_observes_a_snapshot_then_remaining_deltas_without_another_call() {
+    let f = fixture(MockScript {
+        status: 200,
+        chunks: vec![
+            (Duration::ZERO, text_chunk("before-refresh")),
+            (Duration::from_secs(2), text_chunk("-after-refresh")),
+            (Duration::ZERO, done_chunk()),
+        ],
+        models: Vec::new(),
+    })
+    .await;
+    let conv = f.create_conv().await;
+    let mut original = SseReader::new(f.post(&conv, f.send_body("refresh")).await);
+    let start = original.next().await.unwrap();
+    let id = start.1["assistant_node_id"].as_str().unwrap().to_owned();
+    assert_eq!(original.next().await.unwrap().1["t"], "before-refresh");
+    drop(original);
+    let mut resumed = SseReader::new(
+        f.app
+            .client
+            .get(f.app.url(&format!("/api/conversations/{conv}/turns")))
+            .send()
+            .await
+            .unwrap(),
+    );
+    let (kind, snapshot) = resumed.next().await.unwrap();
+    assert_eq!(kind, "snapshot");
+    assert_eq!(snapshot["node"]["id"], id);
+    assert_eq!(snapshot["node"]["content"], "before-refresh");
+    assert!(snapshot["node"].get("model_id").is_none());
+    let remaining = tokio::time::timeout(Duration::from_secs(5), resumed.collect())
+        .await
+        .unwrap();
+    assert_eq!(remaining.last().unwrap().0, "done");
+    assert_eq!(
+        remaining.last().unwrap().1["node"]["content"],
+        "before-refresh-after-refresh"
+    );
+    assert_eq!(f.requests().len(), 1);
+    assert_eq!(
+        f.app
+            .store
+            .nodes(&conv)
+            .unwrap()
+            .iter()
+            .filter(|n| n.role == NodeRole::Assistant)
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn explicit_stop_persists_partial_and_stale_stop_cannot_stop_the_active_turn() {
+    let f = fixture(slow_script()).await;
+    let conv = f.create_conv().await;
+    let mut events = SseReader::new(f.post(&conv, f.send_body("stop")).await);
+    let start = events.next().await.unwrap();
+    let id = start.1["assistant_node_id"].as_str().unwrap();
+    assert_eq!(events.next().await.unwrap().1["t"], "x");
+    let stale = f
+        .app
+        .client
+        .post(
+            f.app
+                .url(&format!("/api/conversations/{conv}/turns/stale/stop")),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), 409);
+    assert!(!f.idle());
+    let stopped = f
+        .app
+        .client
+        .post(
+            f.app
+                .url(&format!("/api/conversations/{conv}/turns/{id}/stop")),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stopped.status(), 204);
+    let final_events = tokio::time::timeout(Duration::from_secs(3), events.collect())
+        .await
+        .unwrap();
+    let final_node = &final_events.last().unwrap().1["node"];
+    assert_eq!(final_node["status"], "interrupted");
+    assert_eq!(final_node["content"], "x");
+    assert!(f.idle());
+}
+
+#[tokio::test]
+async fn another_user_cannot_observe_or_stop_a_generation() {
+    let f = fixture(slow_script()).await;
+    let conv = f.create_conv().await;
+    let mut events = SseReader::new(f.post(&conv, f.send_body("private")).await);
+    let start = events.next().await.unwrap();
+    let id = start.1["assistant_node_id"].as_str().unwrap();
+    let other = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    let registration = other
+        .post(f.app.url("/api/account/register"))
+        .json(&json!({"username":"other-observer","password":"isolated-test-password"}))
+        .send()
+        .await
+        .unwrap();
+    assert!(registration.status().is_success());
+    assert_eq!(
+        other
+            .get(f.app.url(&format!("/api/conversations/{conv}/turns")))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        other
+            .post(
+                f.app
+                    .url(&format!("/api/conversations/{conv}/turns/{id}/stop"))
+            )
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert!(!f.idle());
+    assert_eq!(
+        f.app
+            .client
+            .post(
+                f.app
+                    .url(&format!("/api/conversations/{conv}/turns/{id}/stop"))
+            )
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+}
+
+#[tokio::test]
+async fn revoked_observer_session_closes_but_core_can_be_observed_after_login() {
+    let f = fixture(slow_script()).await;
+    let conv = f.create_conv().await;
+    let mut original = SseReader::new(f.post(&conv, f.send_body("private stream")).await);
+    let start = original.next().await.unwrap();
+    let id = start.1["assistant_node_id"].as_str().unwrap();
+    assert_eq!(original.next().await.unwrap().1["t"], "x");
+    assert_eq!(
+        f.app
+            .client
+            .delete(f.app.url("/api/account/session"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), original.next())
+            .await
+            .expect("revoked observer kept access")
+            .is_none()
+    );
+    assert!(!f.idle());
+    assert_eq!(
+        f.app
+            .client
+            .post(f.app.url("/api/account/login"))
+            .json(&json!({"username":"fixture-user","password":"fixture-password-only"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let mut resumed = SseReader::new(
+        f.app
+            .client
+            .get(f.app.url(&format!("/api/conversations/{conv}/turns")))
+            .send()
+            .await
+            .unwrap(),
+    );
+    assert_eq!(resumed.next().await.unwrap().1["node"]["content"], "x");
+    assert_eq!(f.requests().len(), 1);
+    assert_eq!(
+        f.app
+            .client
+            .post(
+                f.app
+                    .url(&format!("/api/conversations/{conv}/turns/{id}/stop"))
+            )
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
 }

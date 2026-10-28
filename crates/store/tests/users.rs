@@ -45,12 +45,12 @@ fn account_password_modes_sessions_and_legacy_ownership() {
     store.set_password_storage(PasswordStorage::Hash).unwrap();
     assert_eq!(
         store.user_password(&a.id).unwrap(),
-        (None, PasswordStorage::Hash)
+        (Some("test-password-alpha".into()), PasswordStorage::Plain)
     );
     store.set_password_storage(PasswordStorage::Plain).unwrap();
     assert_eq!(
         store.user_password(&a.id).unwrap(),
-        (None, PasswordStorage::Hash)
+        (Some("test-password-alpha".into()), PasswordStorage::Plain)
     );
     assert!(store.authenticate_user("alpha", "wrong").unwrap().is_none());
     assert!(
@@ -141,14 +141,18 @@ fn preferences_reject_cross_user_conversations_and_clear_deleted_references() {
 
 #[cfg(unix)]
 #[test]
-fn credentials_database_sidecars_are_private_and_hash_conversion_scrubs_plaintext() {
+fn credentials_database_sidecars_are_private_and_new_hash_accounts_store_no_plaintext() {
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("accounts.db");
     let store = Store::open(&path).unwrap();
-    let password = "unique-fixture-password-migration-marker";
-    store.create_user("private-user", password).unwrap();
+    let password = "unique-fixture-password-hash-marker";
     store.set_password_storage(PasswordStorage::Hash).unwrap();
+    let user = store.create_user("private-user", password).unwrap();
+    assert_eq!(
+        store.user_password(&user.id).unwrap(),
+        (None, PasswordStorage::Hash)
+    );
     for name in ["accounts.db", "accounts.db-wal", "accounts.db-shm"] {
         let file = dir.path().join(name);
         if file.exists() {
@@ -285,5 +289,155 @@ fn password_reset_rejects_a_profile_update_verified_against_the_old_password() {
             .authenticate_user("profile-race", "admin-replacement-password")
             .unwrap()
             .is_some()
+    );
+}
+
+#[test]
+fn new_account_password_policy_preserves_existing_credentials_and_sessions() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(&dir.path().join("accounts.db")).unwrap();
+    let plain = store
+        .create_user("existing-plain", "existing-test-password")
+        .unwrap();
+    store
+        .create_user_session(
+            &plain.id,
+            plain.credential_revision,
+            "existing-policy-session",
+            i64::MAX,
+        )
+        .unwrap();
+    store.set_password_storage(PasswordStorage::Hash).unwrap();
+    assert_eq!(
+        store.user_password(&plain.id).unwrap(),
+        (
+            Some("existing-test-password".into()),
+            PasswordStorage::Plain
+        )
+    );
+    let authenticated = store
+        .authenticate_user("existing-plain", "existing-test-password")
+        .unwrap()
+        .unwrap();
+    assert_eq!(authenticated.password_storage, PasswordStorage::Plain);
+    assert_eq!(authenticated.credential_revision, plain.credential_revision);
+    assert!(
+        store
+            .user_for_session("existing-policy-session")
+            .unwrap()
+            .is_some()
+    );
+    let reset_plain = store
+        .update_user(
+            &plain.id,
+            Some(plain.credential_revision),
+            None,
+            Some("changed-plain-password"),
+            None,
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        store.user_password(&plain.id).unwrap(),
+        (
+            Some("changed-plain-password".into()),
+            PasswordStorage::Plain
+        )
+    );
+    assert_eq!(
+        reset_plain.credential_revision,
+        plain.credential_revision + 1
+    );
+    assert!(
+        store
+            .user_for_session("existing-policy-session")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .authenticate_user("existing-plain", "existing-test-password")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .authenticate_user("existing-plain", "changed-plain-password")
+            .unwrap()
+            .is_some()
+    );
+    let hashed = store
+        .create_user("new-hashed", "hashed-test-password")
+        .unwrap();
+    assert_eq!(
+        store.user_password(&hashed.id).unwrap(),
+        (None, PasswordStorage::Hash)
+    );
+    store
+        .create_user_session(
+            &hashed.id,
+            hashed.credential_revision,
+            "hashed-policy-session",
+            i64::MAX,
+        )
+        .unwrap();
+    store.set_password_storage(PasswordStorage::Plain).unwrap();
+    let authenticated = store
+        .authenticate_user("new-hashed", "hashed-test-password")
+        .unwrap()
+        .unwrap();
+    assert_eq!(authenticated.password_storage, PasswordStorage::Hash);
+    assert_eq!(
+        authenticated.credential_revision,
+        hashed.credential_revision
+    );
+    assert!(
+        store
+            .user_for_session("hashed-policy-session")
+            .unwrap()
+            .is_some()
+    );
+    let reset_hashed = store
+        .update_user(
+            &hashed.id,
+            Some(hashed.credential_revision),
+            None,
+            Some("changed-hashed-password"),
+            None,
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        store.user_password(&hashed.id).unwrap(),
+        (None, PasswordStorage::Hash)
+    );
+    assert_eq!(
+        reset_hashed.credential_revision,
+        hashed.credential_revision + 1
+    );
+    assert!(
+        store
+            .user_for_session("hashed-policy-session")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .authenticate_user("new-hashed", "hashed-test-password")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .authenticate_user("new-hashed", "changed-hashed-password")
+            .unwrap()
+            .is_some()
+    );
+    let later = store
+        .create_user("later-plain", "later-test-password")
+        .unwrap();
+    assert_eq!(
+        store.user_password(&later.id).unwrap(),
+        (Some("later-test-password".into()), PasswordStorage::Plain)
     );
 }

@@ -1,5 +1,7 @@
 //! User-facing conversation API.
 
+use std::borrow::Cow;
+
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::{Extension, Json};
@@ -146,8 +148,8 @@ pub struct MetricsView {
     usage: UsageView,
 }
 
-impl From<Metrics> for MetricsView {
-    fn from(m: Metrics) -> MetricsView {
+impl From<&Metrics> for MetricsView {
+    fn from(m: &Metrics) -> MetricsView {
         MetricsView {
             ttft_ms: m.ttft_ms,
             total_ms: m.total_ms,
@@ -165,35 +167,54 @@ impl From<Metrics> for MetricsView {
 
 /// A message node exposes only the public role snapshot and token/time metrics.
 #[derive(Serialize)]
-pub struct NodeView {
-    id: String,
-    parent_id: Option<String>,
+pub struct NodeView<'a> {
+    id: Cow<'a, str>,
+    parent_id: Option<Cow<'a, str>>,
     role: NodeRole,
-    content: String,
-    attachments: Vec<nekochat_store::Attachment>,
-    reasoning: Option<String>,
-    character_id: Option<String>,
-    character_name: Option<String>,
-    character_avatar: Option<String>,
+    content: Cow<'a, str>,
+    attachments: Cow<'a, [nekochat_store::Attachment]>,
+    reasoning: Option<Cow<'a, str>>,
+    character_id: Option<Cow<'a, str>>,
+    character_name: Option<Cow<'a, str>>,
+    character_avatar: Option<Cow<'a, str>>,
     status: NodeStatus,
     metrics: Option<MetricsView>,
     created_at: i64,
 }
 
-impl From<Node> for NodeView {
-    fn from(n: Node) -> NodeView {
-        NodeView {
-            id: n.id,
-            parent_id: n.parent_id,
+impl From<Node> for NodeView<'static> {
+    fn from(n: Node) -> Self {
+        Self {
+            id: Cow::Owned(n.id),
+            parent_id: n.parent_id.map(Cow::Owned),
             role: n.role,
-            content: n.content,
-            attachments: n.attachments,
-            reasoning: n.reasoning,
-            character_id: n.character_id,
-            character_name: n.character_name,
-            character_avatar: n.character_avatar,
+            content: Cow::Owned(n.content),
+            attachments: Cow::Owned(n.attachments),
+            reasoning: n.reasoning.map(Cow::Owned),
+            character_id: n.character_id.map(Cow::Owned),
+            character_name: n.character_name.map(Cow::Owned),
+            character_avatar: n.character_avatar.map(Cow::Owned),
             status: n.status,
-            metrics: n.metrics.map(Into::into),
+            metrics: n.metrics.as_ref().map(MetricsView::from),
+            created_at: n.created_at,
+        }
+    }
+}
+
+impl<'a> From<&'a Node> for NodeView<'a> {
+    fn from(n: &'a Node) -> Self {
+        Self {
+            id: Cow::Borrowed(&n.id),
+            parent_id: n.parent_id.as_deref().map(Cow::Borrowed),
+            role: n.role.clone(),
+            content: Cow::Borrowed(&n.content),
+            attachments: Cow::Borrowed(&n.attachments),
+            reasoning: n.reasoning.as_deref().map(Cow::Borrowed),
+            character_id: n.character_id.as_deref().map(Cow::Borrowed),
+            character_name: n.character_name.as_deref().map(Cow::Borrowed),
+            character_avatar: n.character_avatar.as_deref().map(Cow::Borrowed),
+            status: n.status.clone(),
+            metrics: n.metrics.as_ref().map(MetricsView::from),
             created_at: n.created_at,
         }
     }
@@ -205,7 +226,8 @@ pub struct ConversationView {
     title: String,
     character_id: Option<String>,
     leaf_id: Option<String>,
-    nodes: Vec<NodeView>,
+    nodes: Vec<NodeView<'static>>,
+    active_turn_id: Option<String>,
 }
 
 /// `GET /api/conversations/{id}` with every node; the client derives paths and siblings.
@@ -215,6 +237,9 @@ pub async fn get_conversation(
     Path(id): Path<String>,
 ) -> Result<Json<ConversationView>, ApiError> {
     require_conversation(&state, &user, &id).await?;
+    let active_turn_id = state
+        .generation(&id)
+        .map(|generation| generation.id.clone());
     let store = state.store.clone();
     let (conv, nodes) = blocking(move || {
         let conv = store.get_conversation(&id)?.ok_or(StoreError::NotFound)?;
@@ -228,6 +253,7 @@ pub async fn get_conversation(
         character_id: conv.character_id,
         leaf_id: conv.leaf_id,
         nodes: nodes.into_iter().map(Into::into).collect(),
+        active_turn_id,
     }))
 }
 
@@ -238,20 +264,22 @@ pub async fn delete_conversation(
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     require_conversation(&state, &user, &id).await?;
-    state.cancel_turn(&id);
+    let _deletion = state.begin_deletion(&id);
     let store = state.store.clone();
     blocking(move || store.delete_conversation(&id)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `POST /api/conversations/{id}/clear`; a running turn is cancelled first.
+/// Clearing history is not an implicit stop action.
 pub async fn clear_conversation(
     State(state): State<AppState>,
     Extension(user): Extension<CurrentUser>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     require_conversation(&state, &user, &id).await?;
-    state.cancel_turn(&id);
+    let (_guard, _) = state
+        .begin_turn(&id)
+        .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "请先停止生成，再清空对话"))?;
     let store = state.store.clone();
     blocking(move || store.clear_conversation(&id)).await?;
     Ok(StatusCode::NO_CONTENT)

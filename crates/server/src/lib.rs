@@ -6,7 +6,9 @@ pub mod auth;
 pub mod chat;
 pub mod codex;
 pub mod config;
+pub mod generation;
 mod model_defaults;
+mod observation;
 pub mod state;
 pub mod web;
 
@@ -75,7 +77,14 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
             post(user::clear_conversation),
         )
         .route("/api/conversations/{id}/leaf", put(user::set_leaf))
-        .route("/api/conversations/{id}/turns", post(chat::post_turn))
+        .route(
+            "/api/conversations/{id}/turns",
+            post(chat::post_turn).get(chat::observe_turn),
+        )
+        .route(
+            "/api/conversations/{id}/turns/{turn_id}/stop",
+            post(chat::stop_turn),
+        )
         .route(
             "/api/conversations/{id}/attachments",
             post(attachments::upload).layer(axum::extract::DefaultBodyLimit::max(
