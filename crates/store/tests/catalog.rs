@@ -1,5 +1,5 @@
 use nekochat_core::{Price, Protocol, ReasoningSpec, ReasoningStyle};
-use nekochat_store::{ModelSpec, SettingKey, Store, StoreError};
+use nekochat_store::{ModelSpec, Store, StoreError};
 
 fn spec(provider: &str, upstream_id: &str) -> ModelSpec {
     ModelSpec {
@@ -82,14 +82,11 @@ fn model_spec_round_trips() {
 }
 
 #[test]
-fn deleting_default_model_clears_setting() {
+fn deleting_model_removes_only_the_listed_model() {
     let (_d, store) = fresh();
     let m = store.insert_model(&spec("deepseek", "x")).unwrap();
-    store
-        .set_setting(SettingKey::DefaultModel, Some(&m.id))
-        .unwrap();
     store.delete_model(&m.id).unwrap();
-    assert_eq!(store.get_setting(SettingKey::DefaultModel).unwrap(), None);
+    assert!(store.get_model(&m.id).unwrap().is_none());
 }
 
 #[test]

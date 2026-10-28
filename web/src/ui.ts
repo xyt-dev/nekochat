@@ -20,6 +20,11 @@ export interface ConfirmRequest {
 
 const [confirmRequest, setConfirmRequest] = createSignal<ConfirmRequest | null>(null);
 export { confirmRequest };
+export function resetAccountUi(): void {
+  confirmRequest()?.resolve(false);
+  clearTimeout(toastTimer);
+  setToastText(null);
+}
 
 /** Opens the confirmation dialog; resolves `true` when the user confirms. */
 export function confirmAction(title: string, message: string, confirmLabel: string): Promise<boolean> {

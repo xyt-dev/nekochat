@@ -69,6 +69,7 @@ fn node(conv: &str, id: &str, parent: Option<&str>, created_at: i64) -> Node {
         effort: None,
         character_id: None,
         character_name: None,
+        character_avatar: None,
         status: NodeStatus::Complete,
         metrics: None,
         created_at,
@@ -94,18 +95,18 @@ async fn characters_endpoint_only_exposes_public_role_fields() {
             .map(String::from)
             .into()
     );
-    assert_eq!(
-        keys(&v["characters"][0]),
-        [
-            "id",
-            "display_name",
-            "background",
-            "vision",
-            "uses_chatgpt_plan"
-        ]
-        .map(String::from)
-        .into()
-    );
+    for private in [
+        "uses_chatgpt_plan",
+        "provider",
+        "model_id",
+        "parameters",
+        "system_prompt",
+    ] {
+        assert!(
+            v["characters"][0].get(private).is_none(),
+            "ordinary role exposes {private}"
+        );
+    }
     assert_eq!(
         app.client
             .get(app.url("/api/models"))
@@ -193,7 +194,7 @@ async fn conversation_view_exposes_role_snapshot_not_private_configuration() {
     let r = app
         .client
         .put(app.url("/api/admin/settings"))
-        .json(&json!({"default_model_id": null, "default_character_id": c["id"]}))
+        .json(&json!({"default_character_id": c["id"]}))
         .send()
         .await
         .unwrap();
@@ -238,6 +239,7 @@ async fn conversation_view_exposes_role_snapshot_not_private_configuration() {
             "reasoning",
             "character_id",
             "character_name",
+            "character_avatar",
             "status",
             "metrics",
             "created_at"

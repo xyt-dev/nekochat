@@ -286,6 +286,11 @@ pub async fn delete_character(
 }
 
 async fn check_character(state: &AppState, body: &CharacterSpec) -> Result<(), ApiError> {
+    if let Some(url) = &body.avatar {
+        if !crate::accounts::avatar_url_allowed(state, url).await? {
+            return Err(ApiError::bad_request("头像必须是存在的本站上传图片"));
+        }
+    }
     if body.name.trim().is_empty() || body.display_name.trim().is_empty() {
         return Err(ApiError::bad_request("内部名称和公开名称不能为空"));
     }
@@ -334,9 +339,8 @@ async fn check_character(state: &AppState, body: &CharacterSpec) -> Result<(), A
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Settings {
-    #[serde(default)]
-    default_model_id: Option<String>,
     #[serde(default)]
     default_character_id: Option<String>,
 }
@@ -345,7 +349,6 @@ pub async fn get_settings(State(state): State<AppState>) -> Result<Json<Settings
     let store = state.store.clone();
     let settings = blocking(move || {
         Ok(Settings {
-            default_model_id: store.get_setting(SettingKey::DefaultModel)?,
             default_character_id: store.get_setting(SettingKey::DefaultCharacter)?,
         })
     })
@@ -359,18 +362,13 @@ pub async fn put_settings(
 ) -> Result<Json<Settings>, ApiError> {
     let store = state.store.clone();
     let dangling = blocking(move || {
-        let model_ok = match &body.default_model_id {
-            Some(id) => store.get_model(id)?.is_some(),
-            None => true,
-        };
         let character_ok = match &body.default_character_id {
             Some(id) => store.get_character(id)?.is_some(),
             None => true,
         };
-        if !(model_ok && character_ok) {
+        if !character_ok {
             return Ok(Err(body));
         }
-        store.set_setting(SettingKey::DefaultModel, body.default_model_id.as_deref())?;
         store.set_setting(
             SettingKey::DefaultCharacter,
             body.default_character_id.as_deref(),
@@ -380,6 +378,6 @@ pub async fn put_settings(
     .await?;
     match dangling {
         Ok(settings) => Ok(Json(settings)),
-        Err(_) => Err(ApiError::bad_request("默认模型或默认角色不存在")),
+        Err(_) => Err(ApiError::bad_request("默认角色不存在")),
     }
 }

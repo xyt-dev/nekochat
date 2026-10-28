@@ -3,11 +3,12 @@ resolver = "3"
 members = ["crates/core", "crates/store", "crates/gateway", "crates/server", "crates/mdwasm", "crates/resources"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.7.0"
 edition = "2024"
 
 [workspace.dependencies]
 anyhow = "1"
+argon2 = "0.5"
 base64 = "0.22"
 bytes = "1"
 axum = "0.8.9"

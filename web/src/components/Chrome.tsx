@@ -1,9 +1,9 @@
-import { createEffect, createSignal, For, Show } from "solid-js";
-import { ApiError, login } from "../api";
+import { createEffect, For, Show } from "solid-js";
 import { store } from "../store";
 import { allThemes, applyTheme, BUILTIN_THEMES, CUSTOM_GROUP, customThemes, type ThemeInfo, themeId } from "../themes";
 import { confirmAction, confirmRequest, toastText } from "../ui";
 import { createPopover } from "./Popover";
+import { AccountMenu } from "./Account";
 
 const DELETE_WARNING = "聊天记录、上传的图片和文件会从服务器上一起删掉，无法恢复。";
 
@@ -120,6 +120,7 @@ export function TopBar() {
       </button>
       <div class="topbar-title">{store.conv()?.title ?? "nekochat"}</div>
       <ThemePicker />
+      <AccountMenu />
     </header>
   );
 }
@@ -166,42 +167,3 @@ export function Toast() {
   );
 }
 
-export function LoginPage() {
-  const [password, setPassword] = createSignal("");
-  const [error, setError] = createSignal<string | null>(null);
-  const [busy, setBusy] = createSignal(false);
-  const submit = async (e: SubmitEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await login(password());
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "登录失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div class="login">
-      <form class="login-card" onSubmit={submit}>
-        <h2>nekochat</h2>
-        <p>请输入访问口令</p>
-        <input
-          type="password"
-          autocomplete="current-password"
-          placeholder="访问口令"
-          value={password()}
-          onInput={(e) => setPassword(e.currentTarget.value)}
-          ref={(el) => requestAnimationFrame(() => el.focus())}
-        />
-        <Show when={error()}>
-          <div class="login-error">{error()}</div>
-        </Show>
-        <button type="submit" class="btn btn-primary" disabled={busy() || !password()}>
-          进入
-        </button>
-      </form>
-    </div>
-  );
-}

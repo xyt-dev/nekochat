@@ -2,6 +2,7 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import { localImageUrl } from "../localImages";
 import { errorMessage, type AdminApi, type Character, type CharacterParameters, type CharacterRecipe, type ListedModel, type Provider, type ResourcePack } from "./api";
 import { PackPreview } from "./ResourcePacks";
+import { AvatarInput } from "./AvatarInput";
 
 const NUMBER_FIELDS = [
   { key: "temperature", label: "Temperature", min: 0, max: 2, step: "any" },
@@ -28,12 +29,14 @@ export function CharacterEditor(props: {
   const [numbers, setNumbers] = createSignal<Record<NumberKey, string>>(Object.fromEntries(NUMBER_FIELDS.map(({ key }) => [key, initial?.parameters[key] == null ? "" : String(initial.parameters[key])])) as Record<NumberKey, string>);
   const [stop, setStop] = createSignal(initial?.parameters.stop?.join("\n") ?? "");
   const [background, setBackground] = createSignal(initial?.background?.url ?? "");
+  const [avatar, setAvatar] = createSignal(initial?.avatar ?? null);
   const [opacity, setOpacity] = createSignal(initial?.background?.opacity ?? 0.15);
   const [packs, setPacks] = createSignal(initial?.resource_packs ?? []);
   const [identity, setIdentity] = createSignal<CharacterRecipe["sticker_identity"]>(initial?.sticker_identity ?? "neutral");
   const [frequency, setFrequency] = createSignal<CharacterRecipe["sticker_frequency"]>(initial?.sticker_frequency ?? "often");
   const [busy, setBusy] = createSignal(false);
   const [uploading, setUploading] = createSignal(false);
+  const [avatarUploading, setAvatarUploading] = createSignal(false);
   const [error, setError] = createSignal("");
   const model = createMemo(() => props.models.find((item) => item.id === modelId()));
   const nativeNumberFields = createMemo(() => NUMBER_FIELDS.filter((field) =>
@@ -83,11 +86,12 @@ export function CharacterEditor(props: {
       if (stop()) parameters.stop = stop().split("\n").filter((value) => value.length > 0);
       const url = background() ? localImageUrl(background()) : null;
       if (background() && !url) throw new Error("只能使用本站已上传背景或本地资源素材");
+      if (avatar() && !localImageUrl(avatar())) throw new Error("只能使用本站已上传头像");
       if (!Number.isFinite(opacity()) || opacity() < 0 || opacity() > 1) throw new Error("背景透明度必须在 0 到 1 之间");
       if (missingPacks().length) throw new Error("请移除未加载的资源包后保存");
       await props.api.saveCharacter(initial?.id ?? null, {
         name: name().trim(), display_name: displayName().trim(), system_prompt: prompt(), model_id: modelId() || null,
-        parameters, enabled: enabled(), sort: order, background: url ? { url, opacity: opacity() } : null,
+        parameters, enabled: enabled(), sort: order, avatar: avatar(), background: url ? { url, opacity: opacity() } : null,
         resource_packs: packs(), sticker_identity: identity(), sticker_frequency: frequency(),
       });
       await props.onSaved();
@@ -97,7 +101,7 @@ export function CharacterEditor(props: {
   return <section class="admin-card admin-editor" aria-labelledby="character-editor-title">
     <h3 id="character-editor-title">{initial ? "编辑角色" : "新增角色"}</h3>
     <form onSubmit={(event) => void save(event)}>
-      <fieldset disabled={busy() || uploading()}>
+      <fieldset disabled={busy() || uploading() || avatarUploading()}>
         <div class="admin-form-grid">
           <label>内部名称<input name="character-name" required value={name()} onInput={(event) => setName(event.currentTarget.value)} /></label>
           <label>公开显示名<input name="character-display-name" required value={displayName()} onInput={(event) => setDisplayName(event.currentTarget.value)} /></label>
@@ -110,6 +114,8 @@ export function CharacterEditor(props: {
           <label class="admin-check"><input name="character-enabled" type="checkbox" checked={enabled()} onChange={(event) => setEnabled(event.currentTarget.checked)} />启用角色</label>
         </div>
         <Show when={!model()}><p class="admin-note">未绑定可用模型的角色不会出现在聊天端，请先上架模型并绑定。</p></Show>
+        <h4>角色头像</h4><p class="admin-note">在角色卡片与角色回复旁显示；留空使用名称首字。</p>
+        <AvatarInput api={props.api} name="character-avatar" value={avatar()} onChange={setAvatar} onUploading={setAvatarUploading} disabled={busy() || uploading()} />
         <label>系统提示词<textarea name="system-prompt" rows="9" value={prompt()} onInput={(event) => setPrompt(event.currentTarget.value)} /></label>
         <h4>服务端生成参数（不向聊天端公开）</h4><p class="admin-note">留空使用服务端模型默认值。参数直接用于下一轮生成，不接受任意 JSON、工具或文件执行配置。</p>
         <div class="admin-form-grid">
@@ -132,7 +138,7 @@ export function CharacterEditor(props: {
         </div>
       </fieldset>
       <Show when={uploading()}><p role="status">正在上传到本站…</p></Show><Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show>
-      <div class="admin-actions"><button type="submit" class="primary" disabled={busy() || uploading()}>{busy() ? "保存中…" : "保存角色"}</button><button type="button" disabled={busy() || uploading()} onClick={props.onCancel}>取消</button></div>
+      <div class="admin-actions"><button type="submit" class="primary" disabled={busy() || uploading() || avatarUploading()}>{busy() ? "保存中…" : "保存角色"}</button><button type="button" disabled={busy() || uploading() || avatarUploading()} onClick={props.onCancel}>取消</button></div>
     </form>
   </section>;
 }

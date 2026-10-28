@@ -17,7 +17,7 @@ interface Entry {
 
 const MAX_ENTRIES = 600;
 const entries = new Map<string, Entry>();
-const worker = new Worker(new URL("./md.worker.ts", import.meta.url), { type: "module" });
+let worker = new Worker(new URL("./md.worker.ts", import.meta.url), { type: "module" });
 const arrived: MdResponse[] = [];
 
 function post(req: MdRequest) {
@@ -56,6 +56,16 @@ function pump(e: Entry) {
 
 // What each in-flight request rendered, applied with its response.
 const sentText = new Map<string, { text: string; final: boolean }>();
+/** Remove every account's source, HTML and queued render result on logout/switch. */
+export function resetMarkdownCache(): void {
+  if (entries.size === 0 && sentText.size === 0 && arrived.length === 0) return;
+  worker.terminate();
+  worker = new Worker(new URL("./md.worker.ts", import.meta.url), { type: "module" });
+  worker.onmessage = receiveMarkdown;
+  entries.clear();
+  sentText.clear();
+  arrived.length = 0;
+}
 
 function applyArrived() {
   for (const res of arrived.splice(0)) {
@@ -74,10 +84,11 @@ function applyArrived() {
   }
 }
 
-worker.onmessage = (ev: MessageEvent<MdResponse>) => {
+function receiveMarkdown(ev: MessageEvent<MdResponse>) {
   arrived.push(ev.data);
   inNextFrame(applyArrived);
-};
+}
+worker.onmessage = receiveMarkdown;
 
 /** Asks for `text` rendered under `key`; only the newest wish is kept while one is in flight. */
 function request(key: string, text: string, final: boolean) {

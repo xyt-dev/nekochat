@@ -11,9 +11,7 @@
           var id = localStorage.getItem("nk.theme");
           var url = localStorage.getItem("nk.themeUrl");
           if (!id) {
-            id = matchMedia("(prefers-color-scheme: light)").matches
-              ? "catppuccin-latte"
-              : "catppuccin-mocha";
+            id = "claude-dark";
           }
           document.documentElement.dataset.theme = id;
           if (url) {
@@ -23,7 +21,7 @@
             link.id = "nk-custom-theme";
             document.head.appendChild(link);
           }
-        } catch (e) {}
+        } catch (e) { document.documentElement.dataset.theme = "claude-dark"; }
       })();
     </script>
   </head>

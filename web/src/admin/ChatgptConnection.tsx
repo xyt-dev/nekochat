@@ -52,7 +52,7 @@ export function ChatgptConnection(props: { api: AdminApi; onChanged: () => Promi
   });
   return <section class="admin-card" aria-labelledby="chatgpt-connection-title">
     <h3 id="chatgpt-connection-title">连接官方ChatGPT账号（订阅）</h3>
-    <p class="admin-note">通过 OpenAI 官方 Sign in with ChatGPT 授权，使用账号允许的 ChatGPT 订阅或 credits；与 API key 计费分开。只有管理员可以连接，凭证仅保存在本服务器，不发送给浏览器。不自动修改现有角色或默认模型。</p>
+    <p class="admin-note">通过 OpenAI 官方 Sign in with ChatGPT 授权，使用账号允许的 ChatGPT 订阅或 credits；与 API key 计费分开。只有管理员可以连接，凭证仅保存在本服务器，不发送给浏览器。不自动修改现有角色或默认角色设置。</p>
     <p role="status">{status() ? status()!.connected ? "已连接 · 使用 ChatGPT 订阅" : "尚未连接可用的 ChatGPT 账号" : "正在读取连接状态…"} <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">Manage usage · 管理 ChatGPT 用量</a></p>
     <Show when={status()?.active_client_id}><p class="admin-note">当前账号：{status()?.accounts.find((account) => account.client_id === status()?.active_client_id)?.label}</p></Show>
     <label>ChatGPT 账号 / 工作区<select name="chatgpt-account" value={selected()} disabled={busy()} onChange={(event) => setSelected(event.currentTarget.value)}><option value="">添加新的账号 / 工作区</option><For each={status()?.accounts ?? []}>{(account) => <option value={account.client_id}>{account.label}{account.connected ? "（已保存会话）" : "（需重新授权）"}</option>}</For></select></label>

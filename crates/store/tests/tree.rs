@@ -19,6 +19,7 @@ fn node(conv: &str, id: &str, parent: Option<&str>, role: NodeRole, at: i64) -> 
         effort: None,
         character_id: None,
         character_name: None,
+        character_avatar: None,
         status: NodeStatus::Complete,
         metrics: None,
         created_at: at,
@@ -302,24 +303,15 @@ fn newer_schema_version_is_refused() {
         .pragma_update(None, "user_version", 99)
         .unwrap();
     let err = Store::open(&path).err().expect("must refuse");
-    let msg = err.to_string();
-    assert!(msg.contains("99") && msg.contains('3'), "{msg}");
+    assert!(matches!(
+        err,
+        nekochat_store::StoreError::UnsupportedSchema { found: 99, .. }
+    ));
     let version: i64 = rusqlite::Connection::open(&path)
         .unwrap()
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     assert_eq!(version, 99);
-}
-
-#[test]
-fn fresh_database_gets_schema_version() {
-    let (dir, store) = fresh();
-    drop(store);
-    let version: i64 = rusqlite::Connection::open(dir.path().join("nekochat.db"))
-        .unwrap()
-        .query_row("PRAGMA user_version", [], |r| r.get(0))
-        .unwrap();
-    assert_eq!(version, 3);
 }
 
 #[test]
@@ -338,7 +330,14 @@ fn images_survive_reopening_and_are_reused_across_branches() {
     let (dir, store) = fresh();
     let conv = store.create_conversation(None).unwrap().id;
     let attachment = store
-        .insert_attachment(&conv, "image/png", b"\x89PNG\r\n\x1a\npersisted image")
+        .insert_attachment(
+            &conv,
+            "image.png",
+            "image",
+            "image/png",
+            b"\x89PNG\r\n\x1a\npersisted image",
+            None,
+        )
         .unwrap();
     let mut original = node(&conv, "image-user", None, NodeRole::User, 1);
     original.attachments = vec![attachment.clone()];
@@ -382,8 +381,12 @@ fn clearing_scrubs_unused_and_referenced_image_bytes_from_database_and_wal() {
     let (dir, store) = fresh();
     let conv = store.create_conversation(None).unwrap().id;
     let marker = b"UNIQUE_PRIVATE_IMAGE_BLOB_MARKER_418731";
-    let attachment = store.insert_attachment(&conv, "image/png", marker).unwrap();
-    let unused = store.insert_attachment(&conv, "image/gif", marker).unwrap();
+    let attachment = store
+        .insert_attachment(&conv, "image.png", "image", "image/png", marker, None)
+        .unwrap();
+    let unused = store
+        .insert_attachment(&conv, "image.gif", "image", "image/gif", marker, None)
+        .unwrap();
     let mut message = node(&conv, "image-node", None, NodeRole::User, 1);
     message.attachments = vec![attachment.clone()];
     store.insert_node(&message).unwrap();
@@ -402,6 +405,102 @@ fn clearing_scrubs_unused_and_referenced_image_bytes_from_database_and_wal() {
                 !contains(&bytes, marker),
                 "{filename} retains private image bytes"
             );
+        }
+    }
+}
+
+#[test]
+fn documents_persist_original_bytes_and_model_text_without_leaking_either_in_metadata() {
+    let (dir, store) = fresh();
+    let conv = store.create_conversation(None).unwrap().id;
+    let bytes = b"%PDF-1.4 ORIGINAL_PRIVATE_DOCUMENT_907321";
+    let text = "EXTRACTED_PRIVATE_DOCUMENT_734128";
+    let attachment = store
+        .insert_attachment(
+            &conv,
+            "报告.pdf",
+            "document",
+            "application/pdf",
+            bytes,
+            Some(text),
+        )
+        .unwrap();
+    let unused = store
+        .insert_attachment(
+            &conv,
+            "unused.md",
+            "document",
+            "text/markdown; charset=utf-8",
+            b"UNUSED_PRIVATE_DOCUMENT_521841",
+            Some("UNUSED_PRIVATE_DOCUMENT_521841"),
+        )
+        .unwrap();
+    let mut message = node(&conv, "document-user", None, NodeRole::User, 1);
+    message.attachments = vec![attachment.clone()];
+    store.insert_node(&message).unwrap();
+    drop(store);
+    let store = Store::open(&dir.path().join("nekochat.db")).unwrap();
+    let metadata = store
+        .get_node(&conv, "document-user")
+        .unwrap()
+        .unwrap()
+        .attachments;
+    assert_eq!(metadata, vec![attachment.clone()]);
+    let json = serde_json::to_string(&metadata).unwrap();
+    assert!(!json.contains(text));
+    assert!(!json.contains("ORIGINAL_PRIVATE"));
+    assert_eq!(
+        store
+            .get_attachment(&conv, &attachment.id)
+            .unwrap()
+            .unwrap()
+            .1,
+        bytes
+    );
+    let (model_metadata, model_bytes, model_text) = store
+        .attachment_model_content(&conv, &attachment.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(model_metadata.name, "报告.pdf");
+    assert!(
+        model_bytes.is_none(),
+        "model context must not read raw PDF bytes"
+    );
+    assert_eq!(model_text.as_deref(), Some(text));
+    let other = store.create_conversation(None).unwrap().id;
+    assert!(
+        store
+            .attachment_model_content(&other, &attachment.id)
+            .unwrap()
+            .is_none()
+    );
+    store.clear_conversation(&conv).unwrap();
+    assert!(
+        store
+            .get_attachment(&conv, &attachment.id)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .attachment_model_content(&conv, &attachment.id)
+            .unwrap()
+            .is_none()
+    );
+    assert!(store.get_attachment(&conv, &unused.id).unwrap().is_none());
+    drop(store);
+    for filename in ["nekochat.db", "nekochat.db-wal"] {
+        if let Ok(database) = std::fs::read(dir.path().join(filename)) {
+            for marker in [
+                bytes.as_slice(),
+                text.as_bytes(),
+                b"UNUSED_PRIVATE_DOCUMENT_521841".as_slice(),
+            ] {
+                assert!(
+                    !contains(&database, marker),
+                    "{filename} retains cleared document bytes/text"
+                );
+            }
         }
     }
 }

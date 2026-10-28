@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import { store } from "../store";
 import { createPopover } from "./Popover";
+import { Avatar } from "./Files";
 
 /** Only server-authorized public cards are available; recipes remain administrator-only. */
 export function CharacterPicker() {
@@ -14,6 +15,7 @@ export function CharacterPicker() {
         const next = !open(); setOpen(next);
         if (next) void store.loadCharacters();
       }}>
+        <Show when={store.character()}>{(character) => <Avatar name={character().display_name} url={character().avatar} />}</Show>
         {store.character()?.display_name ?? "无可用角色"} <span class="pill-caret">▾</span>
       </button>
       <Show when={open()}>
@@ -23,7 +25,7 @@ export function CharacterPicker() {
               <button type="button" class="popup-item" aria-pressed={store.character()?.id === character.id}
                 classList={{ selected: store.character()?.id === character.id }} onClick={() => {
                   store.chooseCharacter(character); setOpen(false); trigger.focus();
-                }}><span>{character.display_name}</span></button>
+                }}><Avatar name={character.display_name} url={character.avatar} /><span>{character.display_name}</span></button>
             )}</For>
             <div class="popup-empty">从下一轮开始使用，保留当前对话</div>
           </Show>

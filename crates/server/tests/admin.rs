@@ -253,7 +253,7 @@ async fn settings_reject_dangling_ids() {
     let r = app
         .client
         .put(app.url("/api/admin/settings"))
-        .json(&json!({"default_model_id": "nope", "default_character_id": null}))
+        .json(&json!({"default_character_id": "nope"}))
         .send()
         .await
         .unwrap();
@@ -272,7 +272,7 @@ async fn settings_reject_dangling_ids() {
     let r = app
         .client
         .put(app.url("/api/admin/settings"))
-        .json(&json!({"default_model_id": null, "default_character_id": c["id"]}))
+        .json(&json!({"default_character_id": c["id"]}))
         .send()
         .await
         .unwrap();
@@ -286,10 +286,7 @@ async fn settings_reject_dangling_ids() {
         .json()
         .await
         .unwrap();
-    assert_eq!(
-        s,
-        json!({"default_model_id": null, "default_character_id": c["id"]})
-    );
+    assert_eq!(s, json!({"default_character_id": c["id"]}));
 }
 
 #[tokio::test]

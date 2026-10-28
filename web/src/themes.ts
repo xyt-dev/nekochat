@@ -35,7 +35,7 @@ export const CUSTOM_GROUP = "自定义";
 const LINK_ID = "nk-custom-theme";
 
 const [customThemes, setCustomThemes] = createSignal<ThemeInfo[]>([]);
-const [themeId, setThemeId] = createSignal(document.documentElement.dataset.theme ?? "catppuccin-mocha");
+const [themeId, setThemeId] = createSignal(document.documentElement.dataset.theme ?? "claude-dark");
 export { customThemes, themeId };
 
 /** Reads the preview colors out of a custom stylesheet; unknown ones fall back to gray. */

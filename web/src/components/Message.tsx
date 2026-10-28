@@ -3,6 +3,7 @@ import type { Metrics, NodeStatus, NodeView } from "../api";
 import { type LiveTurn, store } from "../store";
 import { siblingsOf } from "../tree";
 import { Markdown } from "./Markdown";
+import { Avatar, formatFileSize } from "./Files";
 
 /** Hover actions; on touch screens a tap on the message reveals them instead. */
 function MessageShell(props: { class: string; children: JSX.Element }) {
@@ -53,18 +54,25 @@ export function UserMessage(props: { node: NodeView }) {
     store.setEditing({ nodeId: props.node.id });
     store.setComposerText(props.node.content);
     store.setComposerAttachments(props.node.attachments);
-    document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus();
+    document.querySelector<HTMLElement>(".composer-editor")?.focus();
   };
   return (
     <MessageShell class="msg-user">
-      <div class="bubble">{props.node.content}</div>
-      <Show when={props.node.attachments.length > 0}>
-        <div class="message-attachments"><For each={props.node.attachments}>{(attachment) => (
-          <a href={attachment.url} target="_blank" rel="noopener noreferrer" title="查看原图">
-            <img src={attachment.url} alt="用户上传的图片" loading="lazy" decoding="async" />
-          </a>
-        )}</For></div>
-      </Show>
+      <div class="user-label"><Avatar name={store.user()?.username ?? "用户"} url={store.user()?.avatar} /></div>
+      <div class="bubble">
+        <Show when={props.node.content}><div class="bubble-text">{props.node.content}</div></Show>
+        <Show when={props.node.attachments.length > 0}>
+          <div class="message-attachments"><For each={props.node.attachments}>{(attachment) => (
+            <Show when={attachment.kind === "image"} fallback={
+              <a class="document-card" href={attachment.url} download={attachment.name}><span>{attachment.name}</span><small>{formatFileSize(attachment.size)} · 下载</small></a>
+            }>
+              <a class="message-image" href={attachment.url} target="_blank" rel="noopener noreferrer" title={attachment.name}>
+                <img src={attachment.url} alt={attachment.name} loading="lazy" decoding="async" />
+              </a>
+            </Show>
+          )}</For></div>
+        </Show>
+      </div>
       <div class="msg-actions">
         <SiblingNav node={props.node} />
         <button type="button" class="act hover-only" onClick={edit}>
@@ -158,7 +166,7 @@ export function AssistantMessage(props: { node: NodeView }) {
   };
   return (
     <MessageShell class="msg-assistant">
-      <div class="character-label">{n().character_name ?? "助手"}</div>
+      <div class="character-label"><Avatar name={n().character_name ?? "助手"} url={n().character_avatar} /><span>{n().character_name ?? "助手"}</span></div>
       <Show when={n().reasoning || reasoningMs() !== null}>
         <Reasoning text={() => n().reasoning ?? ""} label={label} />
       </Show>
@@ -192,7 +200,7 @@ export function LiveMessage(props: { turn: LiveTurn }) {
   const generating = () => t.error() === null;
   return (
     <MessageShell class="msg-assistant">
-      <div class="character-label">{t.characterName() || "助手"}</div>
+      <div class="character-label"><Avatar name={t.characterName() || "助手"} url={t.characterAvatar()} /><span>{t.characterName() || "助手"}</span></div>
       <Show when={t.reasoningStart() !== null}>
         <Reasoning text={t.reasoning} label={label} />
       </Show>

@@ -51,6 +51,7 @@ pub struct Node {
     pub effort: Option<String>,
     pub character_id: Option<String>,
     pub character_name: Option<String>,
+    pub character_avatar: Option<String>,
     pub status: NodeStatus,
     pub metrics: Option<Metrics>,
     pub created_at: i64,
@@ -109,7 +110,7 @@ impl FromSql for NodeStatus {
 }
 
 const CONV_COLS: &str = "id, title, character_id, leaf_id, session_key, created_at, updated_at";
-const NODE_COLS: &str = "id, conversation_id, parent_id, role, content, reasoning, model_id, model_label, effort, status, metrics, created_at, character_id, character_name";
+const NODE_COLS: &str = "id, conversation_id, parent_id, role, content, reasoning, model_id, model_label, effort, status, metrics, created_at, character_id, character_name, character_avatar";
 
 fn conversation_from_row(r: &Row) -> rusqlite::Result<Conversation> {
     Ok(Conversation {
@@ -142,6 +143,7 @@ fn node_from_row(r: &Row) -> rusqlite::Result<(Node, Option<String>)> {
             created_at: r.get(11)?,
             character_id: r.get(12)?,
             character_name: r.get(13)?,
+            character_avatar: r.get(14)?,
         },
         r.get(10)?,
     ))
@@ -175,6 +177,68 @@ fn scrub(conn: &Connection) -> Result<()> {
 }
 
 impl Store {
+    /// Identity-bound callers must use this creator; unowned legacy imports remain private.
+    pub fn create_owned_conversation(
+        &self,
+        user_id: &str,
+        character_id: Option<&str>,
+    ) -> Result<Conversation> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        if tx
+            .query_row(
+                "SELECT 1 FROM users WHERE id=?1 AND disabled=0",
+                [user_id],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_none()
+        {
+            return Err(StoreError::NotFound);
+        }
+        let now = now_ms();
+        let conv = Conversation {
+            id: new_id(),
+            title: DEFAULT_TITLE.into(),
+            character_id: character_id.map(Into::into),
+            leaf_id: None,
+            session_key: uuid::Uuid::new_v4().to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+        tx.execute("INSERT INTO conversations(id,title,character_id,leaf_id,session_key,created_at,updated_at,owner_user_id) VALUES(?1,?2,?3,NULL,?4,?5,?5,?6)",
+            params![conv.id,conv.title,conv.character_id,conv.session_key,now,user_id])?;
+        tx.execute(
+            "UPDATE users SET last_conversation_id=?2,last_character_id=?3 WHERE id=?1",
+            params![user_id, conv.id, conv.character_id],
+        )?;
+        tx.commit()?;
+        Ok(conv)
+    }
+
+    pub fn require_conversation_owner(&self, conv_id: &str, user_id: &str) -> Result<()> {
+        if self.conn().query_row("SELECT 1 FROM conversations c JOIN users u ON u.id=c.owner_user_id WHERE c.id=?1 AND c.owner_user_id=?2 AND u.disabled=0",params![conv_id,user_id],|_|Ok(())).optional()?.is_none() {
+            return Err(StoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    pub fn list_user_conversations(&self, user_id: &str) -> Result<Vec<Conversation>> {
+        let conn = self.conn();
+        let mut stmt=conn.prepare(&format!("SELECT {CONV_COLS} FROM conversations WHERE owner_user_id=?1 ORDER BY updated_at DESC,id DESC"))?;
+        Ok(stmt
+            .query_map([user_id], conversation_from_row)?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn user_conversation_ids(&self, user_id: &str) -> Result<Vec<String>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT id FROM conversations WHERE owner_user_id=?1")?;
+        Ok(stmt
+            .query_map([user_id], |row| row.get(0))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
     pub fn create_conversation(&self, character_id: Option<&str>) -> Result<Conversation> {
         let now = now_ms();
         let conv = Conversation {
@@ -290,7 +354,7 @@ impl Store {
         }
         tx.execute(
             &format!(
-                "INSERT INTO nodes ({NODE_COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"
+                "INSERT INTO nodes ({NODE_COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"
             ),
             params![
                 node.id,
@@ -306,7 +370,8 @@ impl Store {
                 metrics,
                 node.created_at,
                 node.character_id,
-                node.character_name
+                node.character_name,
+                node.character_avatar
             ],
         )?;
         for (position, attachment) in node.attachments.iter().enumerate() {

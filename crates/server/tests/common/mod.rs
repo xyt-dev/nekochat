@@ -116,6 +116,8 @@ async fn serve_router(router: Router) -> SocketAddr {
 
 #[derive(Default)]
 pub struct TestCfg {
+    /// Leaves the account cookie unset for authentication boundary tests.
+    pub anonymous: bool,
     pub access_password: Option<String>,
     pub admin_password: Option<String>,
     /// Base URL of a mock upstream registered as provider `mock`.
@@ -135,6 +137,7 @@ pub struct TestApp {
     pub running: RunningTurns,
     pub dir: TempDir,
     pub state: AppState,
+    pub user_id: String,
 }
 
 impl TestApp {
@@ -190,15 +193,39 @@ pub async fn spawn_app(cfg: TestCfg) -> TestApp {
         None => nekochat_server::app(state),
     };
     let addr = serve_router(router).await;
+    let base = format!("http://{addr}");
+    let jar = Arc::new(reqwest::cookie::Jar::default());
+    let user_id = if cfg.anonymous {
+        String::new()
+    } else {
+        let user = store
+            .create_user("fixture-user", "fixture-password-only")
+            .unwrap();
+        let token = uuid::Uuid::new_v4().to_string();
+        store
+            .create_user_session(
+                &user.id,
+                user.credential_revision,
+                &nekochat_server::accounts::fingerprint(&token),
+                i64::MAX,
+            )
+            .unwrap();
+        jar.add_cookie_str(
+            &format!("nk_user={token}; Path=/; HttpOnly"),
+            &base.parse().unwrap(),
+        );
+        user.id.clone()
+    };
     TestApp {
-        base: format!("http://{addr}"),
+        base,
         client: reqwest::Client::builder()
-            .cookie_store(true)
+            .cookie_provider(jar)
             .build()
             .unwrap(),
         store,
         running,
         dir,
         state: service_state,
+        user_id,
     }
 }

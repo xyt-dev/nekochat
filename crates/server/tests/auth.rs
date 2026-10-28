@@ -8,17 +8,19 @@ fn pw(s: &str) -> Option<String> {
 }
 
 #[tokio::test]
-async fn open_access_when_no_password() {
-    let app = spawn_app(TestCfg::default()).await;
+async fn mandatory_account_login_without_access_password() {
+    let app = spawn_app(TestCfg {
+        anonymous: true,
+        ..Default::default()
+    })
+    .await;
     let r = app
         .client
         .get(app.url("/api/conversations"))
         .send()
         .await
         .unwrap();
-    assert_eq!(r.status(), 200);
-    let body: serde_json::Value = r.json().await.unwrap();
-    assert_eq!(body, json!([]));
+    assert_eq!(r.status(), 401);
 }
 
 #[tokio::test]

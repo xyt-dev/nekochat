@@ -5,6 +5,7 @@ mod catalog;
 mod tree;
 mod usage;
 mod usage_stats;
+mod users;
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -17,10 +18,11 @@ pub use catalog::{Character, CharacterSpec, ListedModel, ModelSpec, SettingKey};
 pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
 pub use usage_stats::{AllowanceWindow, ModelAllowance, ModelUsageStats, UsagePoint, UsageTotals};
+pub use users::{PasswordStorage, User, UserPublic};
 
 const SCHEMA: &str = include_str!("schema.sql");
 /// The schema version this code writes and understands.
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 5;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -53,6 +55,13 @@ impl Store {
             })?;
         }
         let conn = Connection::open(path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).map_err(
+                |e| StoreError::Sqlite(rusqlite::Error::ToSqlConversionFailure(Box::new(e))),
+            )?;
+        }
         let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version > SCHEMA_VERSION {
             return Err(StoreError::UnsupportedSchema {
@@ -100,6 +109,58 @@ impl Store {
                  PRAGMA user_version = 3;
                  COMMIT;",
             )?;
+        }
+        if version < 4 {
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE avatars (id TEXT PRIMARY KEY, media_type TEXT NOT NULL, bytes BLOB NOT NULL);
+                 CREATE TABLE users (
+                   id TEXT PRIMARY KEY, username TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                   password TEXT NOT NULL, password_storage TEXT NOT NULL CHECK(password_storage IN ('plain','hash')),
+                   avatar TEXT, disabled INTEGER NOT NULL DEFAULT 0,
+                   last_character_id TEXT REFERENCES characters(id) ON DELETE SET NULL,
+                   last_conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+                   created_at INTEGER NOT NULL);
+                 CREATE TABLE user_sessions (
+                   fingerprint TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                   expires_at INTEGER NOT NULL);
+                 CREATE INDEX user_sessions_user ON user_sessions(user_id);
+                 ALTER TABLE conversations ADD COLUMN owner_user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
+                 CREATE INDEX conversations_owner ON conversations(owner_user_id,updated_at);
+                 ALTER TABLE characters ADD COLUMN avatar TEXT;
+                 ALTER TABLE nodes ADD COLUMN character_avatar TEXT;
+                 ALTER TABLE attachments ADD COLUMN name TEXT NOT NULL DEFAULT 'image';
+                 ALTER TABLE attachments ADD COLUMN kind TEXT NOT NULL DEFAULT 'image' CHECK(kind IN ('image','document'));
+                 ALTER TABLE attachments ADD COLUMN extracted_text TEXT;
+                 UPDATE attachments SET name = CASE media_type WHEN 'image/png' THEN 'image.png' WHEN 'image/jpeg' THEN 'image.jpg' WHEN 'image/webp' THEN 'image.webp' WHEN 'image/gif' THEN 'image.gif' ELSE 'image' END;
+                 DELETE FROM settings WHERE key='default_model_id';
+                 INSERT INTO settings(key,value) VALUES('password_storage','plain');
+                 PRAGMA user_version = 4;
+                 COMMIT;",
+            )?;
+        }
+        if version < 5 {
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 ALTER TABLE users ADD COLUMN credential_revision INTEGER NOT NULL DEFAULT 0;
+                 PRAGMA user_version = 5;
+                 COMMIT;",
+            )?;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for suffix in ["-wal", "-shm"] {
+                let mut filename = path.as_os_str().to_owned();
+                filename.push(suffix);
+                let sidecar = std::path::PathBuf::from(filename);
+                if sidecar.exists() {
+                    std::fs::set_permissions(sidecar, std::fs::Permissions::from_mode(0o600))
+                        .map_err(|e| {
+                            StoreError::Sqlite(rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+                        })?;
+                }
+            }
         }
         Ok(Store {
             conn: Mutex::new(conn),

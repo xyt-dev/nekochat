@@ -26,12 +26,15 @@ clap.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 mime_guess.workspace = true
+pdf-extract = "0.12.1"
+percent-encoding = "2"
 reqwest.workspace = true
 rustix = { version = "1", features = ["fs"] }
 rust-embed.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 subtle.workspace = true
+time = "0.3"
 tokio.workspace = true
 tokio-util.workspace = true
 toml.workspace = true

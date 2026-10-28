@@ -1,12 +1,13 @@
 //! User-facing conversation API.
 
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::{Extension, Json};
 use nekochat_core::{Background, Metrics};
 use nekochat_store::{Conversation, Node, NodeRole, NodeStatus, SettingKey, StoreError};
 use serde::{Deserialize, Serialize};
 
+use crate::accounts::{CurrentUser, require_conversation};
 use crate::api::{ApiError, JsonBody, blocking};
 use crate::state::AppState;
 
@@ -33,9 +34,9 @@ impl From<Conversation> for ConversationSummary {
 pub struct PickerCharacter {
     id: String,
     display_name: String,
+    avatar: Option<String>,
     background: Option<Background>,
     vision: bool,
-    uses_chatgpt_plan: bool,
 }
 
 #[derive(Serialize)]
@@ -44,6 +45,11 @@ pub struct CharactersView {
     characters: Vec<PickerCharacter>,
 }
 
+impl CharactersView {
+    pub fn contains(&self, id: &str) -> bool {
+        self.characters.iter().any(|c| c.id == id)
+    }
+}
 pub async fn available_characters(state: &AppState) -> Result<CharactersView, ApiError> {
     let store = state.store.clone();
     let (default_id, listed, models) = blocking(move || {
@@ -67,15 +73,12 @@ pub async fn available_characters(state: &AppState) -> Result<CharactersView, Ap
         .map(|c| PickerCharacter {
             id: c.id,
             display_name: c.spec.display_name,
+            avatar: c.spec.avatar,
             background: c.spec.background,
             vision: models
                 .iter()
                 .find(|m| Some(&m.id) == c.spec.model_id.as_ref())
                 .is_some_and(|m| m.spec.vision),
-            uses_chatgpt_plan: models
-                .iter()
-                .find(|m| Some(&m.id) == c.spec.model_id.as_ref())
-                .is_some_and(|m| m.spec.protocol == nekochat_core::Protocol::ChatgptResponses),
         })
         .collect();
     let default_character_id = default_id
@@ -96,9 +99,10 @@ pub async fn list_characters(
 /// `GET /api/conversations`, newest first.
 pub async fn list_conversations(
     State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
 ) -> Result<Json<Vec<ConversationSummary>>, ApiError> {
     let store = state.store.clone();
-    let convs = blocking(move || store.list_conversations()).await?;
+    let convs = blocking(move || store.list_user_conversations(&user.id)).await?;
     Ok(Json(convs.into_iter().map(Into::into).collect()))
 }
 
@@ -110,6 +114,7 @@ pub struct CreateConversation {
 
 pub async fn create_conversation(
     State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
     JsonBody(body): JsonBody<CreateConversation>,
 ) -> Result<(StatusCode, Json<ConversationSummary>), ApiError> {
     let available = available_characters(&state).await?;
@@ -119,7 +124,7 @@ pub async fn create_conversation(
         .filter(|id| available.characters.iter().any(|c| &c.id == id))
         .ok_or_else(|| ApiError::bad_request("没有可用角色，请管理员配置并绑定已上架模型"))?;
     let store = state.store.clone();
-    let conv = blocking(move || store.create_conversation(Some(&id))).await?;
+    let conv = blocking(move || store.create_owned_conversation(&user.id, Some(&id))).await?;
     Ok((StatusCode::CREATED, Json(conv.into())))
 }
 /// Token counts as the client sees them; cost fields stay admin-only.
@@ -169,6 +174,7 @@ pub struct NodeView {
     reasoning: Option<String>,
     character_id: Option<String>,
     character_name: Option<String>,
+    character_avatar: Option<String>,
     status: NodeStatus,
     metrics: Option<MetricsView>,
     created_at: i64,
@@ -185,6 +191,7 @@ impl From<Node> for NodeView {
             reasoning: n.reasoning,
             character_id: n.character_id,
             character_name: n.character_name,
+            character_avatar: n.character_avatar,
             status: n.status,
             metrics: n.metrics.map(Into::into),
             created_at: n.created_at,
@@ -204,8 +211,10 @@ pub struct ConversationView {
 /// `GET /api/conversations/{id}` with every node; the client derives paths and siblings.
 pub async fn get_conversation(
     State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
     Path(id): Path<String>,
 ) -> Result<Json<ConversationView>, ApiError> {
+    require_conversation(&state, &user, &id).await?;
     let store = state.store.clone();
     let (conv, nodes) = blocking(move || {
         let conv = store.get_conversation(&id)?.ok_or(StoreError::NotFound)?;
@@ -225,8 +234,10 @@ pub async fn get_conversation(
 /// `DELETE /api/conversations/{id}`; a running turn is cancelled first.
 pub async fn delete_conversation(
     State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    require_conversation(&state, &user, &id).await?;
     state.cancel_turn(&id);
     let store = state.store.clone();
     blocking(move || store.delete_conversation(&id)).await?;
@@ -236,8 +247,10 @@ pub async fn delete_conversation(
 /// `POST /api/conversations/{id}/clear`; a running turn is cancelled first.
 pub async fn clear_conversation(
     State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    require_conversation(&state, &user, &id).await?;
     state.cancel_turn(&id);
     let store = state.store.clone();
     blocking(move || store.clear_conversation(&id)).await?;
@@ -259,9 +272,11 @@ pub struct LeafView {
 /// a turn runs there: the turn would move the leaf back when it saves its reply.
 pub async fn set_leaf(
     State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
     Path(id): Path<String>,
     JsonBody(req): JsonBody<LeafRequest>,
 ) -> Result<Json<LeafView>, ApiError> {
+    require_conversation(&state, &user, &id).await?;
     if state.turn_running(&id) {
         return Err(ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"));
     }

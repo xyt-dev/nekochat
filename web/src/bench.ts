@@ -58,6 +58,7 @@ function fakeConversation(): { nodes: NodeView[]; leaf: string } {
       reasoning: user ? null : "先配方，再讨论判别式。",
       character_id: user ? null : "bench-character",
       character_name: user ? null : "本地角色",
+      character_avatar: null,
       status: "complete",
       metrics: user
         ? null
@@ -158,7 +159,7 @@ export async function runBench(): Promise<void> {
   store.setLive((l) => ({ ...l, [convId]: turn }));
   store.handleTurnEvent(turn, {
     type: "start",
-    data: { user_node: userNode, assistant_node_id: "bench-live", character_id: "bench-character", character_name: "本地角色" },
+    data: { user_node: userNode, assistant_node_id: "bench-live", character_id: "bench-character", character_name: "本地角色", character_avatar: null },
   });
   const source = "![猫猫搓手](/api/resources/nekowhale/4a44767ab58b.gif)\n\n" + REPLY.repeat(40);
   let pos = 0;

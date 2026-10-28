@@ -527,6 +527,7 @@ fn store_node(
         status,
         character_id: None,
         character_name: None,
+        character_avatar: None,
         metrics: None,
         created_at: now_ms(),
         attachments: vec![],
@@ -1108,7 +1109,7 @@ async fn clear_and_delete_remove_even_unused_uploads_and_serve_private_image_hea
     let url = f.app.url(attachment["url"].as_str().unwrap());
     let response = f.app.client.get(&url).send().await.unwrap();
     assert_eq!(response.status(), 200);
-    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert_eq!(response.headers()["cache-control"], "private, no-store");
     assert_eq!(response.headers()["x-content-type-options"], "nosniff");
     assert_eq!(response.headers()["content-type"], "image/png");
     let other = f.create_conv().await;
@@ -1192,4 +1193,322 @@ async fn role_switch_to_text_only_refuses_image_history_before_saving_or_upstrea
     assert_eq!(f.post(&conv, f.send_body("continue")).await.status(), 400);
     assert_eq!(f.requests().len(), 1);
     assert_eq!(f.app.store.nodes(&conv).unwrap().len(), 2);
+}
+
+async fn upload_document(f: &Fixture, conv: &str, name: &str, bytes: Vec<u8>) -> Value {
+    let response = f
+        .app
+        .client
+        .post(f.app.url(&format!("/api/conversations/{conv}/attachments")))
+        .header(
+            "x-file-name",
+            percent_encoding::utf8_percent_encode(name, percent_encoding::NON_ALPHANUMERIC)
+                .to_string(),
+        )
+        .body(bytes)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    response.json().await.unwrap()
+}
+
+// A real single-page PDF: byte offsets and stream length are generated, not an extraction stub.
+fn document_pdf(text: &str) -> Vec<u8> {
+    let stream = format!("BT /F1 12 Tf 72 720 Td ({text}) Tj ET");
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_owned(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_owned(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>".to_owned(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_owned(),
+        format!("<< /Length {} >>\nstream\n{stream}\nendstream", stream.len()),
+    ];
+    let mut pdf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = vec![0];
+    for (index, object) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", index + 1).as_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
+    for offset in &offsets[1..] {
+        pdf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(
+        format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes(),
+    );
+    pdf
+}
+
+#[tokio::test]
+async fn real_pdf_and_utf8_markdown_reach_text_model_and_survive_history_edit_regenerate() {
+    let f = fixture(deepseek_reply("", "accepted")).await;
+    let conv = f.create_conv().await;
+    let pdf = upload_document(
+        &f,
+        &conv,
+        "report.pdf",
+        document_pdf("Invoice total 731 dollars"),
+    )
+    .await;
+    let md = upload_document(
+        &f,
+        &conv,
+        "笔记.md",
+        "# 独立内容\n订单编号：MK-832".as_bytes().to_vec(),
+    )
+    .await;
+    assert_eq!(pdf["kind"], "document");
+    assert_eq!(md["name"], "笔记.md");
+    assert!(md.get("extracted_text").is_none());
+    assert!(md.get("bytes").is_none());
+    let sent = f.turn(&conv, json!({"action":"send","content":"summarize","character_id":f.character_id,"attachment_ids":[pdf["id"],md["id"]]})).await;
+    let user = &sent.iter().find(|(name, _)| name == "start").unwrap().1["user_node"];
+    let saved = f.app.store.nodes(&conv).unwrap();
+    assert_eq!(saved[0].attachments.len(), 2);
+    assert_eq!(saved[0].content, "summarize");
+    f.turn(&conv, f.send_body("continue")).await;
+    let edited = f.turn(&conv, json!({"action":"edit","node_id":user["id"],"content":"revise","character_id":f.character_id})).await;
+    let edited_user = &edited.iter().find(|(name, _)| name == "start").unwrap().1["user_node"];
+    f.turn(
+        &conv,
+        json!({"action":"regenerate","node_id":edited_user["id"],"character_id":f.character_id}),
+    )
+    .await;
+    let requests = f.requests();
+    assert_eq!(requests.len(), 4);
+    for request in &requests {
+        let document_turn = request.body["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|message| {
+                message["role"] == "user"
+                    && message["content"]
+                        .as_str()
+                        .is_some_and(|text| text.contains("Invoice total 731 dollars"))
+            })
+            .expect("extracted PDF content must be user text, never an image or system prompt");
+        let content = document_turn["content"].as_str().unwrap();
+        assert!(content.contains("report.pdf"));
+        assert!(content.contains("笔记.md"));
+        assert!(content.contains("订单编号：MK-832"));
+        assert!(!request.body.to_string().contains("image_url"));
+    }
+    assert_eq!(requests[2].body["messages"], requests[3].body["messages"]);
+}
+
+#[tokio::test]
+async fn mixed_uploads_only_encode_images_and_reject_duplicate_or_wrong_conversation_ids() {
+    let f = fixture(deepseek_reply("", "accepted")).await;
+    let mut model = f.app.store.get_model(&f.model_id).unwrap().unwrap().spec;
+    model.vision = true;
+    f.app.store.update_model(&f.model_id, &model).unwrap();
+    let conv = f.create_conv().await;
+    let other = f.create_conv().await;
+    let doc = upload_document(&f, &conv, "data.csv", b"item,total\ncoffee,23".to_vec()).await;
+    let image = upload_png(&f, &conv).await;
+    for (target, ids) in [
+        (&conv, json!([doc["id"], doc["id"]])),
+        (&other, json!([doc["id"]])),
+    ] {
+        assert_eq!(f.post(target, json!({"action":"send","content":"","character_id":f.character_id,"attachment_ids":ids})).await.status(), 400);
+        assert!(f.app.store.nodes(target).unwrap().is_empty());
+    }
+    assert!(f.requests().is_empty());
+    f.turn(&conv, json!({"action":"send","content":"","character_id":f.character_id,"attachment_ids":[doc["id"],image["id"]]})).await;
+    let requests = f.requests();
+    let parts = requests[0].body["messages"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()["content"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|part| part["type"] == "image_url")
+            .count(),
+        1
+    );
+    assert!(
+        parts
+            .iter()
+            .any(|part| part["type"] == "text"
+                && part["text"].as_str().unwrap().contains("coffee,23"))
+    );
+}
+
+#[tokio::test]
+async fn documents_download_safely_and_unused_uploads_disappear_on_clear_and_delete() {
+    let f = fixture(deepseek_reply("", "")).await;
+    let conv = f.create_conv().await;
+    let bytes = b"<html><script>alert(1)</script></html>".to_vec();
+    let doc = upload_document(&f, &conv, "../网页.html", bytes.clone()).await;
+    assert_eq!(doc["name"], "网页.html");
+    let url = f.app.url(doc["url"].as_str().unwrap());
+    let response = f.app.client.get(&url).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.headers()["content-type"],
+        "text/plain; charset=utf-8"
+    );
+    assert_eq!(response.headers()["cache-control"], "private, no-store");
+    assert_eq!(response.headers()["x-content-type-options"], "nosniff");
+    let disposition = response.headers()["content-disposition"].to_str().unwrap();
+    assert!(disposition.starts_with("attachment;"));
+    assert!(disposition.contains("filename*=UTF-8''"));
+    assert_eq!(response.bytes().await.unwrap().as_ref(), bytes.as_slice());
+    assert_eq!(
+        f.app
+            .client
+            .post(f.app.url(&format!("/api/conversations/{conv}/clear")))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    assert_eq!(f.app.client.get(&url).send().await.unwrap().status(), 404);
+    let doc = upload_document(&f, &conv, "unused.txt", b"delete private document".to_vec()).await;
+    assert_eq!(
+        f.app
+            .client
+            .delete(f.app.url(&format!("/api/conversations/{conv}")))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    assert_eq!(
+        f.app
+            .client
+            .get(f.app.url(doc["url"].as_str().unwrap()))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+}
+
+#[tokio::test]
+async fn unsupported_binary_corrupt_pdf_and_oversize_documents_are_not_persisted() {
+    let f = fixture(deepseek_reply("", "")).await;
+    let conv = f.create_conv().await;
+    for (name, bytes) in [
+        ("archive.zip", b"PK\x03\x04binary".to_vec()),
+        ("binary.txt", b"hello\0world".to_vec()),
+        ("broken.pdf", b"%PDF-1.4\nnot a valid document".to_vec()),
+        ("empty.pdf", document_pdf("")),
+        ("too-much-text.md", vec![b'a'; 2 * 1024 * 1024 + 1]),
+        ("too-large.txt", vec![b'a'; 16 * 1024 * 1024 + 1]),
+    ] {
+        let response = f
+            .app
+            .client
+            .post(f.app.url(&format!("/api/conversations/{conv}/attachments")))
+            .header("x-file-name", name)
+            .body(bytes)
+            .send()
+            .await
+            .unwrap();
+        assert!(
+            matches!(response.status().as_u16(), 400 | 413),
+            "{name}: {}",
+            response.status()
+        );
+    }
+    assert!(f.app.store.nodes(&conv).unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn transport_neutral_turn_checks_actor_ownership_before_reading_or_saving() {
+    let f = fixture(deepseek_reply("", "never")).await;
+    let conv = f.create_conv().await;
+    let request = serde_json::from_value(f.send_body("must not be stored")).unwrap();
+    let result = nekochat_server::chat::start_turn(
+        f.app.state.clone(),
+        "different-user-id".into(),
+        conv.clone(),
+        request,
+    )
+    .await;
+    let error = match result {
+        Ok(_) => panic!("an unauthorised Rust channel must not start a turn"),
+        Err(error) => error,
+    };
+    use axum::response::IntoResponse;
+    assert_eq!(error.into_response().status(), 404);
+    assert!(f.app.store.nodes(&conv).unwrap().is_empty());
+    assert!(f.requests().is_empty());
+    assert!(f.idle());
+}
+
+#[tokio::test]
+async fn sixth_document_is_rejected_before_saving_or_contacting_a_text_only_model() {
+    let f = fixture(deepseek_reply("", "never")).await;
+    let conv = f.create_conv().await;
+    let mut ids = Vec::new();
+    for _ in 0..6 {
+        ids.push(
+            upload_document(&f, &conv, "note.md", b"uploaded document".to_vec()).await["id"]
+                .clone(),
+        );
+    }
+    assert_eq!(
+        f.post(
+            &conv,
+            json!({"action":"send","content":"","character_id":f.character_id,"attachment_ids":ids})
+        )
+        .await
+        .status(),
+        400
+    );
+    assert!(f.app.store.nodes(&conv).unwrap().is_empty());
+    assert!(f.requests().is_empty());
+}
+
+#[tokio::test]
+async fn encrypted_pdf_is_rejected_even_when_empty_password_would_auto_decrypt() {
+    use pdf_extract::encryption::{EncryptionState, EncryptionVersion, Permissions};
+    use pdf_extract::{Document, Object};
+    let f = fixture(deepseek_reply("", "")).await;
+    let conv = f.create_conv().await;
+    for user_password in ["fixture-user", ""] {
+        let mut pdf =
+            Document::load_mem(&document_pdf("Encrypted content must not be accepted")).unwrap();
+        pdf.trailer.set(
+            "ID",
+            Object::Array(vec![
+                Object::string_literal("document-regression-identifier"),
+                Object::string_literal("document-regression-identifier"),
+            ]),
+        );
+        let state = EncryptionState::try_from(EncryptionVersion::V2 {
+            document: &pdf,
+            owner_password: "fixture-owner",
+            user_password,
+            key_length: 128,
+            permissions: Permissions::default(),
+        })
+        .unwrap();
+        pdf.encrypt(&state).unwrap();
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        let response = f
+            .app
+            .client
+            .post(f.app.url(&format!("/api/conversations/{conv}/attachments")))
+            .header("x-file-name", "encrypted.pdf")
+            .body(bytes)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 400);
+        let error: Value = response.json().await.unwrap();
+        assert!(error["error"].as_str().unwrap().contains("加密"));
+    }
 }

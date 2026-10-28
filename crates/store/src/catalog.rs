@@ -21,6 +21,8 @@ pub struct CharacterSpec {
     pub name: String,
     pub display_name: String,
     #[serde(default)]
+    pub avatar: Option<String>,
+    #[serde(default)]
     pub system_prompt: String,
     #[serde(default)]
     pub model_id: Option<String>,
@@ -52,14 +54,12 @@ fn frequency_default() -> String {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKey {
-    DefaultModel,
     DefaultCharacter,
 }
 
 impl SettingKey {
     fn as_str(self) -> &'static str {
         match self {
-            SettingKey::DefaultModel => "default_model_id",
             SettingKey::DefaultCharacter => "default_character_id",
         }
     }
@@ -85,7 +85,7 @@ pub struct ListedModel {
     pub spec: ModelSpec,
 }
 
-const CHARACTER_COLS: &str = "id, name, system_prompt, created_at, updated_at, display_name, model_id, parameters, enabled, sort, background, resource_packs, sticker_identity, sticker_frequency";
+const CHARACTER_COLS: &str = "id, name, system_prompt, created_at, updated_at, display_name, model_id, parameters, enabled, sort, background, resource_packs, sticker_identity, sticker_frequency, avatar";
 const MODEL_COLS: &str = "id, provider, upstream_id, display_name, sort, protocol, reasoning, vision, context_window, price";
 
 fn character_from_row(r: &Row) -> rusqlite::Result<Character> {
@@ -119,6 +119,7 @@ fn character_from_row(r: &Row) -> rusqlite::Result<Character> {
             resource_packs: json(r, 11)?,
             sticker_identity: r.get(12)?,
             sticker_frequency: r.get(13)?,
+            avatar: r.get(14)?,
         },
         created_at: r.get(3)?,
         updated_at: r.get(4)?,
@@ -208,11 +209,11 @@ impl Store {
             updated_at: now,
         };
         self.conn().execute(
-            &format!("INSERT INTO characters ({CHARACTER_COLS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)"),
+            &format!("INSERT INTO characters ({CHARACTER_COLS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)"),
             params![c.id, spec.name, spec.system_prompt, now, now, spec.display_name, spec.model_id,
                 serde_json::to_string(&spec.parameters)?, spec.enabled, spec.sort,
                 spec.background.as_ref().map(serde_json::to_string).transpose()?,
-                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency],
+                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, spec.avatar],
         )?;
         Ok(c)
     }
@@ -220,11 +221,11 @@ impl Store {
     pub fn update_character(&self, id: &str, spec: &CharacterSpec) -> Result<Character> {
         let conn = self.conn();
         conn.query_row(
-            &format!("UPDATE characters SET name=?2, system_prompt=?3, display_name=?4, model_id=?5, parameters=?6, enabled=?7, sort=?8, background=?9, resource_packs=?10, sticker_identity=?11, sticker_frequency=?12, updated_at=?13 WHERE id=?1 RETURNING {CHARACTER_COLS}"),
+            &format!("UPDATE characters SET name=?2, system_prompt=?3, display_name=?4, model_id=?5, parameters=?6, enabled=?7, sort=?8, background=?9, resource_packs=?10, sticker_identity=?11, sticker_frequency=?12, updated_at=?13, avatar=?14 WHERE id=?1 RETURNING {CHARACTER_COLS}"),
             params![id, spec.name, spec.system_prompt, spec.display_name, spec.model_id,
                 serde_json::to_string(&spec.parameters)?, spec.enabled, spec.sort,
                 spec.background.as_ref().map(serde_json::to_string).transpose()?,
-                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, now_ms()],
+                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, now_ms(), spec.avatar],
             character_from_row,
         ).optional()?.ok_or(StoreError::NotFound)
     }
@@ -350,10 +351,6 @@ impl Store {
         if tx.execute("DELETE FROM models WHERE id = ?1", [id])? == 0 {
             return Err(StoreError::NotFound);
         }
-        tx.execute(
-            "DELETE FROM settings WHERE key = ?1 AND value = ?2",
-            params![SettingKey::DefaultModel.as_str(), id],
-        )?;
         tx.commit()?;
         Ok(())
     }

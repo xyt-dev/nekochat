@@ -243,6 +243,8 @@ pre,
   padding: 8px 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .character-label {
@@ -632,20 +634,26 @@ div.nk-math {
   border-color: var(--nk-accent);
 }
 
-.composer textarea {
-  flex: 1;
+.composer-editor {
+  flex: 1 0 100%;
+  width: 100%;
   min-width: 0;
-  resize: none;
   border: none;
   outline: none;
   background: transparent;
   color: var(--nk-text);
   font: inherit;
   max-height: 40vh;
+  min-height: 40px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   padding: 4px 0;
 }
 
-.composer textarea::placeholder {
+.composer-editor[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  pointer-events: none;
   color: var(--nk-text-faint);
 }
 
@@ -1048,10 +1056,34 @@ div.nk-math {
 }
 
 .composer { flex-wrap: wrap; }
-.attachment-draft { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; padding: 4px; }
-.attachment-preview { position: relative; }
-.attachment-preview img { display: block; width: 80px; height: 80px; border-radius: 6px; object-fit: cover; }
-.attachment-preview button { position: absolute; top: 0; right: 0; padding: 0 5px; border-radius: 4px; background: var(--nk-surface); }
-.message-attachments { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 100%; margin-top: 8px; }
-.message-attachments img { display: block; max-width: min(320px, 75vw); max-height: 240px; width: auto; height: auto; object-fit: contain; border-radius: 8px; }
-.chatgpt-disclosure { color: var(--nk-text-faint); font-size: 11px; }
+.composer-tools { width: 100%; }
+.composer-tools .send { margin-left: auto; }
+.upload-status { color: var(--nk-text-faint); }
+.editor-image { position: relative; display: inline-flex; vertical-align: middle; margin: 4px 8px 4px 0; max-width: 100%; white-space: normal; }
+.editor-image img { display: block; max-width: min(180px, 100%); max-height: 150px; object-fit: contain; border-radius: 8px; }
+.editor-image button { position: absolute; top: 3px; right: 3px; width: 24px; height: 24px; padding: 0; border: 1px solid var(--nk-border); border-radius: 50%; background: var(--nk-surface); line-height: 1; }
+.message-attachments { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; white-space: normal; }
+.bubble-text + .message-attachments { margin-top: 8px; }
+.message-image { display: block; min-width: 0; max-width: 100%; }
+.message-image img { display: block; width: auto; height: auto; max-width: min(320px, 100%); max-height: 300px; object-fit: contain; border-radius: 8px; }
+.document-drafts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.document-card { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--nk-border); border-radius: 8px; background: var(--nk-bg-raised, var(--nk-bg-side)); max-width: 100%; min-width: 0; color: var(--nk-text); text-decoration: none; }
+.document-card a { display: flex; flex-direction: column; min-width: 0; color: inherit; text-decoration: none; }
+.document-card span { overflow-wrap: anywhere; }
+.document-card small { display: block; color: var(--nk-text-faint); white-space: nowrap; }
+.document-card button { flex: none; border: none; background: none; }
+.message-attachments > .document-card { flex-direction: column; align-items: flex-start; gap: 0; }
+.avatar { display: inline-flex; flex: none; width: 28px; height: 28px; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%; background: var(--nk-surface); color: var(--nk-text-muted); font: 600 13px/1 system-ui, sans-serif; }
+.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.user-label { margin-bottom: 5px; }
+.character-label { display: flex; align-items: center; gap: 7px; }
+.account-button { display: flex; padding: 0; background: none; border: 1px solid var(--nk-border); border-radius: 50%; }
+.account-popup { right: 0; min-width: 150px; }
+.login-card label, .profile-dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.login-card input, .profile-dialog input { width: 100%; }
+.profile-dialog { display: flex; flex-direction: column; gap: 12px; max-height: 90dvh; overflow-y: auto; }
+.profile-dialog input { font: inherit; padding: 8px 10px; border: 1px solid var(--nk-border); border-radius: 8px; background: var(--nk-bg); color: var(--nk-text); }
+.profile-avatar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.profile-avatar .avatar { width: 56px; height: 56px; font-size: 22px; }
+.profile-avatar label { cursor: pointer; }
+.profile-dialog small { color: var(--nk-text-faint); }

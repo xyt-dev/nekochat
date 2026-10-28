@@ -34,6 +34,13 @@ fn schema_one_migrates_without_losing_tree_usage_or_private_model_metadata() {
     assert_eq!(reply.model_id.as_deref(), Some("model"));
     assert_eq!(reply.status, NodeStatus::Complete);
     assert_eq!(reply.character_name, None);
+    assert_eq!(reply.character_avatar, None);
+    let user = store
+        .create_user("migration-user", "migration-test-password")
+        .unwrap();
+    assert!(store.list_user_conversations(&user.id).unwrap().is_empty());
+    assert!(store.require_conversation_owner("conv", &user.id).is_err());
+    assert_eq!(store.legacy_conversation_count().unwrap(), 1);
     assert_eq!(
         store
             .get_conversation("conv")
@@ -53,7 +60,7 @@ fn schema_one_migrates_without_losing_tree_usage_or_private_model_metadata() {
     assert_eq!(
         conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
             .unwrap(),
-        3
+        4
     );
     drop(conn);
     assert_eq!(Store::open(&path).unwrap().nodes("conv").unwrap().len(), 2);

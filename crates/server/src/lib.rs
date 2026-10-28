@@ -1,3 +1,4 @@
+pub mod accounts;
 pub mod api;
 pub mod assets;
 pub mod attachments;
@@ -32,6 +33,23 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
     let api = Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/session", post(auth::access_login))
+        .route(
+            "/api/account/session",
+            get(accounts::session).delete(accounts::logout),
+        )
+        .route("/api/account/register", post(accounts::register))
+        .route("/api/account/login", post(accounts::login))
+        .route(
+            "/api/account",
+            axum::routing::patch(accounts::update_profile),
+        )
+        .route("/api/account/preferences", put(accounts::preferences))
+        .route(
+            "/api/account/avatar",
+            post(accounts::upload_avatar)
+                .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024)),
+        )
+        .route("/api/avatars/{id}", get(accounts::avatar))
         .route("/api/characters", get(user::list_characters))
         .route("/api/resources/{pack}/{id}", get(crate::assets::resource))
         .route("/api/backgrounds/{file}", get(crate::assets::background))
@@ -61,7 +79,7 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
         .route(
             "/api/conversations/{id}/attachments",
             post(attachments::upload).layer(axum::extract::DefaultBodyLimit::max(
-                attachments::MAX_IMAGE_BYTES,
+                attachments::MAX_DOCUMENT_BYTES,
             )),
         )
         .route(
@@ -73,6 +91,31 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
             get(attachments::metadata),
         )
         .route("/api/admin/session", post(auth::admin_login))
+        .route(
+            "/api/admin/users",
+            get(accounts::admin_users).post(accounts::admin_create_user),
+        )
+        .route(
+            "/api/admin/users/{id}",
+            axum::routing::patch(accounts::admin_update_user).delete(accounts::admin_delete_user),
+        )
+        .route(
+            "/api/admin/users/{id}/password",
+            post(accounts::admin_password),
+        )
+        .route(
+            "/api/admin/users/{id}/legacy-conversations",
+            post(accounts::admin_assign_legacy),
+        )
+        .route(
+            "/api/admin/user-settings",
+            get(accounts::admin_user_settings).put(accounts::admin_put_user_settings),
+        )
+        .route(
+            "/api/admin/avatars",
+            post(accounts::admin_upload_avatar)
+                .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024)),
+        )
         .route("/api/admin/chatgpt", get(codex::status))
         .route("/api/admin/chatgpt/start", post(codex::start))
         .route("/api/admin/chatgpt/callback", post(codex::callback))

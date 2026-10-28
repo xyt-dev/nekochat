@@ -28,7 +28,10 @@ async fn role_parameters_are_server_owned_and_shared_service_is_transport_indepe
         .unwrap();
     assert_eq!(response.status(), 201);
     let role: Value = response.json().await.unwrap();
-    let conv = app.store.create_conversation(role["id"].as_str()).unwrap();
+    let conv = app
+        .store
+        .create_owned_conversation(&app.user_id, role["id"].as_str())
+        .unwrap();
     for (key, value) in [
         ("model_id", json!("attacker")),
         ("effort", json!("max")),
@@ -77,9 +80,14 @@ async fn role_parameters_are_server_owned_and_shared_service_is_transport_indepe
         json!({"action":"send","content":"Rust adapter","character_id":alternate["id"]}),
     )
     .unwrap();
-    let mut events = start_turn(app.state.clone(), conv.id.clone(), request)
-        .await
-        .unwrap();
+    let mut events = start_turn(
+        app.state.clone(),
+        app.user_id.clone(),
+        conv.id.clone(),
+        request,
+    )
+    .await
+    .unwrap();
     let mut completed = false;
     while let Some(event) = events.next().await {
         if let TurnEvent::Done(node) = event {

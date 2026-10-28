@@ -88,10 +88,41 @@ fn has_session(state: &AppState, jar: &CookieJar, scope: Scope, cookie: &str) ->
 pub async fn gate(
     State(state): State<AppState>,
     jar: CookieJar,
-    req: Request,
+    mut req: Request,
     next: Next,
 ) -> Response {
     let path = req.uri().path();
+    // Ports are part of the origin: another localhost service is not this browser origin.
+    if !matches!(
+        *req.method(),
+        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
+    ) && let Some(origin) = req.headers().get(header::ORIGIN)
+    {
+        let same_origin = origin
+            .to_str()
+            .ok()
+            .and_then(|value| reqwest::Url::parse(value).ok())
+            .filter(|url| {
+                matches!(url.scheme(), "http" | "https")
+                    && url.username().is_empty()
+                    && url.password().is_none()
+            })
+            .is_some_and(|origin| {
+                req.headers()
+                    .get(header::HOST)
+                    .and_then(|host| host.to_str().ok())
+                    .and_then(|host| {
+                        reqwest::Url::parse(&format!("{}://{host}", origin.scheme())).ok()
+                    })
+                    .is_some_and(|target| {
+                        target.host_str() == origin.host_str()
+                            && target.port_or_known_default() == origin.port_or_known_default()
+                    })
+            });
+        if !same_origin {
+            return ApiError::new(StatusCode::FORBIDDEN, "不允许的请求来源").into_response();
+        }
+    }
     if path == "/api/admin" || path.starts_with("/api/admin/") {
         if state.config.admin_password.is_none() {
             return ApiError::not_found().into_response();
@@ -104,8 +135,32 @@ pub async fn gate(
         && path != "/api/session"
         && state.config.access_password.is_some()
         && !has_session(&state, &jar, Scope::Access, ACCESS_COOKIE)
+        && !(path.starts_with("/api/avatars/")
+            && has_session(&state, &jar, Scope::Admin, ADMIN_COOKIE))
     {
         return ApiError::unauthorized().into_response();
+    }
+    if path.starts_with("/api/")
+        && path != "/api/health"
+        && path != "/api/session"
+        && !path.starts_with("/api/admin/")
+    {
+        let account_entry = matches!(
+            path,
+            "/api/account/register" | "/api/account/login" | "/api/account/session"
+        );
+        let admin_avatar = path.starts_with("/api/avatars/")
+            && has_session(&state, &jar, Scope::Admin, ADMIN_COOKIE);
+        if !account_entry && !admin_avatar {
+            match crate::accounts::resolve(&state, &jar).await {
+                Ok(Some(user)) => {
+                    req.extensions_mut()
+                        .insert(crate::accounts::CurrentUser::from(user));
+                }
+                Ok(None) => return ApiError::unauthorized().into_response(),
+                Err(error) => return error.into_response(),
+            }
+        }
     }
     next.run(req).await
 }

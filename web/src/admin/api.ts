@@ -7,7 +7,7 @@ export interface CharacterParameters {
 export interface CharacterRecipe {
   name: string; display_name: string; system_prompt: string; model_id: string | null;
   parameters: CharacterParameters; enabled: boolean; sort: number;
-  background: { url: string; opacity: number } | null; resource_packs: string[];
+  avatar: string | null; background: { url: string; opacity: number } | null; resource_packs: string[];
   sticker_identity: "self" | "neutral"; sticker_frequency: "rare" | "normal" | "often";
 }
 export interface Character extends CharacterRecipe { id: string; created_at: number; updated_at: number }
@@ -15,7 +15,16 @@ export interface ResourcePack {
   id: string; name: string; description: string; sticker_count: number; skill: string;
   attribution: string; assets: { id: string; name: string; url: string }[];
 }
-export interface Settings { default_model_id: string | null; default_character_id: string | null }
+export interface Settings { default_character_id: string | null }
+export type PasswordStorage = "plain" | "hash";
+export interface UserAdmin {
+  id: string; username: string; avatar: string | null;
+  last_character_id: string | null; last_conversation_id: string | null;
+  disabled: boolean; password_storage: PasswordStorage; created_at: number;
+}
+export interface UserChanges { username?: string; password?: string; avatar?: string | null; disabled?: boolean }
+export interface UserSettings { password_storage: PasswordStorage; legacy_conversations: number }
+export interface UserPassword { password: string | null; password_storage: PasswordStorage }
 export interface ModelDefaults {
   display_name: string;
   protocol: "chat_completions" | "responses" | "chatgpt_responses";
@@ -72,6 +81,15 @@ export interface AdminApi {
   deleteCharacter(characterId: string): Promise<void>;
   resourcePacks(): Promise<ResourcePack[]>;
   uploadBackground(file: File): Promise<{ url: string }>;
+  uploadAvatar(file: File): Promise<{ url: string }>;
+  users(): Promise<{ users: UserAdmin[] }>;
+  createUser(body: { username: string; password: string }): Promise<UserAdmin>;
+  updateUser(userId: string, body: UserChanges): Promise<UserAdmin>;
+  deleteUser(userId: string): Promise<void>;
+  userPassword(userId: string): Promise<UserPassword>;
+  userSettings(): Promise<UserSettings>;
+  saveUserSettings(passwordStorage: PasswordStorage): Promise<UserSettings>;
+  assignLegacyConversations(userId: string): Promise<{ assigned: number }>;
   settings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<Settings>;
   stats(from: number, to: number, bucket: number): Promise<Stats>;
@@ -119,6 +137,15 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     deleteCharacter: (characterId: string) => request<void>(`/characters/${id(characterId)}`, "DELETE"),
     resourcePacks: () => request<ResourcePack[]>("/resource-packs"),
     uploadBackground: (file: File) => request<{ url: string }>("/backgrounds", "POST", file),
+    uploadAvatar: (file: File) => request<{ url: string }>("/avatars", "POST", file),
+    users: () => request<{ users: UserAdmin[] }>("/users"),
+    createUser: (body: { username: string; password: string }) => request<UserAdmin>("/users", "POST", body),
+    updateUser: (userId: string, body: UserChanges) => request<UserAdmin>(`/users/${id(userId)}`, "PATCH", body),
+    deleteUser: (userId: string) => request<void>(`/users/${id(userId)}`, "DELETE"),
+    userPassword: (userId: string) => request<UserPassword>(`/users/${id(userId)}/password`, "POST", {}),
+    userSettings: () => request<UserSettings>("/user-settings"),
+    saveUserSettings: (passwordStorage: PasswordStorage) => request<UserSettings>("/user-settings", "PUT", { password_storage: passwordStorage }),
+    assignLegacyConversations: (userId: string) => request<{ assigned: number }>(`/users/${id(userId)}/legacy-conversations`, "POST", {}),
     settings: () => request<Settings>("/settings"),
     saveSettings: (settings: Settings) => request<Settings>("/settings", "PUT", settings),
     stats: (from: number, to: number, bucket: number) => request<Stats>(`/stats?${new URLSearchParams({ from_ms: String(from), to_ms: String(to), bucket_ms: String(bucket) })}`),

@@ -4,6 +4,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -24,6 +25,7 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use crate::accounts::CurrentUser;
 use crate::api::user::NodeView;
 use crate::api::{ApiError, JsonBody, blocking};
 use crate::state::{AppState, TurnGuard};
@@ -65,6 +67,7 @@ pub enum TurnEvent {
         assistant_node_id: String,
         character_id: String,
         character_name: String,
+        character_avatar: Option<String>,
     },
     Reasoning(String),
     Chunk(ResourceChunk),
@@ -102,10 +105,11 @@ struct Prepared {
 /// reply as SSE (`start`, `reasoning`/`text` deltas, then `done` or `error`).
 pub async fn post_turn(
     State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
     Path(conv_id): Path<String>,
     JsonBody(req): JsonBody<TurnRequest>,
 ) -> Result<Response, ApiError> {
-    let events = start_turn(state, conv_id, req)
+    let events = start_turn(state, user.id, conv_id, req)
         .await?
         .map(|event| Ok::<_, Infallible>(http_event(event)));
     Ok(Sse::new(events)
@@ -116,9 +120,19 @@ pub async fn post_turn(
 /// Starts one guarded turn without an HTTP request or SSE dependency.
 pub async fn start_turn(
     state: AppState,
+    actor_user_id: String,
     conv_id: String,
     req: TurnRequest,
 ) -> Result<TurnStream, ApiError> {
+    // Every transport must supply its authenticated actor; middleware alone is insufficient.
+    // Check before taking a turn claim, reading history or contacting any provider.
+    let store = state.store.clone();
+    let owner_conv = conv_id.clone();
+    let actor_user_id = blocking(move || {
+        store.require_conversation_owner(&owner_conv, &actor_user_id)?;
+        Ok(actor_user_id)
+    })
+    .await?;
     let TurnRequest {
         action,
         character_id,
@@ -138,7 +152,10 @@ pub async fn start_turn(
         .begin_turn(&conv_id)
         .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"))?;
     let store = state.store.clone();
-    let (conv, character, target) = blocking(move || {
+    let (conv, character, target, actor_user_id) = blocking(move || {
+        // The account may have been disabled/reassigned between the first check and claim.
+        // Once claimed, account invalidation can cancel this turn reliably.
+        store.require_conversation_owner(&conv_id, &actor_user_id)?;
         let target = match target_id {
             Some(node_id) => store.get_node(&conv_id, &node_id)?,
             None => None,
@@ -147,6 +164,7 @@ pub async fn start_turn(
             store.get_conversation(&conv_id)?,
             store.get_character(&character_id)?,
             target,
+            actor_user_id,
         ))
     })
     .await?;
@@ -203,35 +221,39 @@ pub async fn start_turn(
         }
     };
     if anchor.attachment_ids.len() > 5 {
-        return Err(ApiError::bad_request("每条消息最多 5 张图片"));
+        return Err(ApiError::bad_request("每条消息最多 5 个附件"));
     }
     let unique: std::collections::HashSet<_> = anchor.attachment_ids.iter().collect();
     if unique.len() != anchor.attachment_ids.len() {
-        return Err(ApiError::bad_request("图片不能重复"));
+        return Err(ApiError::bad_request("附件不能重复"));
     }
     if anchor.content.trim().is_empty() && anchor.attachment_ids.is_empty() {
-        return Err(ApiError::bad_request("消息内容或图片不能为空"));
+        return Err(ApiError::bad_request("消息内容或附件不能为空"));
     }
     let store = state.store.clone();
     let check_conv = conv.id.clone();
     let check_ids = anchor.attachment_ids.clone();
     let check_parent = anchor.parent.clone();
     let has_images = blocking(move || {
-        match store.attachment_metadata(&check_conv, &check_ids) {
-            Ok(_) => {}
+        let current = match store.attachment_metadata(&check_conv, &check_ids) {
+            Ok(items) => items,
             Err(StoreError::NotFound) => return Ok(None),
             Err(error) => return Err(error),
-        }
+        };
         Ok(Some(
-            !check_ids.is_empty()
+            current.iter().any(|attachment| attachment.kind == "image")
                 || store
                     .path_to(&check_conv, check_parent.as_deref())?
                     .iter()
-                    .any(|node| !node.attachments.is_empty()),
+                    .any(|node| {
+                        node.attachments
+                            .iter()
+                            .any(|attachment| attachment.kind == "image")
+                    }),
         ))
     })
     .await?
-    .ok_or_else(|| ApiError::bad_request("图片不存在或不属于当前对话"))?;
+    .ok_or_else(|| ApiError::bad_request("附件不存在或不属于当前对话"))?;
     if has_images && !model.spec.vision {
         return Err(ApiError::bad_request(
             "当前角色不支持图片输入，请选择支持图片的角色",
@@ -248,7 +270,11 @@ pub async fn start_turn(
         .map_err(|_| ApiError::bad_request("角色资源包不可用"))?;
     let store = state.store.clone();
     let selected = character.clone();
-    let prepared = blocking(move || prepare(&store, conv, anchor, &selected, &prompt)).await?;
+    let prepared = blocking(move || {
+        store.set_user_preferences(&actor_user_id, Some(&selected.id), Some(&conv.id))?;
+        prepare(&store, conv, anchor, &selected, &prompt)
+    })
+    .await?;
     let turn = Turn {
         label: model_label(&model.spec.display_name, &provider.label),
         store: state.store,
@@ -349,6 +375,7 @@ fn prepare(
                 effort: None,
                 character_id: None,
                 character_name: None,
+                character_avatar: None,
                 status: NodeStatus::Complete,
                 metrics: None,
                 created_at: now_ms(),
@@ -388,42 +415,59 @@ fn context(
             NodeRole::Assistant if node.content.is_empty() => continue,
             NodeRole::Assistant => ChatRole::Assistant,
         };
-        messages.push(ChatMessage {
+        messages.push(message_with_attachments(
+            store,
+            &conv.id,
             role,
-            content: node.content,
-            images: images(
-                store,
-                &conv.id,
-                node.attachments
-                    .iter()
-                    .map(|attachment| attachment.id.as_str()),
-            )?,
-        });
+            node.content,
+            node.attachments
+                .iter()
+                .map(|attachment| attachment.id.as_str()),
+        )?);
     }
-    messages.push(ChatMessage {
-        role: ChatRole::User,
-        content: user_text.to_owned(),
-        images: images(store, &conv.id, attachment_ids.iter().map(String::as_str))?,
-    });
+    messages.push(message_with_attachments(
+        store,
+        &conv.id,
+        ChatRole::User,
+        user_text.to_owned(),
+        attachment_ids.iter().map(String::as_str),
+    )?);
     Ok(messages)
 }
 
-fn images<'a>(
+/// Documents remain untrusted user-message content. Only images become multimodal input.
+fn message_with_attachments<'a>(
     store: &Store,
     conv: &str,
+    role: ChatRole,
+    mut content: String,
     ids: impl IntoIterator<Item = &'a str>,
-) -> Result<Vec<ChatImage>, StoreError> {
-    ids.into_iter()
-        .map(|id| {
-            let (attachment, bytes) = store
-                .get_attachment(conv, id)?
-                .ok_or(StoreError::NotFound)?;
-            Ok(ChatImage {
+) -> Result<ChatMessage, StoreError> {
+    let mut images = Vec::new();
+    for id in ids {
+        let (attachment, bytes, text) = store
+            .attachment_model_content(conv, id)?
+            .ok_or(StoreError::NotFound)?;
+        if attachment.kind == "image" {
+            images.push(ChatImage {
                 media_type: attachment.media_type,
-                base64: base64::engine::general_purpose::STANDARD.encode(bytes),
-            })
-        })
-        .collect()
+                base64: base64::engine::general_purpose::STANDARD
+                    .encode(bytes.ok_or(StoreError::NotFound)?),
+            });
+        } else {
+            let text = text.ok_or(StoreError::NotFound)?;
+            content.push_str("\n\n--- Attached document: ");
+            content.push_str(&attachment.name);
+            content.push_str(" ---\n");
+            content.push_str(&text);
+            content.push_str("\n--- End attached document ---");
+        }
+    }
+    Ok(ChatMessage {
+        role,
+        content,
+        images,
+    })
 }
 
 /// Cost in USD of `u` at `price` (USD per million tokens); `None` unless all three prices are set.
@@ -469,9 +513,10 @@ fn http_event(value: TurnEvent) -> Event {
             assistant_node_id,
             character_id,
             character_name,
+            character_avatar,
         } => (
             "start",
-            json!({"user_node": user_node.map(NodeView::from), "assistant_node_id":assistant_node_id, "character_id":character_id,"character_name":character_name}),
+            json!({"user_node": user_node.map(NodeView::from), "assistant_node_id":assistant_node_id, "character_id":character_id,"character_name":character_name,"character_avatar":character_avatar}),
         ),
         TurnEvent::Reasoning(t) => ("reasoning", json!({"t":t})),
         TurnEvent::Chunk(ResourceChunk::Text(t)) => ("text", json!({"t":t})),
@@ -604,6 +649,7 @@ impl Turn {
             assistant_node_id: self.assistant_id.clone(),
             character_id: self.character.id.clone(),
             character_name: self.character.spec.display_name.clone(),
+            character_avatar: self.character.spec.avatar.clone(),
         };
         if out.send(start).await.is_err() {
             // Nothing generated yet, so nothing to keep.
@@ -671,6 +717,7 @@ impl Turn {
             effort,
             character_id: Some(character.id),
             character_name: Some(character.spec.display_name),
+            character_avatar: character.spec.avatar,
             status,
             metrics: Some(metrics),
             created_at: now_ms(),
