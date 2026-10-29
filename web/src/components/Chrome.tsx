@@ -2,7 +2,7 @@ import { createEffect, For, Show } from "solid-js";
 import { store } from "../store";
 import { allThemes, applyTheme, BUILTIN_THEMES, CUSTOM_GROUP, customThemes, type ThemeInfo, themeId } from "../themes";
 import { confirmAction, confirmRequest, toastText } from "../ui";
-import { createPopover } from "./Popover";
+import { createPopover, trapDialogFocus } from "./Popover";
 import { AccountMenu } from "./Account";
 import { CharacterPicker } from "./Pickers";
 
@@ -30,13 +30,14 @@ export function Sidebar() {
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     }}>
-      <button type="button" class="sidebar-close" onClick={() => { store.setSidebarOpen(false); document.querySelector<HTMLButtonElement>(".menu-button")?.focus(); }}>关闭对话列表</button>
+      <button type="button" class="sidebar-close" onClick={() => { store.setSidebarOpen(false); document.querySelector<HTMLButtonElement>(".menu-button")?.focus(); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>关闭对话列表</button>
       <CharacterPicker />
       <button type="button" class="new-chat" onClick={() => void store.newConversation()}>
-        ＋ 新对话
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>新对话
       </button>
-      <nav class="conv-list">
-        <For each={store.conversations()}>
+      <div class="sidebar-section-title"><span>最近对话</span><span>{store.conversations().length}</span></div>
+      <nav class="conv-list" aria-label="历史对话">
+        <For each={store.conversations()} fallback={<div class="sidebar-empty">还没有对话<small>从上方开始一段新的聊天。</small></div>}>
           {(c) => (
             <div
               class="conv-item"
@@ -50,7 +51,7 @@ export function Sidebar() {
                 aria-label={`彻底删除 ${c.title}`}
                 onClick={() => void remove(c.id, c.title)}
               >
-                🗑
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" /></svg>
               </button>
             </div>
           )}
@@ -78,12 +79,12 @@ function ThemePicker() {
   const current = () => allThemes().find((t) => t.id === themeId());
   return (
     <div class="picker" ref={root}>
-      <button type="button" class="pill theme-button" onClick={() => setOpen((o) => !o)}>
+      <button type="button" class="pill theme-button" aria-label={`切换主题，当前${current()?.group ?? ""} ${current()?.name ?? themeId()}`} aria-expanded={open()} aria-controls="theme-options" onClick={() => setOpen((o) => !o)}>
         <Show when={current()}>{(t) => <Dots theme={t()} />}</Show>
         <span>{current()?.name ?? themeId()}</span> <span class="pill-caret">▾</span>
       </button>
       <Show when={open()}>
-        <div class="popup popup-down theme-popup">
+        <div id="theme-options" class="popup popup-down theme-popup" role="group" aria-label="主题列表">
           <For each={groups()}>
             {([group, themes]) => (
               <div class="popup-group">
@@ -118,7 +119,7 @@ export function TopBar() {
   return (
     <header class="topbar">
       <button type="button" class="menu-button" title="对话列表" aria-label="打开对话列表" aria-expanded={store.sidebarOpen()} aria-controls="conversation-sidebar" onClick={() => store.setSidebarOpen((o) => !o)}>
-        ☰
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
       </button>
       <div class="topbar-title">{store.conv()?.title ?? "nekochat"}</div>
       <ThemePicker />
@@ -128,6 +129,15 @@ export function TopBar() {
 }
 
 export function ConfirmDialog() {
+  let returnFocus: HTMLElement | null = null;
+  createEffect(() => {
+    if (confirmRequest()) returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    else if (returnFocus) {
+      const element = returnFocus;
+      returnFocus = null;
+      requestAnimationFrame(() => { if (element.isConnected) element.focus({ preventScroll: true }); });
+    }
+  });
   return (
     <Show when={confirmRequest()}>
       {(req) => (
@@ -135,18 +145,20 @@ export function ConfirmDialog() {
           <div
             class="dialog"
             role="alertdialog"
-            onKeyDown={(e) => e.key === "Escape" && req().resolve(false)}
+            aria-modal="true"
+            aria-labelledby="confirmation-title"
+            aria-describedby="confirmation-message"
+            onKeyDown={(event) => { if (event.key === "Escape") req().resolve(false); else trapDialogFocus(event, event.currentTarget); }}
           >
-            <h3>{req().title}</h3>
-            <p>{req().message}</p>
+            <h3 id="confirmation-title">{req().title}</h3>
+            <p id="confirmation-message">{req().message}</p>
             <div class="dialog-actions">
-              <button type="button" class="btn" onClick={() => req().resolve(false)}>
+              <button type="button" class="btn" ref={(element) => requestAnimationFrame(() => { if (element.isConnected) element.focus({ preventScroll: true }); })} onClick={() => req().resolve(false)}>
                 取消
               </button>
               <button
                 type="button"
                 class="btn btn-danger"
-                ref={(el) => requestAnimationFrame(() => el.focus())}
                 onClick={() => req().resolve(true)}
               >
                 {req().confirmLabel}

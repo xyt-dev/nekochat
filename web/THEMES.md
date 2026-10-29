@@ -15,7 +15,7 @@
 | `claude` | Light | Claude |
 | `claude-dark` | Dark | Claude |
 
-文件在 `web/src/themes/`。没选过主题时按系统深浅色用 Mocha 或 Latte；选择记在 localStorage（`nk.theme`，自定义主题另记 `nk.themeUrl`）。
+文件在 `web/src/themes/`。新访客默认 Claude Dark；已有选择保留在 localStorage（`nk.theme`，自定义主题另记 `nk.themeUrl`），不因明暗系统设置或升级覆盖个人选择。
 
 ## 变量清单
 
@@ -46,6 +46,8 @@
 | `--nk-pink` | 代码里的元信息 | pink |
 
 主题菜单里每项的三个色点依次是 `--nk-bg`、`--nk-accent`、`--nk-text`。
+
+共享布局另外提供 `--nk-sidebar-width`、`--nk-content-width` 和 `--nk-radius-sm` / `--nk-radius-md` / `--nk-radius-lg`，统一侧栏、内容列和控件圆角。这些是可选的几何覆盖，不属于自定义主题必填的调色变量；颜色仍只来自上表。触屏输入控件保持至少 16px，不通过视口缩放限制适配主题。
 
 ## 自定义主题
 

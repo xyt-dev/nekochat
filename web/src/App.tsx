@@ -21,7 +21,7 @@ export function App(props: { offline?: boolean }) {
   }));
   return (
     <div class="app" classList={{ "sidebar-open": store.sidebarOpen() }}>
-      <Show when={props.offline || store.sessionReady()} fallback={<div class="login" role="status">加载登录状态…</div>}>
+      <Show when={props.offline || store.sessionReady()} fallback={<div class="app-loading" role="status" aria-live="polite"><strong>nekochat</strong><span>正在恢复你的会话…</span></div>}>
         <Show when={props.offline || store.user()} fallback={<LoginPage />}>
           <Sidebar />
           <button type="button" class="backdrop" aria-label="关闭对话列表" tabIndex={store.sidebarOpen() ? 0 : -1} onClick={() => store.setSidebarOpen(false)} />
