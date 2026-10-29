@@ -35,11 +35,21 @@ export function Composer() {
     const turn = store.currentLive();
     return turn !== undefined && turn.error() === null;
   };
+  const connectionStatus = () => {
+    const turn = store.currentLive();
+    if (!turn || turn.error() !== null) return "";
+    if (turn.stopping()) return "正在停止…";
+    switch (turn.connectionState()) {
+      case "connecting": return "正在连接…";
+      case "reconnecting": return "连接已断开，正在恢复…";
+      case "streaming": return "正在生成…";
+    }
+  };
 
   // Only input events walk the small draft DOM; streaming/history never touches it.
   const readText = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-    if (!(node instanceof HTMLElement) || node.dataset.attachmentId) return "";
+    if (!(node instanceof HTMLElement) || node.dataset.attachmentId || node.hasAttribute("data-caret-placeholder")) return "";
     if (node.tagName === "BR") return "\n";
     let text = "";
     for (const child of node.childNodes) {
@@ -52,13 +62,26 @@ export function Composer() {
     const selection = window.getSelection();
     if (selection?.rangeCount && editor.contains(selection.anchorNode)) savedRange = selection.getRangeAt(0).cloneRange();
   };
+  const ensureCaretLine = () => {
+    // A trailing LF needs a real caret line in contenteditable. Ignore this BR
+    // when serializing so it never becomes an extra newline in the message.
+    let tail = editor.lastChild;
+    while (tail?.nodeType === Node.TEXT_NODE && !tail.textContent) tail = tail.previousSibling;
+    if (tail?.nodeType === Node.TEXT_NODE && tail.textContent?.endsWith("\n")) {
+      const placeholder = document.createElement("br");
+      placeholder.dataset.caretPlaceholder = "";
+      editor.append(placeholder);
+    }
+  };
   const insertNode = (node: Node) => {
+    for (const placeholder of editor.querySelectorAll("[data-caret-placeholder]")) placeholder.remove();
     const range = savedRange && editor.contains(savedRange.commonAncestorContainer) ? savedRange : document.createRange();
     if (range !== savedRange) { range.selectNodeContents(editor); range.collapse(false); }
     range.deleteContents();
     range.insertNode(node);
     range.setStartAfter(node);
     range.collapse(true);
+    ensureCaretLine();
     savedRange = range.cloneRange();
     if (document.activeElement === editor) {
       const selection = window.getSelection();
@@ -66,13 +89,25 @@ export function Composer() {
       selection?.addRange(range);
     }
   };
-  const syncInput = () => {
-    if (composing) return;
+  const syncInput = (event?: InputEvent) => {
+    if (composing || event?.isComposing) {
+      editor.dataset.empty = "false";
+      return;
+    }
+    // Browsers leave a caret BR after deleting the last content. An intentional
+    // newline is a text node here (Shift+Enter/paste), so never trim draft text.
+    if (event?.inputType.startsWith("delete") && !editor.textContent
+      && !editor.querySelector("[data-attachment-id]") && readText(editor) === "\n"
+      && editor.querySelectorAll("br").length === 1) {
+      editor.replaceChildren();
+      savedRange = null;
+    }
     const ids = new Set(Array.from(editor.querySelectorAll<HTMLElement>("[data-attachment-id]")).map((node) => node.dataset.attachmentId));
     batch(() => {
       store.setComposerText(readText(editor));
       store.setComposerAttachments((list) => list.filter((item) => item.kind !== "image" || !renderedImages.has(item.id) || ids.has(item.id)));
     });
+    editor.dataset.empty = String(!readText(editor) && ids.size === 0);
     rememberCaret();
   };
 
@@ -109,10 +144,19 @@ export function Composer() {
       remove.type = "button";
       remove.textContent = "×";
       remove.setAttribute("aria-label", `移除图片 ${attachment.name}`);
+      remove.addEventListener("mousedown", (event) => event.preventDefault());
       remove.addEventListener("click", () => {
+        const range = document.createRange();
+        range.setStartBefore(chip);
+        range.collapse(true);
         chip.remove();
+        ensureCaretLine();
+        savedRange = range.cloneRange();
         store.setComposerAttachments((list) => list.filter((item) => item.id !== attachment.id));
-        editor.focus();
+        editor.focus({ preventScroll: true });
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
       });
       chip.append(image, remove);
       insertNode(chip);
@@ -205,7 +249,8 @@ export function Composer() {
         )}</For></div></Show>
         <div ref={editor} class="composer-editor" contentEditable role="textbox" aria-label="输入消息" aria-multiline="true" data-placeholder="输入消息…" data-empty="true"
           onInput={syncInput} onKeyDown={onKeyDown} onKeyUp={rememberCaret} onMouseUp={rememberCaret} onBlur={rememberCaret}
-          onCompositionStart={() => { composing = true; }} onCompositionEnd={() => { composing = false; batch(() => { syncInput(); setCompositionRevision((revision) => revision + 1); }); }}
+          onCompositionStart={() => { composing = true; editor.dataset.empty = "false"; }}
+          onCompositionEnd={() => { composing = false; batch(() => { syncInput(); setCompositionRevision((revision) => revision + 1); }); }}
           onPaste={(event) => {
             event.preventDefault(); rememberCaret();
             const files = Array.from(event.clipboardData?.files ?? []);
@@ -215,14 +260,15 @@ export function Composer() {
           }} />
         <Show when={store.uploadingAttachments() > 0}><small class="upload-status" role="status">附件上传中…</small></Show>
         <div class="composer-tools">
+          <small class="composer-status" role="status" aria-live="polite" aria-atomic="true">{connectionStatus()}</small>
           <button type="button" class="attachment-button" title="上传图片、PDF 或文本（也可粘贴或拖放）" aria-label="上传附件" onClick={() => { rememberCaret(); fileInput.click(); }}>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8L15.1 5.5" />
             </svg>
           </button>
-          <Show when={generating()} fallback={<button type="button" class="send" title="发送（Enter）"
+          <Show when={generating()} fallback={<button type="button" class="send" title="发送（Enter）" aria-label="发送消息"
             disabled={(!store.composerText().trim() && store.composerAttachments().length === 0) || store.uploadingAttachments() > 0} onClick={() => void send()}>↑</button>}>
-            <button type="button" class="send stop" title={store.currentLive()?.stopping() ? "正在停止" : "停止生成"} disabled={store.currentLive()?.stopping()} onClick={() => void store.stopTurn()}>■</button>
+            <button type="button" class="send stop" title={store.currentLive()?.stopping() ? "正在停止" : "停止生成"} aria-label={store.currentLive()?.stopping() ? "正在停止生成" : "停止生成"} disabled={store.currentLive()?.stopping()} onClick={() => void store.stopTurn()}>■</button>
           </Show>
         </div>
       </div>

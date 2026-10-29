@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount } from "solid-js";
+import { batch, createEffect, createMemo, createSignal, For, onCleanup, onMount } from "solid-js";
 import { store } from "../store";
 import { outline, type OutlineRow } from "../tree";
 
@@ -19,17 +19,25 @@ export function TreePanel() {
     ),
   );
   let listEl!: HTMLDivElement;
+  let closeEl!: HTMLButtonElement;
+  let opener: HTMLElement | null = null;
 
   const close = () => store.setTreeOpen(false);
   const choose = (row: OutlineRow) => {
     close();
     if (row.node.role === "user") {
-      store.setEditing({ nodeId: row.node.id });
-      store.setComposerText(row.node.content);
-      requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus());
+      batch(() => {
+        store.setEditing({ nodeId: row.node.id });
+        store.setComposerText(row.node.content);
+        store.setComposerAttachments(row.node.attachments);
+      });
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(".composer-editor")?.focus());
     } else {
-      store.setEditing(null);
-      store.setComposerText("");
+      batch(() => {
+        store.setEditing(null);
+        store.setComposerText("");
+        store.setComposerAttachments([]);
+      });
       void store.moveLeaf(row.node.id, false);
     }
   };
@@ -39,6 +47,11 @@ export function TreePanel() {
     if (e.key === "Escape") {
       e.preventDefault();
       close();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      (document.activeElement === listEl ? closeEl : listEl).focus({ preventScroll: true });
+    } else if ((e.target as HTMLElement).closest("button")) {
+      return;
     } else if (n === 0) {
       return;
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -50,8 +63,15 @@ export function TreePanel() {
       choose(rows()[selected()]);
     }
   };
-  onMount(() => document.addEventListener("keydown", onKey));
-  onCleanup(() => document.removeEventListener("keydown", onKey));
+  onMount(() => {
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    listEl.focus({ preventScroll: true });
+    document.addEventListener("keydown", onKey);
+  });
+  onCleanup(() => {
+    document.removeEventListener("keydown", onKey);
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  });
 
   createEffect(() => {
     listEl.children[selected()]?.scrollIntoView({ block: "nearest" });
@@ -59,16 +79,22 @@ export function TreePanel() {
 
   return (
     <div class="overlay" onClick={(e) => e.target === e.currentTarget && close()}>
-      <div class="tree-panel" role="dialog" aria-label="对话树">
+      <div class="tree-panel" role="dialog" aria-modal="true" aria-label="对话树">
         <div class="tree-head">
           <span>对话树</span>
           <small>↑↓ 选择 · Enter 跳转 · Esc 关闭</small>
+          <button ref={closeEl} type="button" class="tree-close" aria-label="关闭对话树" onClick={close}>×</button>
         </div>
-        <div class="tree-list" ref={listEl}>
+        <div class="tree-list" ref={listEl} role="listbox" tabIndex={0} aria-label="对话分支"
+          aria-activedescendant={rows()[selected()] ? `tree-option-${rows()[selected()].node.id}` : undefined}>
           <For each={rows()} fallback={<div class="popup-empty">还没有消息</div>}>
             {(row, i) => (
               <div
                 class="tree-row"
+                id={`tree-option-${row.node.id}`}
+                role="option"
+                aria-selected={i() === selected()}
+                aria-label={`${row.node.role === "user" ? "编辑你的消息" : "跳转到回复"}：${snippet(row.node.content)}`}
                 classList={{
                   selected: i() === selected(),
                   current: row.node.id === leafId(),
@@ -79,7 +105,7 @@ export function TreePanel() {
                 onMouseMove={() => setSelected(i())}
                 onClick={() => choose(row)}
               >
-                <span class="tree-prefix">{row.prefix}</span>
+                <span class="tree-prefix" aria-hidden="true">{row.prefix}</span>
                 <span class="tree-role">{row.node.role === "user" ? "你" : "答"}</span>
                 <span class="tree-text">{snippet(row.node.content)}</span>
               </div>

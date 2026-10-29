@@ -1,6 +1,8 @@
 import { createVirtualizer } from "@tanstack/solid-virtual";
 import { createEffect, createMemo, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js";
 import type { NodeView } from "../api";
+import { copyText } from "../clipboard";
+import { toast } from "../ui";
 import { type LiveTurn, store } from "../store";
 import { AssistantMessage, LiveMessage, UserMessage } from "./Message";
 
@@ -73,14 +75,23 @@ export function MessageList() {
   );
 
   // Code block "复制" buttons come from worker HTML, so they are handled by delegation.
-  const onClick = (e: MouseEvent) => {
+  const onClick = async (e: MouseEvent) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".nk-copy");
-    if (!btn) return;
-    const code = btn.parentElement?.querySelector("code")?.textContent ?? "";
-    void navigator.clipboard.writeText(code).then(() => {
+    if (!btn || btn.disabled || btn.getAttribute("aria-busy") === "true") return;
+    const code = btn.closest(".nk-code")?.querySelector(":scope > pre > code");
+    if (!code) { toast("未找到要复制的代码"); return; }
+    btn.setAttribute("aria-busy", "true");
+    try {
+      await copyText(code.textContent ?? "");
       btn.textContent = "已复制";
-      setTimeout(() => (btn.textContent = "复制"), 1500);
-    });
+      toast("代码已复制");
+    } catch {
+      btn.textContent = "复制失败";
+      toast("复制失败，请选中代码后手动复制");
+    } finally {
+      btn.removeAttribute("aria-busy");
+      window.setTimeout(() => { if (btn.isConnected) btn.textContent = "复制"; }, 1500);
+    }
   };
 
   const keys = () => virtualizer.getVirtualItems().map((v) => v.key as string);
@@ -97,7 +108,7 @@ export function MessageList() {
       onClick={onClick}
     >
       <Show when={items().length === 0}>
-        <div class="empty-hint">{store.loadingConv() ? "" : "有什么想聊的？"}</div>
+        <div class="empty-hint" role="status">{store.loadingConv() ? "正在加载对话…" : "有什么想聊的？"}</div>
       </Show>
       <div class="messages-sizer" ref={sizerEl} style={{ height: `${virtualizer.getTotalSize()}px` }}>
         <For each={keys()}>

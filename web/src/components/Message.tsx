@@ -29,16 +29,20 @@ function SiblingNav(props: { node: NodeView }) {
       <span class="sibling-nav">
         <button
           type="button"
+          aria-label="上一个分支"
+          title="上一个分支"
           disabled={sib().index === 0}
           onClick={() => void store.moveLeaf(sib().list[sib().index - 1].id, true)}
         >
           ‹
         </button>
-        <span>
+        <span aria-label={`分支 ${sib().index + 1}，共 ${sib().list.length} 个`}>
           {sib().index + 1}/{sib().list.length}
         </span>
         <button
           type="button"
+          aria-label="下一个分支"
+          title="下一个分支"
           disabled={sib().index === sib().list.length - 1}
           onClick={() => void store.moveLeaf(sib().list[sib().index + 1].id, true)}
         >
@@ -143,6 +147,7 @@ function Reasoning(props: { text: Accessor<string>; label: Accessor<string> }) {
       <button
         type="button"
         class="reasoning-toggle"
+        aria-expanded={open()}
         disabled={!props.text()}
         onClick={() => setOpen((o) => !o)}
       >
@@ -174,7 +179,7 @@ export function AssistantMessage(props: { node: NodeView }) {
       </Show>
       <Markdown id={n().id} text={() => n().content} final={() => true} />
       <Show when={store.nodeErrors()[n().id]}>
-        {(msg) => <div class="msg-error">{msg()}</div>}
+        {(msg) => <div class="msg-error" role="alert">{msg()}</div>}
       </Show>
       <DebugLine metrics={n().metrics} status={n().status} />
       <div class="msg-actions">
@@ -201,6 +206,14 @@ export function LiveMessage(props: { turn: LiveTurn }) {
     return end === null ? `思考中 ${seconds(Math.max(now(), start) - start)} 秒` : `思考了 ${seconds(end - start)} 秒`;
   };
   const generating = () => t.error() === null;
+  const status = () => {
+    if (t.stopping()) return "正在停止…";
+    switch (t.connectionState()) {
+      case "connecting": return "正在连接…";
+      case "reconnecting": return "连接已断开，正在恢复…";
+      case "streaming": return "生成中…";
+    }
+  };
   return (
     <MessageShell class="msg-assistant">
       <div class="message-avatar"><Avatar name={t.characterName() || "助手"} url={t.characterAvatar()} /></div>
@@ -211,10 +224,10 @@ export function LiveMessage(props: { turn: LiveTurn }) {
       <Show when={t.assistantId()} fallback={<div class="md-plain">{t.content()}</div>}>
         <Markdown id={t.assistantId()} text={t.content} final={() => !generating()} />
       </Show>
-      <Show when={t.error()}>{(msg) => <div class="msg-error">{msg()}</div>}</Show>
+      <Show when={t.error()}>{(msg) => <div class="msg-error" role="alert">{msg()}</div>}</Show>
       <div class="debug">
         <Show when={generating()}>
-          <span class="generating">生成中…</span>
+          <span class="generating" data-state={t.stopping() ? "stopping" : t.connectionState()}>{status()}</span>
         </Show>
       </div>
       </div>

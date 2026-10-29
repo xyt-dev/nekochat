@@ -22,10 +22,13 @@ import { indexTree, pathTo, type TreeIndex } from "./tree";
 import { resetAccountUi, toast } from "./ui";
 import { resetMarkdownCache } from "./md/client";
 
+export type ConnectionState = "connecting" | "streaming" | "reconnecting";
+
 /** A reply being generated; its text is buffered and copied to signals once per frame. */
 export interface LiveTurn {
   convId: string;
   started: Accessor<boolean>;
+  connectionState: Accessor<ConnectionState>;
   assistantId: Accessor<string>;
   /** User message the reply answers. */
   parentId: Accessor<string | null>;
@@ -46,6 +49,7 @@ export interface LiveTurn {
   buf: { content: string; reasoning: string; dirty: boolean };
   set: {
     started: Setter<boolean>;
+    connectionState: Setter<ConnectionState>;
     assistantId: Setter<string>;
     parentId: Setter<string | null>;
     characterId: Setter<string>;
@@ -66,6 +70,7 @@ export interface Editing {
 
 function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
   const [started, setStarted] = createSignal(false);
+  const [connectionState, setConnectionState] = createSignal<ConnectionState>("connecting");
   const [assistantId, setAssistantId] = createSignal("");
   const [parent, setParent] = createSignal(parentId);
   const [characterId, setCharacterId] = createSignal("");
@@ -80,6 +85,7 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
   return {
     convId,
     started,
+    connectionState,
     assistantId,
     parentId: parent,
     characterId,
@@ -96,6 +102,7 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
     buf: { content: "", reasoning: "", dirty: false },
     set: {
       started: setStarted,
+      connectionState: setConnectionState,
       assistantId: setAssistantId,
       parentId: setParent,
       characterId: setCharacterId,
@@ -464,6 +471,7 @@ function createAppStore() {
 
   /** Feeds one SSE event into a live turn and the open conversation. */
   function handleTurnEvent(turn: LiveTurn, ev: TurnEvent) {
+    if (turn.connectionState() !== "streaming") turn.set.connectionState("streaming");
     switch (ev.type) {
       case "start": {
         const { user_node, assistant_node_id, character_id, character_name, character_avatar } = ev.data;
@@ -614,6 +622,7 @@ function createAppStore() {
           handleTurnEvent(turn, event);
         });
         if (!attached(turn, epoch) || settled) break;
+        turn.set.connectionState("reconnecting");
         // The core may have finished between the history snapshot and the observation request.
         const view = await api.conversation(turn.convId);
         if (!attached(turn, epoch)) break;
@@ -624,12 +633,12 @@ function createAppStore() {
         }
       } catch (error) {
         if (!attached(turn, epoch)) break;
+        turn.set.connectionState("reconnecting");
         if (error instanceof ApiError && error.status > 0) {
           dropLive(turn);
           toast(error.message);
           if (error.status === 404) {
             setConv(null);
-            void loadConversations();
           }
           break;
         }
@@ -702,6 +711,7 @@ function createAppStore() {
         toast(error.message);
         return false;
       }
+      turn.set.connectionState("reconnecting");
       if (!turn.started()) {
         try {
           const view = await api.conversation(turn.convId);
@@ -722,8 +732,12 @@ function createAppStore() {
         }
       }
     }
-    if (attached(turn, epoch) && !settled) await watchTurn(turn, epoch);
-    if (epoch === sessionEpoch && !turn.observer.signal.aborted) void loadConversations();
+    if (attached(turn, epoch) && !settled) {
+      turn.set.connectionState("reconnecting");
+      await watchTurn(turn, epoch);
+    } else if (epoch === sessionEpoch && !turn.observer.signal.aborted) {
+      void loadConversations();
+    }
     return true;
   }
 

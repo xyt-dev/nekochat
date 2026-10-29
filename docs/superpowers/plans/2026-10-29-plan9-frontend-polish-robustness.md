@@ -48,7 +48,7 @@ State worker produces `export type ConnectionState = "connecting" | "streaming" 
 - [x] Give account/login/loading/dialog surfaces the same card and field language; keep real pending/error states, form contents and native focus behavior. Restore popup trigger focus on Escape without stealing outside-click focus.
 - [x] Ensure popups/dialogs fit narrow viewports and long text; preserve native scrolling and mobile input rules.
 - [x] Correct theme documentation to match the actual Claude Dark default and document geometry as optional layout values.
-- [ ] Exercise desktop/mobile and representative dark/light theme families; stage parent baseline files (not worker files), update CHANGELOG, commit the phase after integration evidence is available.
+- [x] Exercise desktop/mobile and representative dark/light theme families; stage parent baseline files (not worker files), update CHANGELOG, commit the phase after integration evidence is available.
 
 ## Step 2 — Chat Workspace and State Feedback
 
