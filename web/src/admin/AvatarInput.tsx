@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js";
+import { createSignal, onCleanup, Show } from "solid-js";
 import { localImageUrl } from "../localImages";
 import { errorMessage, type AdminApi } from "./api";
 
@@ -8,7 +8,10 @@ export function AvatarInput(props: {
 }) {
   const [uploading, setUploading] = createSignal(false);
   const [error, setError] = createSignal("");
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
   async function upload(file: File) {
+    if (uploading() || props.disabled || disposed) return;
     setError(""); setUploading(true); props.onUploading(true);
     try {
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("头像仅支持 PNG、JPEG、WebP");
@@ -16,9 +19,9 @@ export function AvatarInput(props: {
       const result = await props.api.uploadAvatar(file);
       const url = localImageUrl(result.url);
       if (!url?.startsWith("/api/avatars/")) throw new Error("服务器返回了无效的本站头像地址");
-      props.onChange(url);
-    } catch (error) { setError(errorMessage(error)); }
-    finally { setUploading(false); props.onUploading(false); }
+      if (!disposed) props.onChange(url);
+    } catch (error) { if (!disposed) setError(errorMessage(error)); }
+    finally { if (!disposed) { setUploading(false); props.onUploading(false); } }
   }
   return <div class="admin-avatar-editor">
     <label>上传头像（PNG / JPEG / WebP，≤ 2 MiB）<input name={props.name} type="file" accept="image/png,image/jpeg,image/webp" disabled={props.disabled || uploading()} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label>

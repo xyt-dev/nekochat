@@ -57,7 +57,7 @@ State worker produces `export type ConnectionState = "connecting" | "streaming" 
 - [x] Reproduce and fix meaningful rich-editor issues only: native-empty editor normalization, composition boundaries, selection after paste/image removal and TreePanel's obsolete textarea focus target. Do not replace contenteditable with textarea or inject selection resets per token.
 - [x] Make code-block copying work on HTTP with an actual clipboard implementation and honest failure feedback; preserve selection/focus and avoid copying the wrong block. Reuse this path for any affected copy actions.
 - [x] Expose the shared connectionState contract from store and display connecting/reconnecting/stopping clearly. Do not change GET-only recovery or stopped/deleted semantics.
-- [ ] Verify text/IME/multiline/clear, image+document input, tree editing, code-copy success/rejection, scroll-up under output, reconnect without duplicated POST and manual stop/delete. Stage chat/state files plus integrated chat CSS, update CHANGELOG, commit.
+- [x] Verify text/IME/multiline/clear, image+document input, tree editing, code-copy success/rejection, scroll-up under output, reconnect without duplicated POST and manual stop/delete. Stage chat/state files plus integrated chat CSS, update CHANGELOG, commit.
 
 ## Step 3 — Mobile and Administration
 

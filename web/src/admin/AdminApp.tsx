@@ -1,4 +1,4 @@
-import { createSignal, For, Match, onMount, Show, Switch } from "solid-js";
+import { createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { render } from "solid-js/web";
 import { allThemes, applyTheme, loadCustomThemes, themeId } from "../themes";
 import { createAdminApi, errorMessage, type AdminApi, type Character, type ListedModel, type Provider, type ResourcePack, type Settings } from "./api";
@@ -22,11 +22,28 @@ function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
   const [ready, setReady] = createSignal(false);
   const [error, setError] = createSignal("");
   const [loading, setLoading] = createSignal(false);
+  let reloadVersion = 0;
+  let disposed = false;
+  onCleanup(() => { disposed = true; reloadVersion++; });
   async function reload() {
+    if (disposed) return;
+    const version = ++reloadVersion;
     const [nextCharacters, nextModels, nextSettings, nextPacks, nextProviders] = await Promise.all([props.api.characters(), props.api.models(), props.api.settings(), props.api.resourcePacks(), props.api.providers()]);
+    if (disposed || version !== reloadVersion) return;
     setCharacters(nextCharacters); setModels(nextModels); setSettings(nextSettings); setPacks(nextPacks); setProviders(nextProviders); setReady(true);
   }
+  async function afterCatalogCommit(message: string, committedSettings?: Settings) {
+    if (disposed) return;
+    if (committedSettings) {
+      reloadVersion++;
+      setSettings(committedSettings);
+    }
+    setError("");
+    try { await reload(); }
+    catch (failure) { if (!disposed) setError(`${message}，但列表刷新失败：${errorMessage(failure)}`); }
+  }
   async function initialize() {
+    if (loading() || disposed) return;
     setError(""); setLoading(true);
     try { await reload(); } catch (error) { setError(errorMessage(error)); } finally { setLoading(false); }
   }
@@ -40,8 +57,8 @@ function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
         <Match when={tab() !== "monitor" && tab() !== "users"}>
           <Show when={ready()} fallback={<p role="status">{loading() ? "正在加载管理配置…" : "配置加载失败，请重试。"}</p>}>
             <Switch>
-              <Match when={tab() === "models"}><Models api={props.api} providers={providers()} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
-              <Match when={tab() === "roles"}><Roles api={props.api} providers={providers()} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} /></Match>
+              <Match when={tab() === "models"}><Models api={props.api} providers={providers()} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} onCommitted={afterCatalogCommit} /></Match>
+              <Match when={tab() === "roles"}><Roles api={props.api} providers={providers()} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} onCommitted={afterCatalogCommit} /></Match>
               <Match when={tab() === "resources"}><ResourcePacks packs={packs()} /></Match>
             </Switch>
           </Show>
@@ -66,7 +83,9 @@ function AdminApp() {
     catch (error) { if (state() !== "login" && state() !== "disabled") { setError(errorMessage(error)); setState("error"); } }
   }
   async function login(event: SubmitEvent) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault();
+    if (busy()) return;
+    setBusy(true); setError("");
     const submitted = password(); setPassword("");
     try { await api.session(submitted); await checkSession(); }
     catch (error) { setError(errorMessage(error)); }

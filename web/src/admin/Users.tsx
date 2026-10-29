@@ -1,4 +1,4 @@
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { localImageUrl } from "../localImages";
 import { errorMessage, type AdminApi, type PasswordStorage, type UserAdmin, type UserPassword, type UserSettings } from "./api";
 import { AvatarInput } from "./AvatarInput";
@@ -11,23 +11,28 @@ function UserEditor(props: { api: AdminApi; initial: UserAdmin | null; onSaved: 
   const [busy, setBusy] = createSignal(false);
   const [uploading, setUploading] = createSignal(false);
   const [error, setError] = createSignal("");
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
   async function save(event: SubmitEvent) {
-    event.preventDefault(); setError("");
+    event.preventDefault();
+    if (busy() || uploading() || disposed) return;
+    setError("");
     if (!username().trim()) { setError("用户名不能为空"); return; }
     if (password() || !initial) {
       const bytes = new TextEncoder().encode(password()).byteLength;
       if (bytes < 8 || bytes > 1024) { setError("密码必须为 8–1024 个 UTF-8 字节"); return; }
     }
     if (initial && password() && !confirm(`确定重置「${initial.username}」的密码？该用户现有登录会话将失效。`)) return;
-    const submitted = password(); setPassword(""); setBusy(true);
+    const submitted = password(); setBusy(true);
     try {
       if (initial) await props.api.updateUser(initial.id, { username: username().trim(), avatar: avatar(), ...(submitted ? { password: submitted } : {}) });
       else await props.api.createUser({ username: username().trim(), password: submitted });
+      setPassword("");
       await props.onSaved();
     } catch (error) { setError(errorMessage(error)); }
     finally { setBusy(false); }
   }
-  return <section class="admin-card admin-editor" aria-labelledby="user-editor-title">
+  return <section class="admin-card admin-editor" aria-labelledby="user-editor-title" aria-busy={busy() || uploading()}>
     <h3 id="user-editor-title">{initial ? `编辑用户：${initial.username}` : "创建用户"}</h3>
     <form onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy() || uploading()}>
@@ -50,6 +55,7 @@ function PasswordView(props: { api: AdminApi; user: UserAdmin; disabled: boolean
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   async function reveal() {
+    if (busy() || props.disabled) return;
     setBusy(true); setError(""); setResult(null);
     try { setResult(await props.api.userPassword(props.user.id)); }
     catch (error) { setError(errorMessage(error)); }
@@ -74,19 +80,26 @@ export function Users(props: { api: AdminApi }) {
   const [notice, setNotice] = createSignal("");
   const [editing, setEditing] = createSignal<{ initial: UserAdmin | null } | null>(null);
   const blocked = () => loading() || busy() || !!editing();
+  let disposed = false;
+  let reloadVersion = 0;
+  onCleanup(() => { disposed = true; reloadVersion++; });
   async function reload() {
+    const version = ++reloadVersion;
     const [nextUsers, nextSettings] = await Promise.all([props.api.users(), props.api.userSettings()]);
+    if (disposed || version !== reloadVersion) return;
     setUsers(nextUsers.users); setSettings(nextSettings); setReady(true);
   }
   async function initialize() {
+    if (blocked() || disposed) return;
     setLoading(true); setError(""); setNotice("");
     try { await reload(); }
     catch (error) { setError(errorMessage(error)); }
     finally { setLoading(false); }
   }
   async function mutate(action: () => Promise<string>) {
+    if (blocked() || disposed) return;
     setBusy(true); setError(""); setNotice("");
-    try { const message = await action(); await reload(); setNotice(message); }
+    try { const message = await action(); if (disposed) return; await reload(); if (!disposed) setNotice(message); }
     catch (error) { setError(errorMessage(error)); }
     finally { setBusy(false); }
   }
@@ -100,7 +113,7 @@ export function Users(props: { api: AdminApi }) {
   onMount(() => void initialize());
   return <section aria-labelledby="users-title" aria-busy={loading() || busy()}>
     <div class="admin-section-heading"><div><h2 id="users-title">用户管理</h2><p class="admin-note">所有聊天账号独立隔离；管理密码与聊天账号无关。列表不获取密码，只有点击「查看密码」才请求该用户的可恢复原文。</p></div><div class="admin-actions"><button type="button" disabled={blocked()} onClick={() => void initialize()}>{loading() ? "加载中…" : "刷新用户"}</button><button type="button" class="primary" disabled={!ready() || blocked()} onClick={() => { setEditing({ initial: null }); setNotice(""); }}>创建用户</button></div></div>
-    <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show><Show when={notice()}><p role="status">{notice()}</p></Show>
+    <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show><Show when={notice()}><p class="admin-notice" role="status">{notice()}</p></Show>
     <Show when={loading() || busy()}><p role="status">{loading() ? "正在加载用户与存储设置…" : "正在保存更改…"}</p></Show>
     <Show when={settings()}>{(current) => <section class="admin-card" aria-labelledby="password-storage-title">
       <h3 id="password-storage-title">新账号密码存储</h3><p>新建账号使用：<strong data-password-storage={current().password_storage}>{current().password_storage === "plain" ? "明文" : "哈希"}</strong>（新安装默认明文）</p>
@@ -108,7 +121,7 @@ export function Users(props: { api: AdminApi }) {
       <div class="admin-actions" role="group" aria-label="新账号密码存储策略"><button type="button" aria-pressed={current().password_storage === "plain"} disabled={blocked() || current().password_storage === "plain"} onClick={() => changeStorage("plain")}>新账号使用明文</button><button type="button" aria-pressed={current().password_storage === "hash"} disabled={blocked() || current().password_storage === "hash"} onClick={() => changeStorage("hash")}>新账号使用哈希</button></div>
       <h4 class="admin-legacy-heading">未归属旧对话：<span data-legacy-conversations>{current().legacy_conversations}</span></h4><p class="admin-note">旧对话不会自动分给首个注册用户。请在目标用户卡片上明确分配；该操作会分配当时仍未归属的全部旧对话。</p>
     </section>}</Show>
-    <Show when={editing()} keyed>{(draft) => <UserEditor api={props.api} initial={draft.initial} onCancel={() => setEditing(null)} onSaved={async () => { await reload(); setEditing(null); setNotice(draft.initial ? "用户已更新" : "用户已创建"); }} />}</Show>
+    <Show when={editing()} keyed>{(draft) => <UserEditor api={props.api} initial={draft.initial} onCancel={() => setEditing(null)} onSaved={async () => { if (disposed) return; const message = draft.initial ? "用户已更新" : "用户已创建"; setBusy(true); setEditing(null); setNotice(message); setError(""); try { await reload(); } catch (failure) { if (!disposed) setError(`${message}，但列表刷新失败：${errorMessage(failure)}`); } finally { if (!disposed) setBusy(false); } }} />}</Show>
     <Show when={ready()}><div class="admin-card-list"><For each={users()} fallback={<p class="admin-empty">暂无用户。新账号也可在聊天登录页自行注册。</p>}>{(user) => <article class="admin-card" data-user-id={user.id}>
       <div class="admin-section-heading"><div class="admin-identity"><Show when={user.avatar && localImageUrl(user.avatar)} fallback={<span class="admin-avatar admin-avatar-placeholder" aria-hidden="true">{user.username.slice(0, 1)}</span>}>{(url) => <img class="admin-avatar" src={url()} alt={`${user.username}的头像`} loading="lazy" decoding="async" />}</Show><div><h3>{user.username} <span class="admin-badge">{user.disabled ? "已停用" : "已启用"}</span></h3><p class="admin-note">密码实际存储：{user.password_storage === "plain" ? "明文（可显式查看）" : "哈希（原文不可恢复）"}</p></div></div></div>
       <p class="admin-note">用户 ID：{user.id}<br />创建时间：<time dateTime={new Date(user.created_at).toISOString()}>{new Date(user.created_at).toLocaleString()}</time></p>

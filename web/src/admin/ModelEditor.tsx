@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import { errorMessage, type AdminApi, type ModelSpec, type Provider } from "./api";
 
 export function ModelEditor(props: {
@@ -21,6 +21,8 @@ export function ModelEditor(props: {
   const [output, setOutput] = createSignal(initial.price.output?.toString() ?? "");
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
   const levelList = () => levels().split(/[,，\n]/).map((level) => level.trim()).filter(Boolean);
   const number = (value: string, label: string, integer = false): number | null => {
     if (!value.trim()) return null;
@@ -29,7 +31,9 @@ export function ModelEditor(props: {
     return parsed;
   };
   async function save(event: SubmitEvent) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault();
+    if (busy() || disposed) return;
+    setBusy(true); setError("");
     try {
       const parsedSort = Number(sort());
       if (!Number.isSafeInteger(parsedSort)) throw new Error("排序必须是整数");
@@ -46,14 +50,16 @@ export function ModelEditor(props: {
       await props.onSaved();
     } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
   }
-  return <section class="admin-card admin-editor" aria-labelledby="model-editor-title">
+  return <section class="admin-card admin-editor" aria-labelledby="model-editor-title" aria-busy={busy()}>
     <h3 id="model-editor-title">{props.modelId ? "编辑模型" : "上架模型"}</h3>
     <form onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy()} class="admin-form-grid">
+        <h4 class="admin-field-heading">模型标识与上架顺序</h4>
         <label>提供商<select name="model-provider" value={provider()} onChange={(event) => { const key = event.currentTarget.value; setProvider(key); if (key === "chatgpt-subscription") { setProtocol("chatgpt_responses"); setCached(""); setUncached(""); setOutput(""); } }} required><For each={props.providers}>{(item) => <option value={item.key} disabled={item.connected === false}>{item.label} · {item.key}{item.connected === false ? "（未连接）" : ""}</option>}</For></select></label>
         <label>上游模型 ID<input name="upstream-id" required value={upstream()} onInput={(event) => setUpstream(event.currentTarget.value)} /></label>
         <label>显示名<input name="display-name" required value={name()} onInput={(event) => setName(event.currentTarget.value)} /></label>
         <label>排序（小数值在前）<input name="model-sort" type="number" step="1" required value={sort()} onInput={(event) => setSort(event.currentTarget.value)} /></label>
+        <h4 class="admin-field-heading">协议与生成能力</h4>
         <label>协议<select name="model-protocol" value={protocol()} disabled={provider() === "chatgpt-subscription"} onChange={(event) => {
           const next = event.currentTarget.value as ModelSpec["protocol"];
           setProtocol(next);
@@ -69,6 +75,7 @@ export function ModelEditor(props: {
         <label>上下文窗口（token，留空为未知）<input name="context-window" type="number" min="1" step="1" value={context()} onInput={(event) => setContext(event.currentTarget.value)} /></label>
         <label class="admin-check"><input name="vision" type="checkbox" checked={vision()} onChange={(event) => setVision(event.currentTarget.checked)} />支持图片输入</label>
         <Show when={provider() !== "chatgpt-subscription"} fallback={<p class="admin-note">ChatGPT 订阅费用未知，不使用 API token 单价；能力与思考档位必须来自实际账号模型目录。</p>}>
+          <h4 class="admin-field-heading">API 计费单价</h4>
           <label>缓存输入（USD / 百万 token）<input name="price-cached" type="number" min="0" step="any" value={cached()} onInput={(event) => setCached(event.currentTarget.value)} /></label>
           <label>无缓存输入（USD / 百万 token）<input name="price-uncached" type="number" min="0" step="any" value={uncached()} onInput={(event) => setUncached(event.currentTarget.value)} /></label>
           <label>输出（USD / 百万 token）<input name="price-output" type="number" min="0" step="any" value={output()} onInput={(event) => setOutput(event.currentTarget.value)} /></label>

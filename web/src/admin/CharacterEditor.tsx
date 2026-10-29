@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { localImageUrl } from "../localImages";
 import { errorMessage, type AdminApi, type Character, type CharacterParameters, type CharacterRecipe, type ListedModel, type Provider, type ResourcePack } from "./api";
 import { PackPreview } from "./ResourcePacks";
@@ -38,6 +38,8 @@ export function CharacterEditor(props: {
   const [uploading, setUploading] = createSignal(false);
   const [avatarUploading, setAvatarUploading] = createSignal(false);
   const [error, setError] = createSignal("");
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
   const model = createMemo(() => props.models.find((item) => item.id === modelId()));
   const nativeNumberFields = createMemo(() => NUMBER_FIELDS.filter((field) =>
     model()?.protocol !== "chatgpt_responses" && (model()?.protocol !== "responses" || !["seed", "frequency_penalty", "presence_penalty"].includes(field.key))));
@@ -53,6 +55,7 @@ export function CharacterEditor(props: {
     }
   }
   async function upload(file: File) {
+    if (busy() || uploading() || avatarUploading() || disposed) return;
     setError(""); setUploading(true);
     try {
       if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) throw new Error("仅支持 PNG、JPEG、WebP、GIF 图片");
@@ -60,12 +63,14 @@ export function CharacterEditor(props: {
       const result = await props.api.uploadBackground(file);
       const url = localImageUrl(result.url);
       if (!url) throw new Error("服务器返回了无效的本地背景地址");
-      setBackground(url);
+      if (!disposed) setBackground(url);
     } catch (error) { setError(errorMessage(error)); }
     finally { setUploading(false); }
   }
   async function save(event: SubmitEvent) {
-    event.preventDefault(); setError(""); setBusy(true);
+    event.preventDefault();
+    if (busy() || uploading() || avatarUploading() || disposed) return;
+    setError(""); setBusy(true);
     try {
       if (!name().trim() || !displayName().trim()) throw new Error("内部名称与公开显示名不能为空");
       if (modelId() && !model()) throw new Error("请选择实际已上架的模型，或清除模型绑定");
@@ -98,7 +103,7 @@ export function CharacterEditor(props: {
     } catch (error) { setError(errorMessage(error)); }
     finally { setBusy(false); }
   }
-  return <section class="admin-card admin-editor" aria-labelledby="character-editor-title">
+  return <section class="admin-card admin-editor" aria-labelledby="character-editor-title" aria-busy={busy() || uploading() || avatarUploading()}>
     <h3 id="character-editor-title">{initial ? "编辑角色" : "新增角色"}</h3>
     <form onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy() || uploading() || avatarUploading()}>
