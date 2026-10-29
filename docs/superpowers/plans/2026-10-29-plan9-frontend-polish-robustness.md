@@ -8,7 +8,7 @@
 **Spec:** User-approved four-step roadmap in this conversation (2026-10-29), plus `docs/superpowers/specs/2026-10-26-nekochat-design.md` and `Agent.md`.
 
 ## Global Constraints
-- Remain on the existing feature branch. Do not merge, push, rotate credentials, change public Host policy or migrate production data for this task.
+- Work directly on master following the user's explicit cleanup request; do not create stage branches/worktrees unless requested. Do not push, rotate credentials, change public Host policy or migrate production data for this task.
 - Preserve Claude Dark default, all eight built-in themes and custom CSS themes. All colors use existing `--nk-*` variables; optional geometry variables belong to shared layout, not required theme files.
 - Preserve sidebar role cards above New Chat; no model/provider/effort/plan labels in normal chat or composer. Assistant/user avatars remain on opposite sides, aligned with first content.
 - Keep mobile text controls at least 16px, normal manual keyboard input, pinch zoom, safe-area padding and touch access. Do not add autofocus suppression or viewport zoom caps.
@@ -66,7 +66,7 @@ State worker produces `export type ConnectionState = "connecting" | "streaming" 
 - [x] Preserve role defaults, provider-specific model choices, source/usage information only in admin, new-account-only password storage and actual error handling.
 - [x] Keep long labels/IDs/system prompts and directory rows inside cards; allow local table scrolling, full-width narrow fields and usable save/cancel actions.
 - [x] Guard duplicate submits and draft loss during failed operations; correct only confirmed lifecycle/UI issues rather than adding unrelated validation or automatic retries.
-- [ ] Exercise actual login, role editor, resource preview, model selection, user policy/defaults and failed saves on desktop/mobile and light/dark themes. Update CHANGELOG, commit admin phase independently.
+- [x] Exercise actual login, role editor, resource preview, model selection, user policy/defaults and failed saves on desktop/mobile and light/dark themes. Update CHANGELOG, commit admin phase independently.
 
 ## Step 4 — Integration, Robustness and Release
 
@@ -76,12 +76,13 @@ State worker produces `export type ConnectionState = "connecting" | "streaming" 
 - [x] Exercise account switching and invalidation without cross-user drafts/history, file upload failures without losing typed text, and clipboard failure without fake success.
 - [x] Run relevant Rust account/conversation/turn regressions once, TypeScript/WASM/Vite and release build; fix only exercised failures and re-run the failed checks, not the entire suite repeatedly.
 - [x] Obtain scoped independent spec/quality review of changed frontend/state/admin paths, fix evidence-backed findings and verify affected paths.
-- [ ] Update README/theme guide/current design and version/CHANGELOG to the actual release. Commit the final phase with evidence and limits.
-- [ ] Back up live binary/config/data, preserve provider environment/OAuth/Host allowlist and deploy once at the authorized final cutover; verify actual public URL and data preservation. No merge or push.
+- [x] Update README/theme guide/current design and version/CHANGELOG to the actual release. Commit the final phase with evidence and limits.
+- [x] Back up live binary/config/data, preserve provider environment/OAuth/Host allowlist and deploy once at the authorized final cutover; verify actual public URL and data preservation. No merge or push.
 
 ## Execution Rulings
-- Existing feature checkout is intentionally retained: the user works and deploys from this branch, the live release embeds its assets, and all runtime proof uses a separate data directory. No unrequested worktree/branch/merge is introduced.
+- The existing checkout was retained for implementation and all runtime proof uses a separate data directory. The user's later cleanup request explicitly supersedes the initial feature-branch retention decision without changing the working tree.
 - Developer/tool contracts override generic skill boilerplate: independently owned worker files may be edited concurrently; workers do not run checks/formatters or commit. Parent is the integration owner for shared files and four commits.
 - The approved roadmap is the design authority. This plan records exact interfaces and conservative visual decisions; it does not introduce extra features, a new backend architecture or a second design approval cycle.
 - The unchanged snapshot permits faithful baseline capture after visual integration; final before/after benchmarks were rerun under the same 1360×833, DPR 1.25, non-touch Chromium conditions. Initial/after screenshots and native edit regressions remain separate evidence.
-- Keep this already-approved branch and record four ordered commits; no merge, push, worktree removal or repeated full test suite is requested. Shared CSS, including hooks consumed by step 2, belongs to the step 1 visual foundation.
+- At the user's request, master was fast-forwarded to 4cc04e5 and all five obsolete plan refs were safely deleted after confirming ancestry and a single worktree. Keep all current changes and record the fourth release commit on master; no merge, push, worktree removal or repeated full test suite. Shared CSS belongs to the step 1 visual foundation.
+- User approved the production restart, then requested “生成中…” → “思考中…”. Only the two display labels changed; rendered UI and the rebuilt artifact were verified before cutover. Final 0.9.0 is persistent on 0.0.0.0:10000, public 43 address is verified, all 11 business tables/config/OAuth/original environment match the private consistent backup.

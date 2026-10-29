@@ -42,7 +42,7 @@ export function Composer() {
     switch (turn.connectionState()) {
       case "connecting": return "正在连接…";
       case "reconnecting": return "连接已断开，正在恢复…";
-      case "streaming": return "正在生成…";
+      case "streaming": return "思考中…";
     }
   };
 

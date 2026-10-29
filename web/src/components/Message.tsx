@@ -211,7 +211,7 @@ export function LiveMessage(props: { turn: LiveTurn }) {
     switch (t.connectionState()) {
       case "connecting": return "正在连接…";
       case "reconnecting": return "连接已断开，正在恢复…";
-      case "streaming": return "生成中…";
+      case "streaming": return "思考中…";
     }
   };
   return (
