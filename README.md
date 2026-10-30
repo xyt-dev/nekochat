@@ -2,6 +2,8 @@
 
 自托管的角色扮演网页聊天。
 
+源码仓库：[xyt-dev/nekochat](https://github.com/xyt-dev/nekochat)，默认分支为 `main`。版本发布见 [Releases](https://github.com/xyt-dev/nekochat/releases)，变更记录见 [CHANGELOG](CHANGELOG.md)。
+
 ## 运行
 
 1. 复制 Web 和项目内搜索底座的示例配置：
