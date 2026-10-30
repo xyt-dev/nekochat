@@ -1,4 +1,4 @@
 listen = "127.0.0.1:10011"
-data_dir = "./search-data"
+data_dir = "./data/search-engine"
 access_token_env = "NEKOCHAT_SEARCH_RUNTIME_TOKEN"
 admin_token_env = "NEKOCHAT_SEARCH_ADMIN_TOKEN"

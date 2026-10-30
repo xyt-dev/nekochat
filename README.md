@@ -4,10 +4,11 @@
 
 ## 运行
 
-1. 复制示例配置：
+1. 复制 Web 和项目内搜索底座的示例配置：
 
    ```sh
    cp config.example.toml config.toml
+   cp crates/search/config.example.toml crates/search/config.toml
    ```
 
 2. 按需修改 `config.toml`，并为每个提供商设置 `api_key_env` 指定的环境变量：
@@ -17,6 +18,8 @@
    export OPENCODE_API_KEY=...
    ```
 
+   同时在运行环境中设置两个不同的高强度搜索连接令牌 `NEKOCHAT_SEARCH_RUNTIME_TOKEN`、`NEKOCHAT_SEARCH_ADMIN_TOKEN`。令牌在重启后应保持不变，并与管理端保存的搜索连接一致；不要每次启动重新生成。实际配置和数据不提交到版本库。
+
 3. 构建网页前端（需要 bun、`wasm32-unknown-unknown` 目标和 0.2.129 版的 `wasm-bindgen` CLI）：
 
    ```sh
@@ -25,11 +28,21 @@
 
    产物在 `web/dist`。release 构建会把它嵌进二进制；debug 构建运行时直接读磁盘上的 `web/dist`。
 
-4. 启动，然后用浏览器打开 `http://127.0.0.1:10000`：
+   构建 Web 与底座两个程序，产物保持在同一个目录：
 
    ```sh
-   cargo run --release -p nekochat-server -- serve --config config.toml
+   cargo build --release -p nekochat-server -p nekochat-search
    ```
+
+4. 一次启动整个项目，然后用浏览器打开 `http://127.0.0.1:10000`：
+
+   ```sh
+   ./target/release/nekochat serve --config config.toml
+   ```
+
+   默认先启动同目录的 `nekochat-search`，读取项目内 `crates/search/config.toml`；底座完成授权初始化并绑定监听地址，通过只属于该子进程的管道报告就绪后才启动 Web。启动检查不向可能被抢占的本地端口发送令牌。底座仅在回环地址监听，示例数据目录为项目下的 `data/search-engine/`。停止项目会回收自己启动的底座；底座启动失败、监听冲突或运行中退出时明确失败，不继续留下不可用的 Web。
+
+   自定义路径使用 `--search-config <path>`、`--search-program <path>`。已有独立或远程底座时，显式加 `--no-local-search` 启动 Web，并继续使用管理端保存的搜索地址；该模式不启动或终止外部底座。配置里的相对路径仍以启动时的工作目录解析，建议从项目根目录启动。
 
 默认宿主机直接运行，监听 `0.0.0.0:10000`，无需容器。通过服务器 IP 或域名访问前，把实际地址加入 `allowed_hosts`；只允许本机访问时可显式改为 `listen = "127.0.0.1:10000"`。公网部署请设置强 `admin_password`、按需设置站点 `access_password`，并放在 HTTPS 反向代理之后（配置 `trusted_proxies`）；不要用默认弱密码对外开放管理端。
 
@@ -101,10 +114,10 @@
 
 ## 独立搜索底座
 
-搜索由独立 Rust 程序 `nekochat-search` 提供，网页和角色只通过 Nekochat 后端调用它。搜索服务不依赖聊天数据库或 Nekochat crate；未来其他应用可复用同一 HTTP 协议。它不是 shell、裸 curl 或本地文件搜索器。
+搜索源码已经作为子目录放在本项目的 `crates/search/`，由独立 Rust 程序 `nekochat-search` 提供，网页和角色只通过 Nekochat 后端调用它。项目默认统一启动底座和 Web；搜索服务仍可独立构建运行，不依赖聊天数据库或 Nekochat crate，未来其他应用可复用同一 HTTP 协议。它不是 shell、裸 curl 或本地文件搜索器。
 
-1. 为底座设置两个不同的高强度环境变量 `NEKOCHAT_SEARCH_RUNTIME_TOKEN`、`NEKOCHAT_SEARCH_ADMIN_TOKEN`，复制并调整 `crates/search/config.example.toml`。默认只监听 `127.0.0.1:10011`，数据目录应由独立服务账号保护。
-2. 运行 `cargo run -p nekochat-search -- --config crates/search/config.example.toml`。独立构建时也可以只复制整个 `crates/search` 目录，再运行 `cargo build --manifest-path crates/search/Cargo.toml`；其依赖不继承主工作区。
+1. 按上方运行步骤设置两个不同的环境变量并复制 `crates/search/config.example.toml` 到 `crates/search/config.toml`。默认仅监听 `127.0.0.1:10011`，数据保存在项目下的 `data/search-engine/`，目录应限制访问权限。
+2. 默认只需启动项目的 `nekochat serve --config config.toml`，底座会先启动。需要单独运行时使用 `cargo run -p nekochat-search -- --config crates/search/config.toml`，此时 Web 加 `--no-local-search`；单独构建时可复制整个 `crates/search` 目录，其依赖不继承主工作区。
 3. 在 `/admin` → **搜索服务** 填入后端地址、两种令牌和预算，再保存。**测试已保存连接**只验证运行与管理授权，不调用收费搜索。远程部署使用 HTTPS；委托订阅访问凭据只允许 HTTPS 或明确的本机回环 HTTP，不经环境代理或重定向。
 4. 新建 DeepSeek Search / Fetch 服务并填写官方 API key，或新建 GPT Web Search 服务。GPT 默认**复用本站已连接的 ChatGPT 订阅**，账号仍在「模型管理」连接、选择与退出，不需要第二次登录。填写该账号实际获准使用的搜索模型；显式选择 API key 模式才按 OpenAI API 计费，绝不自动切换账单来源。
 5. 在**角色管理**为角色选择一个已启用、已连接的搜索服务。未绑定的角色没有搜索工具；普通用户不能覆盖服务、模型、密钥或绑定。已绑定服务离线时编辑器保留原选择，不会静默解除，重新分配必须明确保存。
@@ -184,7 +197,7 @@ skills/my-pack/
 
 ## 已有数据升级
 
-0.11.0 沿用 schema 6，无新增迁移；0.10.0 引入的 schema 6 兼容已有 schema 1–5，新增可空的角色搜索服务绑定和独立搜索用量表，旧角色默认不启用搜索。保留对话树、模型、计量、账号及官方 GPT 授权；早期未绑定可用模型的角色不发布，旧未归属对话须在管理端用户页明确分配，不自动交给第一个注册者。升级前先结束进行中的回复、停止服务并备份数据目录；旧程序不能直接读取更高版本 schema，回退旧程序必须恢复配套的升级前数据库，验证实例不要复用线上数据目录。已有账号、角色与 OAuth 无需重建，会话按原有效期验证；进程重启不等同于网页刷新，不能恢复旧上游连接。
+0.12.0 沿用 schema 6，无新增迁移；0.10.0 引入的 schema 6 兼容已有 schema 1–5，新增可空的角色搜索服务绑定和独立搜索用量表，旧角色默认不启用搜索。保留对话树、模型、计量、账号及官方 GPT 授权；早期未绑定可用模型的角色不发布，旧未归属对话须在管理端用户页明确分配，不自动交给第一个注册者。升级前先结束进行中的回复、停止服务并备份数据目录；旧程序不能直接读取更高版本 schema，回退旧程序必须恢复配套的升级前数据库，验证实例不要复用线上数据目录。已有账号、角色与 OAuth 无需重建，会话按原有效期验证；进程重启不等同于网页刷新，不能恢复旧上游连接。
 
 ## curl 冒烟
 

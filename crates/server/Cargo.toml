@@ -26,6 +26,7 @@ axum-extra.workspace = true
 clap.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
+libc = "0.2"
 mime_guess.workspace = true
 pdf-extract = "0.12.1"
 percent-encoding = "2"

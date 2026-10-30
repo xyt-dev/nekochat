@@ -1,5 +1,6 @@
 //! Independent, authenticated provider search with caller-owned subscription access.
 pub mod client;
+pub mod config;
 pub mod server;
 mod cancel;
 mod reader;
