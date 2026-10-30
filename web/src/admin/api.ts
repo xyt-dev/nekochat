@@ -147,6 +147,7 @@ export interface AdminApi {
   chatgptCallback(redirectUrl: string): Promise<ChatgptStatus>;
   chatgptCancel(): Promise<void>;
   chatgptLogout(): Promise<ChatgptStatus>;
+  chatgptRemove(clientId: string): Promise<ChatgptStatus>;
   chatgptSelect(clientId: string): Promise<ChatgptStatus>;
   chatgptAcknowledge(): Promise<void>;
   searchConnection(signal?: AbortSignal): Promise<SearchConnection>;
@@ -211,6 +212,7 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     chatgptCallback: (redirectUrl: string) => request<ChatgptStatus>("/chatgpt/callback", "POST", { redirect_url: redirectUrl }),
     chatgptCancel: () => request<void>("/chatgpt/cancel", "POST"),
     chatgptLogout: () => request<ChatgptStatus>("/chatgpt/logout", "POST"),
+    chatgptRemove: (clientId: string) => request<ChatgptStatus>(`/chatgpt/accounts/${id(clientId)}`, "DELETE"),
     chatgptSelect: (clientId: string) => request<ChatgptStatus>("/chatgpt/select", "POST", { client_id: clientId }),
     chatgptAcknowledge: () => request<void>("/chatgpt/acknowledge", "POST"),
     searchConnection: (signal) => request<SearchConnection>("/search/connection", "GET", undefined, signal),

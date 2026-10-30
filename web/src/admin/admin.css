@@ -33,6 +33,7 @@
 .admin-app .admin-theme { flex-direction: row; align-items: center; white-space: nowrap; }
 .admin-theme select { max-width: 225px; }
 .admin-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.admin-app .admin-account-remove { font-size: 16px; min-height: 44px; }
 .admin-gate { margin: 8vh auto; width: min(480px, calc(100% - 32px)); padding: 28px; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-lg, 18px); background: var(--nk-bg-side); }
 .admin-gate button { margin-top: 16px; }
 .admin-nav { display: flex; flex-wrap: wrap; gap: 6px; padding: 22px 32px 0; max-width: 1440px; margin: auto; }

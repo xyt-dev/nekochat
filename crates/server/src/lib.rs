@@ -132,6 +132,7 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
         .route("/api/admin/chatgpt/callback", post(codex::callback))
         .route("/api/admin/chatgpt/cancel", post(codex::cancel))
         .route("/api/admin/chatgpt/logout", post(codex::logout))
+        .route("/api/admin/chatgpt/accounts/{client_id}", axum::routing::delete(codex::remove_account))
         .route("/api/admin/chatgpt/select", post(codex::select))
         .route("/api/admin/chatgpt/acknowledge", post(codex::acknowledge))
         .route("/api/admin/search/connection", get(search::connection).put(search::save_connection))

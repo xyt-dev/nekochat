@@ -188,11 +188,22 @@ fn private_read(path: &Path) -> OAuthResult<Option<Saved>> {
     }
     Ok(Some(saved))
 }
+struct PrivateSaveError {
+    message: &'static str,
+    replaced: bool,
+}
+impl From<&'static str> for PrivateSaveError {
+    fn from(message: &'static str) -> Self { Self { message, replaced: false } }
+}
 fn private_save(path: &Path, saved: &Saved) -> OAuthResult<()> {
+    private_save_with_commit(path, saved).map_err(|failure| failure.message)
+}
+
+fn private_save_with_commit(path: &Path, saved: &Saved) -> Result<(), PrivateSaveError> {
     let parent = path.parent().ok_or("凭证目录无效")?;
     std::fs::create_dir_all(parent).map_err(|_| "无法创建凭证目录")?;
     let temporary = parent.join(format!(".chatgpt-{}.tmp", uuid::Uuid::new_v4()));
-    let result = (|| {
+    let result: OAuthResult<()> = (|| {
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -204,15 +215,15 @@ fn private_save(path: &Path, saved: &Saved) -> OAuthResult<()> {
             .and_then(|_| file.sync_all())
             .map_err(|_| "无法保存 ChatGPT 凭证")?;
         std::fs::rename(&temporary, path).map_err(|_| "无法原子替换 ChatGPT 凭证")?;
-        File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|_| "无法同步凭证目录")?;
         Ok(())
     })();
-    if result.is_err() {
+    if let Err(message) = result {
         let _ = std::fs::remove_file(temporary);
+        return Err(message.into());
     }
-    result
+    File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|_| PrivateSaveError { message: "无法同步凭证目录", replaced: true })
 }
 fn has_session(saved: &Saved) -> bool {
     saved.registrations.iter().any(|registration| {
@@ -634,6 +645,7 @@ impl CodexAccount {
         };
         let mut inner = self.inner.lock().await;
         let operation = async {
+            if attempt.cancel.is_cancelled() { return Err("授权已取消"); }
             if !inner
                 .saved
                 .registrations
@@ -839,6 +851,36 @@ impl CodexAccount {
         inner.saved.welcomed = true;
         private_save(&self.path, &inner.saved)
     }
+    pub async fn remove_disconnected(&self, client: &str) -> OAuthResult<bool> {
+        let mut inner = self.inner.lock().await;
+        let registration = inner.saved.registrations.iter().position(|entry| entry.client_id == client);
+        let incomplete = inner.saved.incomplete_clients.iter().position(|entry| entry == client);
+        if registration.is_none() && incomplete.is_none() { return Ok(false); }
+        if registration.is_some_and(|index| inner.saved.registrations[index].credential.is_some()) {
+            return Err("请先退出此 ChatGPT 账号，再移除本地记录");
+        }
+        let pending = self.pending.lock().unwrap();
+        let exchanging = self.exchanging.lock().unwrap();
+        if pending.as_ref().is_some_and(|attempt| now() < attempt.expires_at && !attempt.cancel.is_cancelled())
+            || exchanging.as_ref().is_some_and(|attempt| !attempt.is_cancelled()) {
+            return Err("授权正在处理中，请完成或取消后再移除记录");
+        }
+        let removed_registration = registration.map(|index| (index, inner.saved.registrations.remove(index)));
+        let removed_incomplete = incomplete.map(|index| (index, inner.saved.incomplete_clients.remove(index)));
+        let active = if inner.saved.active.as_deref() == Some(client) { inner.saved.active.take() } else { None };
+        if let Err(failure) = private_save_with_commit(&self.path, &inner.saved) {
+            if !failure.replaced {
+                if let Some((index, entry)) = removed_registration { inner.saved.registrations.insert(index, entry); }
+                if let Some((index, entry)) = removed_incomplete { inner.saved.incomplete_clients.insert(index, entry); }
+                if active.is_some() { inner.saved.active = active; }
+                return Err(failure.message);
+            }
+            inner.error = Some("本地记录已移除，但凭证目录同步失败；持久化尚未确认，请检查存储");
+        }
+        if active.is_some() { self.connected.store(false, Ordering::Release); }
+        Ok(true)
+    }
+
     pub async fn logout(&self, http: &reqwest::Client) -> OAuthResult<bool> {
         self.cancel();
         self.connected.store(false, Ordering::Release);
@@ -941,6 +983,15 @@ pub async fn cancel(State(state): State<AppState>) -> StatusCode {
 }
 pub async fn logout(State(state): State<AppState>) -> Result<Json<AccountStatus>, ApiError> {
     state.codex.logout(&state.http).await.map_err(api_error)?;
+    Ok(Json(state.codex.status().await))
+}
+pub async fn remove_account(
+    State(state): State<AppState>,
+    axum::extract::Path(client): axum::extract::Path<String>,
+) -> Result<Json<AccountStatus>, ApiError> {
+    if !state.codex.remove_disconnected(&client).await.map_err(api_error)? {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, "找不到此 ChatGPT 账号记录"));
+    }
     Ok(Json(state.codex.status().await))
 }
 pub async fn select(
@@ -1507,5 +1558,125 @@ mod tests {
         .unwrap();
         assert!(!unknown.defaults().vision);
         assert!(unknown.defaults().reasoning.levels.is_empty());
+    }
+
+    fn removal_fixture(directory: &Path) -> CodexAccount {
+        let saved = Saved {
+            host_id: format!("urn:uuid:{}", uuid::Uuid::new_v4()),
+            active: Some("active".into()),
+            welcomed: true,
+            registrations: vec![
+                Registration {
+                    client_id: "active".into(), subject: "subject".into(), email: Some("same@example.invalid".into()),
+                    credential: Some(Credential {
+                        access_token: "retained-access".into(), refresh_token: "retained-refresh".into(), id_token: "retained-id".into(),
+                        scopes: vec![DIRECT_SCOPE.into()], expires_at: now() + 3600, earliest_refresh_at: None,
+                    }),
+                },
+                Registration { client_id: "inactive".into(), subject: "subject".into(), email: Some("same@example.invalid".into()), credential: None },
+            ],
+            incomplete_clients: vec!["incomplete".into()],
+        };
+        private_save(&directory.join("chatgpt-account.json"), &saved).unwrap();
+        CodexAccount::new(directory)
+    }
+
+    #[tokio::test]
+    async fn removing_inactive_and_incomplete_records_preserves_other_account_credentials() {
+        let directory = tempfile::tempdir().unwrap();
+        let account = removal_fixture(directory.path());
+        let mut expected = private_read(&account.path).unwrap().unwrap();
+        expected.registrations.retain(|entry| entry.client_id != "inactive");
+        expected.incomplete_clients.clear();
+        assert!(account.remove_disconnected("inactive").await.unwrap());
+        assert!(account.remove_disconnected("incomplete").await.unwrap());
+        let actual = private_read(&account.path).unwrap().unwrap();
+        assert_eq!(serde_json::to_value(actual).unwrap(), serde_json::to_value(expected).unwrap());
+        assert!(account.connected());
+        assert_eq!(account.status().await.active_client_id.as_deref(), Some("active"));
+        let restored = CodexAccount::new(directory.path());
+        assert!(restored.connected());
+        assert_eq!(restored.status().await.accounts.iter().map(|entry| entry.client_id.as_str()).collect::<Vec<_>>(), vec!["active"]);
+    }
+
+    #[tokio::test]
+    async fn removal_during_pending_or_exchanging_authorization_does_not_cancel_or_change_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let account = removal_fixture(directory.path());
+        let before = std::fs::read(&account.path).unwrap();
+        let cancel = CancellationToken::new();
+        *account.pending.lock().unwrap() = Some(Pending {
+            state: "state".into(), nonce: "nonce".into(), verifier: "verifier".into(),
+            redirect_uri: "http://127.0.0.1:1/auth/callback".into(), client_id: Some("inactive".into()), subject: Some("subject".into()),
+            expires_at: now() + 600, cancel: cancel.clone(),
+        });
+        assert!(account.remove_disconnected("inactive").await.is_err());
+        assert!(!cancel.is_cancelled());
+        assert_eq!(std::fs::read(&account.path).unwrap(), before);
+        account.pending.lock().unwrap().take();
+        *account.exchanging.lock().unwrap() = Some(cancel.clone());
+        assert!(account.remove_disconnected("inactive").await.is_err());
+        assert!(!cancel.is_cancelled());
+        assert_eq!(std::fs::read(&account.path).unwrap(), before);
+    }
+
+    #[tokio::test]
+    async fn failed_removal_save_restores_registration_order_and_stale_active_selection() {
+        let directory = tempfile::tempdir().unwrap();
+        let account = removal_fixture(directory.path());
+        {
+            let mut inner = account.inner.lock().await;
+            inner.saved.active = Some("inactive".into());
+            private_save(&account.path, &inner.saved).unwrap();
+        }
+        account.connected.store(false, Ordering::Release);
+        let before = serde_json::to_value(account.status().await).unwrap();
+        let original = std::fs::read(&account.path).unwrap();
+        let backup = directory.path().join("original.json");
+        std::fs::rename(&account.path, &backup).unwrap();
+        std::fs::create_dir(&account.path).unwrap();
+        assert!(account.remove_disconnected("inactive").await.is_err());
+        assert_eq!(serde_json::to_value(account.status().await).unwrap(), before);
+        assert_eq!(std::fs::read(backup).unwrap(), original);
+    }
+
+    #[tokio::test]
+    async fn cleanup_does_not_reconnect_another_account_after_refresh_persistence_failure() {
+        let directory = tempfile::tempdir().unwrap();
+        let account = removal_fixture(directory.path());
+        account.connected.store(false, Ordering::Release);
+        account.inner.lock().await.error = Some("无法保存轮换凭证");
+        assert!(account.remove_disconnected("inactive").await.unwrap());
+        assert!(!account.connected());
+        let status = account.status().await;
+        assert_eq!(status.active_client_id.as_deref(), Some("active"));
+        assert_eq!(status.error, Some("无法保存轮换凭证"));
+    }
+
+    #[tokio::test]
+    async fn cleanup_does_not_resurrect_a_registration_from_a_canceled_queued_callback() {
+        let directory = tempfile::tempdir().unwrap();
+        let account = removal_fixture(directory.path());
+        let cancel = CancellationToken::new();
+        *account.pending.lock().unwrap() = Some(Pending {
+            state: "state".into(), nonce: "nonce".into(), verifier: "verifier".into(),
+            redirect_uri: "http://127.0.0.1:1/auth/callback".into(), client_id: Some("inactive".into()), subject: Some("subject".into()),
+            expires_at: now() + 600, cancel: cancel.clone(),
+        });
+        let http = reqwest::Client::builder().proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap()).build().unwrap();
+        let inner = account.inner.lock().await;
+        let mut removal = Box::pin(account.remove_disconnected("inactive"));
+        assert!(futures_util::poll!(removal.as_mut()).is_pending());
+        let mut callback = Box::pin(account.complete(&http, "http://127.0.0.1:1/auth/callback?code=cancelled-code&state=state&client_id=inactive"));
+        assert!(futures_util::poll!(callback.as_mut()).is_pending());
+        account.cancel();
+        assert!(cancel.is_cancelled());
+        drop(inner);
+        assert!(removal.await.unwrap());
+        assert!(callback.await.is_err());
+        let saved = private_read(&account.path).unwrap().unwrap();
+        assert!(!saved.registrations.iter().any(|entry| entry.client_id == "inactive"));
+        assert!(!saved.incomplete_clients.iter().any(|entry| entry == "inactive"));
+        assert!(account.connected());
     }
 }

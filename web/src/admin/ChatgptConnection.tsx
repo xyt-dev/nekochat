@@ -11,6 +11,7 @@ export function ChatgptConnection(props: { api: AdminApi; onChanged: () => Promi
   const [welcome, setWelcome] = createSignal(false);
   const activeAccount = () => status()?.accounts.find((account) => account.client_id === status()?.active_client_id);
   const selectedIsActive = () => !!status()?.connected && selected() === status()?.active_client_id;
+  const selectedAccount = () => status()?.accounts.find((account) => account.client_id === selected());
   let disposed = false;
   let polling = false;
   let statusVersion = 0;
@@ -72,6 +73,10 @@ export function ChatgptConnection(props: { api: AdminApi; onChanged: () => Promi
     <label>ChatGPT 账号 / 工作区<select name="chatgpt-account" value={selected()} disabled={busy() || !status()} onChange={(event) => setSelected(event.currentTarget.value)}><option value="" selected={selected() === ""}>添加新的账号 / 工作区</option><For each={status()?.accounts ?? []}>{(account) => <option value={account.client_id} selected={selected() === account.client_id}>{account.label}{account.client_id === status()?.active_client_id && status()?.connected ? "（正在使用）" : account.connected ? "（已保存会话）" : "（需重新授权）"}</option>}</For></select></label>
     <p class="admin-note">订阅请求固定使用当前账号。选择其他已保存账号后，点击「切换至此账号」才会用于后续请求。</p>
     <div class="admin-actions"><button type="button" class="primary" disabled={busy() || !status() || !!status()?.pending} onClick={() => void begin()}>Continue with ChatGPT</button><Show when={selected() && status()?.accounts.some((account) => account.client_id === selected() && account.connected)}><button type="button" disabled={busy() || selectedIsActive()} onClick={() => void action(() => props.api.chatgptSelect(selected()))}>{selectedIsActive() ? "正在使用此账号" : "切换至此账号"}</button></Show><Show when={status()?.connected}><button type="button" disabled={busy()} onClick={() => void action(() => props.api.chatgptLogout())}>退出当前账号</button></Show><button type="button" disabled={busy()} onClick={() => void refresh()}>刷新状态</button></div>
+    <Show when={selectedAccount() && !selectedAccount()!.connected}>
+      <div class="admin-actions"><button type="button" class="admin-account-remove" disabled={busy() || !!status()?.pending} onClick={() => void action(() => props.api.chatgptRemove(selected()))}>移除本地记录</button></div>
+      <p class="admin-note">仅移除所选已退出账号的本地记录，保留其他账号。OpenAI 侧的应用不会随之删除，请到 <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">ChatGPT 设置</a>管理授权；以后重新添加此账号可能创建新的应用注册。</p>
+    </Show>
     <Show when={status()?.pending || authorizationUrl()}><div class="admin-oauth-pending">
       <p>请在 OpenAI 页面完成授权。本次授权十分钟后失效；返回地址仅绑定本服务器的安全环回监听器。</p>
       <Show when={authorizationUrl()}><p><a href={authorizationUrl()} target="_blank" rel="noopener noreferrer">重新打开本次官方授权页面</a></p></Show>
