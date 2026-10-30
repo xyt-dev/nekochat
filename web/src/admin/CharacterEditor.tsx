@@ -1,6 +1,6 @@
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { localImageUrl } from "../localImages";
-import { errorMessage, type AdminApi, type Character, type CharacterParameters, type CharacterRecipe, type ListedModel, type Provider, type ResourcePack } from "./api";
+import { errorMessage, type AdminApi, type Character, type CharacterParameters, type CharacterRecipe, type ListedModel, type Provider, type ResourcePack, type SearchService } from "./api";
 import { PackPreview } from "./ResourcePacks";
 import { AvatarInput } from "./AvatarInput";
 
@@ -23,6 +23,11 @@ export function CharacterEditor(props: {
   const [displayName, setDisplayName] = createSignal(initial?.display_name ?? "");
   const [prompt, setPrompt] = createSignal(initial?.system_prompt ?? "");
   const [modelId, setModelId] = createSignal(initial?.model_id ?? "");
+  const [searchServiceId, setSearchServiceId] = createSignal(initial?.search_service_id ?? "");
+  const [searchServices, setSearchServices] = createSignal<SearchService[]>([]);
+  const [searchLoading, setSearchLoading] = createSignal(false);
+  const [searchError, setSearchError] = createSignal("");
+  const searchController = new AbortController();
   const [enabled, setEnabled] = createSignal(initial?.enabled ?? true);
   const [sort, setSort] = createSignal(String(initial?.sort ?? 0));
   const [effort, setEffort] = createSignal(initial?.parameters.effort ?? "");
@@ -40,6 +45,16 @@ export function CharacterEditor(props: {
   const [error, setError] = createSignal("");
   let disposed = false;
   onCleanup(() => { disposed = true; });
+  onCleanup(() => searchController.abort());
+  const selectedSearchService = createMemo(() => searchServices().find((service) => service.id === searchServiceId()));
+  async function loadSearchServices() {
+    if (disposed || searchLoading()) return;
+    setSearchLoading(true); setSearchError("");
+    try { const services = await props.api.searchServices(searchController.signal); if (!disposed) setSearchServices(services); }
+    catch (failure) { if (!disposed) setSearchError(errorMessage(failure)); }
+    finally { if (!disposed) setSearchLoading(false); }
+  }
+  onMount(() => void loadSearchServices());
   const model = createMemo(() => props.models.find((item) => item.id === modelId()));
   const nativeNumberFields = createMemo(() => NUMBER_FIELDS.filter((field) =>
     model()?.protocol !== "chatgpt_responses" && (model()?.protocol !== "responses" || !["seed", "frequency_penalty", "presence_penalty"].includes(field.key))));
@@ -96,6 +111,7 @@ export function CharacterEditor(props: {
       if (missingPacks().length) throw new Error("请移除未加载的资源包后保存");
       await props.api.saveCharacter(initial?.id ?? null, {
         name: name().trim(), display_name: displayName().trim(), system_prompt: prompt(), model_id: modelId() || null,
+        search_service_id: searchServiceId() || null,
         parameters, enabled: enabled(), sort: order, avatar: avatar(), background: url ? { url, opacity: opacity() } : null,
         resource_packs: packs(), sticker_identity: identity(), sticker_frequency: frequency(),
       });
@@ -119,6 +135,16 @@ export function CharacterEditor(props: {
           <label class="admin-check"><input name="character-enabled" type="checkbox" checked={enabled()} onChange={(event) => setEnabled(event.currentTarget.checked)} />启用角色</label>
         </div>
         <Show when={!model()}><p class="admin-note">未绑定可用模型的角色不会出现在聊天端，请先上架模型并绑定。</p></Show>
+        <h4>可选搜索服务（仅管理员）</h4>
+        <label>角色搜索绑定<select name="character-search-service" value={searchServiceId()} onChange={(event) => setSearchServiceId(event.currentTarget.value)}>
+          <option value="" selected={!searchServiceId()}>不使用搜索服务</option>
+          <Show when={searchServiceId() && !selectedSearchService()}><option value={searchServiceId()} selected>保留原绑定 · {searchServiceId()}（目录未加载或服务不可用）</option></Show>
+          <For each={searchServices()}>{(service) => <option value={service.id} selected={searchServiceId() === service.id} disabled={(!service.enabled || !service.connected) && service.id !== searchServiceId()}>{service.name} · {service.kind === "deepseek" ? "DeepSeek" : "GPT"}{!service.enabled ? "（已停用）" : !service.connected ? "（未授权）" : ""}</option>}</For>
+        </select></label>
+        <p class="admin-note">选填。模型只收到受限搜索证据；聊天端不会收到服务 ID、提供商配置或密钥。目录离线时保留原绑定，不妨碍修改其他角色字段。</p>
+        <Show when={searchLoading()}><p class="admin-note" role="status">正在独立加载搜索服务，不影响编辑角色…</p></Show>
+        <Show when={searchError()}><p class="admin-note" role="status">搜索目录暂不可用：{searchError()}。原绑定仍保留。<button type="button" disabled={searchLoading()} onClick={() => void loadSearchServices()}>重试搜索目录</button></p></Show>
+        <Show when={searchServiceId() && (!selectedSearchService() || !selectedSearchService()?.enabled || !selectedSearchService()?.connected)}><p class="admin-note">当前绑定不可用或状态未知，保存时不会自动替换或清除。可保留绑定，或明确选择「不使用搜索服务」。</p></Show>
         <h4>角色头像</h4><p class="admin-note">在角色卡片与角色回复旁显示；留空使用名称首字。</p>
         <AvatarInput api={props.api} name="character-avatar" value={avatar()} onChange={setAvatar} onUploading={setAvatarUploading} disabled={busy() || uploading()} />
         <label>系统提示词<textarea name="system-prompt" rows="9" value={prompt()} onInput={(event) => setPrompt(event.currentTarget.value)} /></label>

@@ -97,6 +97,37 @@
 
 官方参考：[Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source)、[模型与推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)、[UI 要求](https://developers.openai.com/siwc/ui-ux-guidelines)。
 
+## 独立搜索底座（实验分支）
+
+搜索由独立 Rust 程序 `nekochat-search` 提供，网页和角色只通过 Nekochat 后端调用它。搜索服务不依赖聊天数据库或 Nekochat crate；未来其他应用可复用同一 HTTP 协议。它不是 shell、裸 curl 或本地文件搜索器。
+
+1. 为底座设置两个不同的高强度环境变量 `NEKOCHAT_SEARCH_RUNTIME_TOKEN`、`NEKOCHAT_SEARCH_ADMIN_TOKEN`，复制并调整 `crates/search/config.example.toml`。默认只监听 `127.0.0.1:10011`，数据目录应由独立服务账号保护。
+2. 运行 `cargo run -p nekochat-search -- --config crates/search/config.example.toml`。独立构建时也可以只复制整个 `crates/search` 目录，再运行 `cargo build --manifest-path crates/search/Cargo.toml`；其依赖不继承主工作区。
+3. 在 `/admin` → **搜索服务** 填入后端地址、两种令牌和预算，再保存。**测试已保存连接**只验证运行与管理授权，不调用收费搜索。远程部署使用 HTTPS；委托订阅访问凭据只允许 HTTPS 或明确的本机回环 HTTP，不经环境代理或重定向。
+4. 新建 DeepSeek Search / Fetch 服务并填写官方 API key，或新建 GPT Web Search 服务。GPT 默认**复用本站已连接的 ChatGPT 订阅**，账号仍在「模型管理」连接、选择与退出，不需要第二次登录。填写该账号实际获准使用的搜索模型；显式选择 API key 模式才按 OpenAI API 计费，绝不自动切换账单来源。
+5. 在**角色管理**为角色选择一个已启用、已连接的搜索服务。未绑定的角色没有搜索工具；普通用户不能覆盖服务、模型、密钥或绑定。已绑定服务离线时编辑器保留原选择，不会静默解除，重新分配必须明确保存。
+
+服务 API key 保存在底座的私密 `0600` 数据文件；管理接口只返回是否配置，不回读原值。连接令牌保存在 Nekochat 的本地设置中，因此数据库、WAL/SHM、底座数据与备份都必须限制权限。GPT 订阅凭据仍只有现有 SIWC 管理器负责保存与刷新，底座只接收单次请求的短期 access token，不保存 refresh/id token，也不执行授权或刷新。浏览器不直接访问底座，不会拿到这些凭据。
+
+### 搜索、读取与多轮回答
+
+角色可以调用 `web_search(query)`，再通过 `web_fetch(source_id)` 读取**本轮搜索已返回的来源 ID**，不能提交任意 URL、路径或请求头。DeepSeek 的 Search / Fetch 都由其官方远端执行；GPT 使用原生 Web Search，进一步读取链接由底座内的受限 HTTP Reader 完成，不需要再接一个模型。结果统一保留来源 URL、标题、摘要、可用正文、提供商生成摘要与检索时间；生成摘要不会伪装成网页原文。
+
+搜索不是“先给用户返回一轮，再手动接续”：Rust core 在同一条回复内部执行有限次模型→工具→模型调用，最终带真实来源链接回答。默认每轮最多 3 次工具调用、每次最多 5 条来源，管理端分别可设 1–8、1–10；请求超时可设 1–180 秒，默认 60 秒。预算耗尽后不再提供工具，不重试、不换服务；全部模型轮次与已经发生的搜索用量均记账。这不是把多轮 `max` 伪装成 `ultra`。
+
+网页刷新、关闭或观察连接断线不会重新搜索，也不会中止 core；重新进入先同步最新进度。手动停止和强制删除对话会取消模型与当前底座请求，删除正文不会抹掉已经发生的匿名用量。
+
+网页与搜索摘要按不可信资料处理，不获得系统指令权限。只转发模型提出的查询或获准来源，不将整段会话自动作为查询；模型仍可能将用户内容写入查询，使用第三方搜索前应避免提交敏感信息。
+
+### 访问边界与费用
+
+- 只接受无账号凭据的公开 HTTP(S) 来源，拒绝 `file:`、本地路径、环回/内网字面地址和本地域名。DeepSeek Fetch 只把来源作为 JSON 发送至固定官方接口，由提供商解析、获取并实施远端安全策略，不访问服务器本地文件。
+- 本地 Reader 在实际连接时验证并固定公开 DNS 地址，混合公开/私网结果也拒绝；禁用代理、Cookie、认证和重定向，并限制响应大小、类型、正文和解析工作量。不读取 PDF/二进制、不运行网页 JS。Fake-IP DNS（如 `198.18.0.0/15`）会被安全拒绝，部署者需要为该进程提供真实公开 DNS，不能通过放开私网地址“修复”。
+- 管理页的**真实搜索测试**需要明确确认，确实消耗上游额度。按当前官方标价，DeepSeek 成功且非空的 Search 或 Fetch 各记录 `0.005 CNY`，空搜索记录 `0 CNY`；这是按公开标价计算的成本，不是账户账单对账。GPT 未返回金钱成本时显示未知，不当作免费。不同币种分开统计、不擅自换汇；每轮模型 token 费用与搜索费用分开记。
+- 官方订阅的 Web Search 仍受模型、账号、工作区及套餐政策约束；技术接入不授权公开共享或转售订阅。失败会明确返回，不伪造答案、来源或成功用量。
+
+接口与政策参考：[DeepSeek Search / Fetch 与定价](https://api-docs.deepseek.com/zh-cn/guides/search/)、[SIWC 当前能力与限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md)。该功能目前仅在 `experiment/web-search` 开发与隔离验证，未合并或部署到线上。
+
 
 ## 本地 skill 资源包
 
@@ -149,7 +180,7 @@ skills/my-pack/
 
 ## 已有数据升级
 
-当前 schema 为 5，兼容已有 schema 1–4；0.8–0.9 不增加数据库迁移。保留对话树、模型、计量、账号及官方 GPT 授权；早期未绑定可用模型的角色不发布，旧未归属对话须在管理端用户页明确分配，不自动交给第一个注册者。升级前先结束进行中的回复、停止服务并备份数据目录；旧程序不能直接读取更高版本 schema。已有账号、角色与 OAuth 无需重建，会话按原有效期验证；进程重启不等同于网页刷新，不能恢复旧上游连接。
+当前实验分支 schema 为 6，兼容已有 schema 1–5；新增可空的角色搜索服务绑定和独立搜索用量表，旧角色默认不启用搜索。已部署的 0.9.0 仍为 schema 5。保留对话树、模型、计量、账号及官方 GPT 授权；早期未绑定可用模型的角色不发布，旧未归属对话须在管理端用户页明确分配，不自动交给第一个注册者。升级前先结束进行中的回复、停止服务并备份数据目录；旧程序不能直接读取更高版本 schema，实验实例不要复用线上数据目录。已有账号、角色与 OAuth 无需重建，会话按原有效期验证；进程重启不等同于网页刷新，不能恢复旧上游连接。
 
 ## curl 冒烟
 

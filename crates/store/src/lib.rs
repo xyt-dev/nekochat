@@ -3,6 +3,7 @@
 mod attachments;
 mod catalog;
 mod tree;
+mod search_usage;
 mod usage;
 mod usage_stats;
 mod users;
@@ -17,12 +18,13 @@ pub use attachments::Attachment;
 pub use catalog::{Character, CharacterSpec, ListedModel, ModelSpec, SettingKey};
 pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
+pub use search_usage::SearchUsageRecord;
 pub use usage_stats::{AllowanceWindow, ModelAllowance, ModelUsageStats, UsagePoint, UsageTotals};
 pub use users::{PasswordStorage, User, UserPublic};
 
 const SCHEMA: &str = include_str!("schema.sql");
 /// The schema version this code writes and understands.
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -144,6 +146,18 @@ impl Store {
                 "BEGIN IMMEDIATE;
                  ALTER TABLE users ADD COLUMN credential_revision INTEGER NOT NULL DEFAULT 0;
                  PRAGMA user_version = 5;
+                 COMMIT;",
+            )?;
+        }
+        if version < 6 {
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 ALTER TABLE characters ADD COLUMN search_service_id TEXT;
+                 CREATE TABLE search_usage (
+                   id TEXT PRIMARY KEY, at_ms INTEGER NOT NULL, service_id TEXT NOT NULL,
+                   status TEXT NOT NULL, usage TEXT);
+                 CREATE INDEX search_usage_at ON search_usage(at_ms,id);
+                 PRAGMA user_version = 6;
                  COMMIT;",
             )?;
         }

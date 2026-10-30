@@ -38,6 +38,7 @@ mod tests {
             effort: Some("high"),
             session_id: "conversation",
             parameters: &parameters,
+            tools: None,
         };
         let value = body(&request).unwrap();
         assert_eq!(value["instructions"], "角色指令");
@@ -64,6 +65,7 @@ mod tests {
             effort: None,
             session_id: "conversation",
             parameters: &parameters,
+            tools: None,
         };
         assert!(body(&request).is_err());
     }
@@ -91,7 +93,17 @@ fn body(request: &ChatRequest<'_>) -> Result<Value, GatewayError> {
         }
         instructions.push_str(&message.content);
     }
-    let mut value = json!({"model":request.model,"input":crate::responses::input_messages(&request.messages[initial_system_count..]),"stream":true,"store":false});
+    let mut input = crate::responses::input_messages(&request.messages[initial_system_count..]);
+    if let Some(tools) = request.tools {
+        tools.extend_responses(&mut input);
+    }
+    let mut value = json!({"model":request.model,"input":input,"stream":true,"store":false});
+    if let Some(tools) = request.tools {
+        value["include"] = json!(["reasoning.encrypted_content"]);
+        if !tools.definitions.is_empty() {
+            value["tools"] = tools.response_definitions(true);
+        }
+    }
     if !instructions.is_empty() {
         value["instructions"] = json!(instructions);
     }
@@ -116,5 +128,5 @@ pub async fn stream_chatgpt(
         .await
         .map_err(crate::http::transport)?;
     let response = crate::http::check_status(response).await?;
-    Ok(crate::responses::event_stream(response))
+    Ok(crate::responses::event_stream(response, request.tools.is_some()))
 }

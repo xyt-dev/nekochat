@@ -27,6 +27,8 @@ pub struct CharacterSpec {
     #[serde(default)]
     pub model_id: Option<String>,
     #[serde(default)]
+    pub search_service_id: Option<String>,
+    #[serde(default)]
     pub parameters: GenerationParameters,
     #[serde(default = "enabled_default")]
     pub enabled: bool,
@@ -55,12 +57,14 @@ fn frequency_default() -> String {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKey {
     DefaultCharacter,
+    SearchConnection,
 }
 
 impl SettingKey {
     fn as_str(self) -> &'static str {
         match self {
             SettingKey::DefaultCharacter => "default_character_id",
+            SettingKey::SearchConnection => "search_connection",
         }
     }
 }
@@ -85,7 +89,7 @@ pub struct ListedModel {
     pub spec: ModelSpec,
 }
 
-const CHARACTER_COLS: &str = "id, name, system_prompt, created_at, updated_at, display_name, model_id, parameters, enabled, sort, background, resource_packs, sticker_identity, sticker_frequency, avatar";
+const CHARACTER_COLS: &str = "id, name, system_prompt, created_at, updated_at, display_name, model_id, parameters, enabled, sort, background, resource_packs, sticker_identity, sticker_frequency, avatar, search_service_id";
 const MODEL_COLS: &str = "id, provider, upstream_id, display_name, sort, protocol, reasoning, vision, context_window, price";
 
 fn character_from_row(r: &Row) -> rusqlite::Result<Character> {
@@ -120,6 +124,7 @@ fn character_from_row(r: &Row) -> rusqlite::Result<Character> {
             sticker_identity: r.get(12)?,
             sticker_frequency: r.get(13)?,
             avatar: r.get(14)?,
+            search_service_id: r.get(15)?,
         },
         created_at: r.get(3)?,
         updated_at: r.get(4)?,
@@ -209,11 +214,11 @@ impl Store {
             updated_at: now,
         };
         self.conn().execute(
-            &format!("INSERT INTO characters ({CHARACTER_COLS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)"),
+            &format!("INSERT INTO characters ({CHARACTER_COLS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)"),
             params![c.id, spec.name, spec.system_prompt, now, now, spec.display_name, spec.model_id,
                 serde_json::to_string(&spec.parameters)?, spec.enabled, spec.sort,
                 spec.background.as_ref().map(serde_json::to_string).transpose()?,
-                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, spec.avatar],
+                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, spec.avatar, spec.search_service_id],
         )?;
         Ok(c)
     }
@@ -221,11 +226,11 @@ impl Store {
     pub fn update_character(&self, id: &str, spec: &CharacterSpec) -> Result<Character> {
         let conn = self.conn();
         conn.query_row(
-            &format!("UPDATE characters SET name=?2, system_prompt=?3, display_name=?4, model_id=?5, parameters=?6, enabled=?7, sort=?8, background=?9, resource_packs=?10, sticker_identity=?11, sticker_frequency=?12, updated_at=?13, avatar=?14 WHERE id=?1 RETURNING {CHARACTER_COLS}"),
+            &format!("UPDATE characters SET name=?2, system_prompt=?3, display_name=?4, model_id=?5, parameters=?6, enabled=?7, sort=?8, background=?9, resource_packs=?10, sticker_identity=?11, sticker_frequency=?12, updated_at=?13, avatar=?14, search_service_id=?15 WHERE id=?1 RETURNING {CHARACTER_COLS}"),
             params![id, spec.name, spec.system_prompt, spec.display_name, spec.model_id,
                 serde_json::to_string(&spec.parameters)?, spec.enabled, spec.sort,
                 spec.background.as_ref().map(serde_json::to_string).transpose()?,
-                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, now_ms(), spec.avatar],
+                serde_json::to_string(&spec.resource_packs)?, spec.sticker_identity, spec.sticker_frequency, now_ms(), spec.avatar, spec.search_service_id],
             character_from_row,
         ).optional()?.ok_or(StoreError::NotFound)
     }
@@ -262,6 +267,14 @@ impl Store {
                 character_from_row,
             )
             .optional()?)
+    }
+
+    pub fn search_service_in_use(&self, service_id: &str) -> Result<bool> {
+        Ok(self.conn().query_row(
+            "SELECT EXISTS(SELECT 1 FROM characters WHERE search_service_id=?1)",
+            [service_id],
+            |row| row.get(0),
+        )?)
     }
 
     pub fn get_setting(&self, key: SettingKey) -> Result<Option<String>> {

@@ -88,6 +88,7 @@ pub struct AppState {
     pub(crate) observations: Observations,
     pub resources: Arc<nekochat_resources::ResourceCatalog>,
     pub codex: Arc<crate::codex::CodexAccount>,
+    pub search: Arc<crate::search::SearchBridge>,
 }
 
 /// Upper bound for establishing an upstream connection.
@@ -117,8 +118,10 @@ impl AppState {
             .expect("loading validated local resource packs");
         let codex = Arc::new(crate::codex::CodexAccount::new(&config.data_dir));
         providers.push(crate::codex::provider());
+        let store = Arc::new(store);
+        let search = Arc::new(crate::search::SearchBridge::new(store.clone(), codex.clone(), http.clone()));
         AppState {
-            store: Arc::new(store),
+            store,
             http,
             providers: Arc::new(providers),
             config: Arc::new(config),
@@ -127,6 +130,7 @@ impl AppState {
             observations: Observations::default(),
             resources: Arc::new(resources),
             codex,
+            search,
         }
     }
 

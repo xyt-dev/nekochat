@@ -15,6 +15,7 @@ use futures_util::{StreamExt, stream};
 use nekochat_core::{Price, ReasoningSpec, ReasoningStyle, Usage};
 use nekochat_gateway::{
     ChatImage, ChatMessage, ChatRequest, ChatRole, GatewayError, Provider, StreamEvent,
+    ToolAccumulator, ToolExchange, ToolResult,
 };
 use nekochat_resources::{ResourceCatalog, ResourceChunk, ResourceRef};
 use nekochat_store::{
@@ -27,6 +28,7 @@ use crate::accounts::CurrentUser;
 use crate::api::user::NodeView;
 use crate::api::{ApiError, JsonBody, blocking};
 use crate::generation::Generation;
+use crate::chat_search::{SearchFailure, SearchTurn, TOOL_INSTRUCTIONS, call_refs};
 use crate::state::{AppState, TurnGuard};
 use tokio_util::sync::CancellationToken;
 
@@ -323,6 +325,7 @@ pub async fn start_turn(
         ));
     }
 
+    let search = SearchTurn::prepare(&state, &character, &guard.generation).await?;
     let prompt = state
         .resources
         .prompt(
@@ -349,6 +352,8 @@ pub async fn start_turn(
         assistant_id: guard.generation.id.clone(),
         character,
         resources: state.resources,
+        search,
+        usage_incomplete: false,
     };
     let events = guard.generation.observe(false);
     tokio::spawn(turn.run(guard));
@@ -392,11 +397,15 @@ fn prepare(
         &anchor.content,
         &anchor.attachment_ids,
     )?;
-    let prompt = [character.spec.system_prompt.as_str(), resource_prompt]
+    let mut prompt = [character.spec.system_prompt.as_str(), resource_prompt]
         .into_iter()
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n");
+    if character.spec.search_service_id.is_some() {
+        if !prompt.is_empty() { prompt.push_str("\n\n"); }
+        prompt.push_str(TOOL_INSTRUCTIONS);
+    }
     if !prompt.is_empty() {
         messages.insert(
             0,
@@ -695,6 +704,8 @@ struct Turn {
     assistant_id: String,
     character: Character,
     resources: Arc<ResourceCatalog>,
+    search: Option<SearchTurn>,
+    usage_incomplete: bool,
 }
 
 impl Turn {
@@ -729,9 +740,13 @@ impl Turn {
             start,
         );
         let end = self.stream(generation).await;
-        let Some(status) = end.status().filter(|_| !generation.discarded()) else {
-            return;
-        };
+        let discard = generation.discarded() || matches!(&end, End::Deleted);
+        let status = end.status().unwrap_or(NodeStatus::Interrupted);
+        if !discard {
+            if let Some(footer) = self.search.as_ref().and_then(SearchTurn::footer) {
+                generation.chunk(ResourceChunk::Text(footer));
+            }
+        }
         if let End::Failed(error) = &end {
             let (kind, http_status) = match error {
                 GatewayError::Http { status, .. } => ("http", Some(*status)),
@@ -740,8 +755,15 @@ impl Turn {
             };
             tracing::warn!(conversation = %self.prepared.conv_id, kind, http_status, "upstream error");
         }
-        let (node, usage) =
+        let (node, mut usage) =
             generation.finalize(status, self.model.id, self.label.clone(), self.effort);
+        let node = if discard { None } else { node };
+        if self.usage_incomplete {
+            if let Some(usage) = &mut usage {
+                usage.upstream_cost_usd = None;
+                usage.allowance_usd = None;
+            }
+        }
         if let Some(node) = &node {
             tracing::info!(conversation = %self.prepared.conv_id, node = %node.id, status = ?node.status, "turn finished");
         }
@@ -750,17 +772,22 @@ impl Turn {
             provider: self.provider.key,
             upstream_id: self.model.spec.upstream_id,
             model_label: self.label,
-            cost_usd: cost_usd(&self.model.spec.price, &usage),
+            cost_usd: if self.usage_incomplete { None } else { cost_usd(&self.model.spec.price, &usage) },
             usage,
             purpose: UsagePurpose::Chat,
         });
         let store = self.store;
+        let saving_generation = guard.generation.clone();
         let saved = blocking(move || {
-            if let Some(node) = &node {
-                store.insert_node(node)?;
-            }
+            // Billing contains no conversation/user content and survives explicit deletion.
             if let Some(record) = &record {
                 store.insert_usage(record)?;
+            }
+            if saving_generation.discarded() {
+                return Ok(None);
+            }
+            if let Some(node) = &node {
+                store.insert_node(node)?;
             }
             Ok(node)
         })
@@ -787,72 +814,120 @@ impl Turn {
         // The guard stays claimed through persistence and publication of the terminal event.
     }
 
-    async fn stream(&self, generation: &Generation) -> End {
-        let req = ChatRequest {
-            model: &self.model.spec.upstream_id,
-            messages: &self.prepared.messages,
-            reasoning: self.model.spec.reasoning.style.clone(),
-            effort: self.effort.as_deref(),
-            session_id: &self.prepared.session_key,
-            parameters: &self.character.spec.parameters,
-        };
-        let mut upstream = tokio::select! {
-            biased;
-            () = generation.cancelled() => return cancelled(generation),
-            connected = async {
-                match self.model.spec.protocol {
-                    nekochat_core::Protocol::ChatCompletions => nekochat_gateway::stream_chat(&self.http, &self.provider, &req).await,
-                    nekochat_core::Protocol::Responses => nekochat_gateway::stream_responses(&self.http, &self.provider, &req).await,
-                    nekochat_core::Protocol::ChatgptResponses => nekochat_gateway::stream_chatgpt(&self.http, &self.provider, &req).await,
-                }
-            } => match connected {
-                Ok(upstream) => upstream,
-                Err(error) => return End::Failed(error),
-            }
-        };
-        let mut filter = match self.resources.filter(
+    async fn stream(&mut self, generation: &Generation) -> End {
+        let resources = self.resources.clone();
+        let mut filter = match resources.filter(
             &self.character.spec.resource_packs,
             &self.prepared.recent_resources,
         ) {
             Ok(filter) => filter,
             Err(error) => return End::Failed(GatewayError::Protocol(error.to_string())),
         };
-        loop {
-            let item = tokio::select! {
+        let mut total_usage: Option<Usage> = None;
+        let mut prior_usage_missing = false;
+        let end = 'rounds: loop {
+            let req = ChatRequest {
+                model: &self.model.spec.upstream_id,
+                messages: &self.prepared.messages,
+                reasoning: self.model.spec.reasoning.style.clone(),
+                effort: self.effort.as_deref(),
+                session_id: &self.prepared.session_key,
+                parameters: &self.character.spec.parameters,
+                tools: self.search.as_ref().map(|search| &search.context),
+            };
+            self.usage_incomplete = true;
+            let mut upstream = tokio::select! {
                 biased;
-                () = generation.cancelled() => return cancelled(generation),
-                item = upstream.next() => item,
-            };
-            let chunks = match item {
-                None => {
-                    for chunk in filter.finish() {
-                        generation.chunk(chunk);
+                () = generation.cancelled() => break 'rounds cancelled(generation),
+                connected = async {
+                    match self.model.spec.protocol {
+                        nekochat_core::Protocol::ChatCompletions => nekochat_gateway::stream_chat(&self.http, &self.provider, &req).await,
+                        nekochat_core::Protocol::Responses => nekochat_gateway::stream_responses(&self.http, &self.provider, &req).await,
+                        nekochat_core::Protocol::ChatgptResponses => nekochat_gateway::stream_chatgpt(&self.http, &self.provider, &req).await,
                     }
-                    return End::Done;
-                }
-                Some(Err(error)) => {
-                    for chunk in filter.finish() {
-                        generation.chunk(chunk);
-                    }
-                    return End::Failed(error);
-                }
-                Some(Ok(StreamEvent::Usage(usage))) => {
-                    generation.usage(usage);
-                    continue;
-                }
-                Some(Ok(StreamEvent::Reasoning(text))) => {
-                    generation.reasoning(text);
-                    continue;
-                }
-                Some(Ok(StreamEvent::Text(text))) => {
-                    generation.text_arrived();
-                    filter.push(&text)
+                } => match connected {
+                    Ok(upstream) => upstream,
+                    Err(error) => break 'rounds End::Failed(error),
                 }
             };
-            for chunk in chunks {
-                generation.chunk(chunk);
+            let mut exchange = ToolExchange::default();
+            let mut calls = ToolAccumulator::default();
+            let mut round_usage = None;
+            loop {
+                let item = tokio::select! {
+                    biased;
+                    () = generation.cancelled() => break 'rounds cancelled(generation),
+                    item = upstream.next() => item,
+                };
+                let chunks = match item {
+                    None => break,
+                    Some(Err(error)) => break 'rounds End::Failed(error),
+                    Some(Ok(StreamEvent::Usage(usage))) => {
+                        self.usage_incomplete = prior_usage_missing;
+                        generation.usage(merge_usage(total_usage.clone(), Some(usage.clone())).expect("current usage exists"));
+                        round_usage = Some(usage);
+                        continue;
+                    }
+                    Some(Ok(StreamEvent::Reasoning(text))) => {
+                        if self.search.is_some() { exchange.reasoning.push_str(&text); }
+                        generation.reasoning(text);
+                        continue;
+                    }
+                    Some(Ok(StreamEvent::Text(text))) => {
+                        if self.search.is_some() { exchange.content.push_str(&text); }
+                        generation.text_arrived();
+                        filter.push(&text)
+                    }
+                    Some(Ok(StreamEvent::ToolCallDelta(delta))) => {
+                        if self.search.is_none() {
+                            break 'rounds End::Failed(GatewayError::Protocol("当前角色未授权工具调用".into()));
+                        }
+                        if let Err(error) = calls.push(delta) { break 'rounds End::Failed(error); }
+                        continue;
+                    }
+                    Some(Ok(StreamEvent::ResponseItem(item))) => {
+                        if self.search.is_none() || exchange.response_items.len() >= 128 {
+                            break 'rounds End::Failed(GatewayError::Protocol("未授权或过量的原生工具输出".into()));
+                        }
+                        exchange.response_items.push(item);
+                        continue;
+                    }
+                };
+                for chunk in chunks { generation.chunk(chunk); }
             }
-        }
+            prior_usage_missing |= round_usage.is_none();
+            self.usage_incomplete = prior_usage_missing;
+            total_usage = merge_usage(total_usage, round_usage);
+            exchange.calls = match calls.finish() {
+                Ok(calls) => calls,
+                Err(error) => break 'rounds End::Failed(error),
+            };
+            let requested = match call_refs(&exchange) {
+                Ok(calls) => calls,
+                Err(error) => break 'rounds End::Failed(error),
+            };
+            if requested.is_empty() { break End::Done; }
+            let Some(search) = &mut self.search else {
+                break End::Failed(GatewayError::Protocol("当前角色未授权工具调用".into()));
+            };
+            if search.exhausted() {
+                break End::Failed(GatewayError::Protocol("模型在工具额度用尽后仍请求工具".into()));
+            }
+            let mut results = Vec::with_capacity(requested.len());
+            for call in requested {
+                let output = match search.execute(&call, &self.store, generation).await {
+                    Ok(output) => output,
+                    Err(SearchFailure::Cancelled) => break 'rounds cancelled(generation),
+                    Err(SearchFailure::Failed(error)) => break 'rounds End::Failed(error),
+                };
+                results.push(ToolResult { call_id: call.id.to_owned(), output });
+            }
+            exchange.results = results;
+            search.context.history.push(exchange);
+            if search.exhausted() { search.context.definitions.clear(); }
+        };
+        for chunk in filter.finish() { generation.chunk(chunk); }
+        end
     }
 }
 
@@ -861,5 +936,47 @@ fn cancelled(generation: &Generation) -> End {
         End::Deleted
     } else {
         End::Stopped
+    }
+}
+
+fn merge_usage(left: Option<Usage>, right: Option<Usage>) -> Option<Usage> {
+    match (left, right) {
+        (None, right) => right,
+        (Some(mut left), None) => {
+            left.upstream_cost_usd = None;
+            left.allowance_usd = None;
+            Some(left)
+        }
+        (Some(mut left), Some(right)) => {
+            left.cached_in = left.cached_in.saturating_add(right.cached_in);
+            left.uncached_in = left.uncached_in.saturating_add(right.uncached_in);
+            left.reasoning = left.reasoning.saturating_add(right.reasoning);
+            left.output = left.output.saturating_add(right.output);
+            let money = |left: Option<f64>, right: Option<f64>| left.zip(right)
+                .map(|(left, right)| left + right).filter(|amount| amount.is_finite());
+            left.upstream_cost_usd = money(left.upstream_cost_usd, right.upstream_cost_usd);
+            left.allowance_usd = money(left.allowance_usd, right.allowance_usd);
+            Some(left)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tool_usage_tests {
+    use super::*;
+
+    #[test]
+    fn all_tool_rounds_count_and_unknown_cost_is_not_treated_as_zero() {
+        let first = Usage { cached_in: 8, uncached_in: 12, reasoning: 3, output: 2,
+            upstream_cost_usd: Some(0.02), allowance_usd: Some(0.01) };
+        let second = Usage { cached_in: 9, uncached_in: 11, reasoning: 4, output: 5,
+            upstream_cost_usd: Some(0.03), allowance_usd: Some(0.02) };
+        let total = merge_usage(Some(first), Some(second)).unwrap();
+        assert_eq!((total.cached_in, total.uncached_in, total.reasoning, total.output), (17, 23, 7, 7));
+        assert_eq!(total.upstream_cost_usd, Some(0.05));
+        let incomplete = merge_usage(Some(total), None).unwrap();
+        assert_eq!(incomplete.output, 7);
+        assert_eq!(incomplete.upstream_cost_usd, None);
+        assert_eq!(incomplete.allowance_usd, None);
     }
 }

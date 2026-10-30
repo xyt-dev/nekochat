@@ -128,6 +128,8 @@ pub struct TestCfg {
     pub read_timeout: Option<Duration>,
     /// Frontend files to serve instead of the embedded `web/dist`.
     pub web_assets: Option<Arc<dyn WebAssets>>,
+    /// Loads an explicitly synthetic, unexpired SIWC grant into this test's private directory.
+    pub shared_account: bool,
 }
 
 pub struct TestApp {
@@ -159,6 +161,27 @@ impl TestApp {
 
 pub async fn spawn_app(cfg: TestCfg) -> TestApp {
     let dir = tempfile::tempdir().unwrap();
+    if cfg.shared_account {
+        let path = dir.path().join("chatgpt-account.json");
+        std::fs::write(&path, serde_json::to_vec(&json!({
+            "host_id":"urn:uuid:0196f817-1eb0-7000-8000-000000000001","active":"test-client","welcomed":true,
+            "registrations":[{
+                "client_id":"test-client","subject":"test-subject","email":null,
+                "credential":{
+                    "access_token":"synthetic-shared-access",
+                    "refresh_token":"synthetic-refresh-never-delegated",
+                    "id_token":"synthetic-id-never-delegated",
+                    "scopes":["chatgpt.tokens.use.direct"],
+                    "expires_at":4102444800_u64
+                }
+            }]
+        })).unwrap()).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+    }
     let store = Store::open(&dir.path().join("nekochat.db")).unwrap();
     let providers: Vec<Provider> = cfg
         .upstream

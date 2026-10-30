@@ -10,9 +10,9 @@ use serde_json::{Value, json};
 use crate::http::{check_status, endpoint, role_name, transport};
 use crate::{ChatRequest, GatewayError, Provider, StreamEvent, USER_AGENT};
 
-/// Builds the request body. Never includes `tools`.
+/// Builds one completion; tools are exclusively supplied by the core's authorized role policy.
 pub fn build_body(req: &ChatRequest) -> Value {
-    let messages: Vec<Value> =
+    let mut messages: Vec<Value> =
         req.messages
             .iter()
             .map(|m| {
@@ -31,12 +31,18 @@ pub fn build_body(req: &ChatRequest) -> Value {
                 json!({"role": role_name(m.role), "content": content})
             })
             .collect();
+    if let Some(tools) = req.tools {
+        tools.extend_chat(&mut messages, req.reasoning == ReasoningStyle::DeepSeek);
+    }
     let mut b = json!({
         "model": req.model,
         "messages": messages,
         "stream": true,
         "stream_options": {"include_usage": true},
     });
+    if let Some(tools) = req.tools.filter(|tools| !tools.definitions.is_empty()) {
+        b["tools"] = tools.chat_definitions();
+    }
     match (&req.reasoning, req.effort) {
         (ReasoningStyle::Effort, Some(l)) => {
             b["reasoning_effort"] = json!(l);
@@ -132,6 +138,19 @@ fn chunk_events(v: &Value, out: &mut VecDeque<StreamEvent>) {
     }
     if let Some(t) = text_of("content") {
         out.push_back(StreamEvent::Text(t.to_owned()));
+    }
+    if let Some(calls) = delta.and_then(|delta| delta.get("tool_calls")).and_then(Value::as_array) {
+        for call in calls {
+            let Some(index) = call.get("index").and_then(Value::as_u64).and_then(|index| usize::try_from(index).ok()) else {
+                continue;
+            };
+            out.push_back(StreamEvent::ToolCallDelta(crate::ToolCallDelta {
+                index,
+                id: call.get("id").and_then(Value::as_str).map(str::to_owned),
+                name: call.pointer("/function/name").and_then(Value::as_str).map(str::to_owned),
+                arguments: call.pointer("/function/arguments").and_then(Value::as_str).unwrap_or_default().to_owned(),
+            }));
+        }
     }
     if let Some(us) = v.get("usage").filter(|x| x.is_object()) {
         out.push_back(StreamEvent::Usage(parse_usage(us)));

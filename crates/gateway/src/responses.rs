@@ -51,8 +51,17 @@ fn body(request: &ChatRequest<'_>) -> Result<Value, GatewayError> {
             "Responses 不支持 DeepSeek thinking 模式".into(),
         ));
     }
-    let input = input_messages(request.messages);
+    let mut input = input_messages(request.messages);
+    if let Some(tools) = request.tools {
+        tools.extend_responses(&mut input);
+    }
     let mut body = json!({"model":request.model,"input":input,"stream":true,"store":false});
+    if let Some(tools) = request.tools {
+        body["include"] = json!(["reasoning.encrypted_content"]);
+        if !tools.definitions.is_empty() {
+            body["tools"] = tools.response_definitions(false);
+        }
+    }
     if let Some(effort) = request.effort {
         body["reasoning"] = json!({"effort":effort,"summary":"auto"});
     }
@@ -132,16 +141,17 @@ pub async fn stream_responses(
         builder = builder.header(header.as_str(), request.session_id);
     }
     let response = check_status(builder.send().await.map_err(transport)?).await?;
-    Ok(event_stream(response))
+    Ok(event_stream(response, request.tools.is_some()))
 }
 
 pub(crate) fn event_stream(
     response: reqwest::Response,
+    include_tool_items: bool,
 ) -> BoxStream<'static, Result<StreamEvent, GatewayError>> {
     let events = response.bytes_stream().eventsource();
     stream::unfold(
         (events, VecDeque::new(), false),
-        |(mut events, mut pending, done)| async move {
+        move |(mut events, mut pending, done)| async move {
             let mut done = done;
             loop {
                 if let Some(event) = pending.pop_front() {
@@ -179,7 +189,7 @@ pub(crate) fn event_stream(
                         (events, pending, true),
                     ));
                 }
-                let value: Value = match serde_json::from_str(data) {
+                let mut value: Value = match serde_json::from_str(data) {
                     Ok(value) => value,
                     Err(error) => {
                         return Some((
@@ -195,6 +205,11 @@ pub(crate) fn event_stream(
                     .and_then(Value::as_str)
                     .unwrap_or(&event.event);
                 match kind {
+                    "response.output_item.done" if include_tool_items => {
+                        if let Some(item) = value.as_object_mut().and_then(|value| value.remove("item")) {
+                            pending.push_back(Ok(StreamEvent::ResponseItem(item)));
+                        }
+                    }
                     "response.output_text.delta" | "response.refusal.delta" => {
                         if let Some(text) = value
                             .get("delta")

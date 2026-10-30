@@ -16,6 +16,7 @@ nekochat-core = { path = "../core" }
 nekochat-store = { path = "../store" }
 nekochat-gateway = { path = "../gateway" }
 nekochat-resources = { path = "../resources" }
+nekochat-search = { path = "../search" }
 uuid.workspace = true
 sha2 = "0.10"
 jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
