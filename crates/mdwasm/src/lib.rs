@@ -166,7 +166,7 @@ fn image_allowed(url: &str) -> bool {
                         b.is_ascii_hexdigit()
                     }
                 })
-                && ["png", "jpg", "webp", "gif"].contains(&ext)
+                && ["png", "jpg", "webp", "gif", "avif"].contains(&ext)
         });
     }
     false
@@ -375,6 +375,9 @@ mod tests {
             html.contains("loading=\"lazy\" decoding=\"async\""),
             "{html}"
         );
+        let html = render_html("![AVIF](/api/backgrounds/00000000-0000-4000-8000-000000000000.avif)");
+        assert!(html.contains("<img "), "{html}");
+        assert!(html.contains("src=\"/api/backgrounds/00000000-0000-4000-8000-000000000000.avif\""), "{html}");
         for url in [
             "https://e.com/i.png",
             "//e.com/i.png",

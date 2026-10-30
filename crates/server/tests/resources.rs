@@ -62,8 +62,8 @@ async fn asset_routes_are_access_gated_and_background_upload_is_admin_only() {
     let response = app
         .client
         .post(app.url("/api/admin/backgrounds"))
-        .header("content-type", "image/gif")
-        .body(b"GIF89a".to_vec())
+        .header("content-type", "image/avif")
+        .body(b"\0\0\0\x18ftypavif\0\0\0\0mif1miaf".to_vec())
         .send()
         .await
         .unwrap();
@@ -87,7 +87,7 @@ async fn asset_routes_are_access_gated_and_background_upload_is_admin_only() {
     );
     let response = app.client.get(app.url(url)).send().await.unwrap();
     assert_eq!(response.status(), 200);
-    assert_eq!(response.headers()["content-type"], "image/gif");
+    assert_eq!(response.headers()["content-type"], "image/avif");
     assert_eq!(response.headers()["x-content-type-options"], "nosniff");
     for invalid in [
         "https://evil/image.png",
@@ -108,6 +108,23 @@ async fn asset_routes_are_access_gated_and_background_upload_is_admin_only() {
     assert_eq!(response.status(), 201);
     let role: Value = response.json().await.unwrap();
     assert_eq!(role["background"]["opacity"], 0.15);
+    assert_eq!(role["background"]["position"], "center");
+    let id = role["id"].as_str().unwrap();
+    let response = app.client.put(app.url(&format!("/api/admin/characters/{id}")))
+        .json(&json!({"name":"role","display_name":"Role","background":{"url":url,"opacity":0.25,"position":"right"}}))
+        .send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let roles: Vec<Value> = app.client.get(app.url("/api/admin/characters")).send().await.unwrap().json().await.unwrap();
+    let saved = roles.iter().find(|item| item["id"] == id).unwrap();
+    assert_eq!(saved["background"]["position"], "right");
+    assert_eq!(saved["background"]["opacity"], 0.25);
+    assert_eq!(saved["background"]["url"], url);
+    let rejected = app.client.put(app.url(&format!("/api/admin/characters/{id}")))
+        .json(&json!({"name":"role","display_name":"Role","background":{"url":url,"position":"left"}}))
+        .send().await.unwrap();
+    assert_eq!(rejected.status(), 400);
+    let roles: Vec<Value> = app.client.get(app.url("/api/admin/characters")).send().await.unwrap().json().await.unwrap();
+    assert_eq!(roles.iter().find(|item| item["id"] == id).unwrap()["background"]["position"], "right");
 }
 
 #[cfg(unix)]

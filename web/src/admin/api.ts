@@ -1,3 +1,5 @@
+import type { CharacterBackground } from "../api";
+
 export interface Provider { key: string; label: string; connected?: boolean }
 export interface CharacterParameters {
   effort?: string | null; temperature?: number | null; top_p?: number | null;
@@ -7,7 +9,7 @@ export interface CharacterParameters {
 export interface CharacterRecipe {
   name: string; display_name: string; system_prompt: string; model_id: string | null;
   parameters: CharacterParameters; enabled: boolean; sort: number;
-  avatar: string | null; background: { url: string; opacity: number } | null; resource_packs: string[];
+  avatar: string | null; background: CharacterBackground | null; resource_packs: string[];
   sticker_identity: "self" | "neutral"; sticker_frequency: "rare" | "normal" | "often";
 }
 export interface Character extends CharacterRecipe { id: string; created_at: number; updated_at: number }

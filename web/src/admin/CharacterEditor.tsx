@@ -1,4 +1,6 @@
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import type { BackgroundPosition } from "../api";
+import { BackgroundImage } from "../components/BackgroundImage";
 import { localImageUrl } from "../localImages";
 import { errorMessage, type AdminApi, type Character, type CharacterParameters, type CharacterRecipe, type ListedModel, type Provider, type ResourcePack } from "./api";
 import { PackPreview } from "./ResourcePacks";
@@ -31,6 +33,7 @@ export function CharacterEditor(props: {
   const [background, setBackground] = createSignal(initial?.background?.url ?? "");
   const [avatar, setAvatar] = createSignal(initial?.avatar ?? null);
   const [opacity, setOpacity] = createSignal(initial?.background?.opacity ?? 0.15);
+  const [position, setPosition] = createSignal<BackgroundPosition>(initial?.background?.position ?? "center");
   const [packs, setPacks] = createSignal(initial?.resource_packs ?? []);
   const [identity, setIdentity] = createSignal<CharacterRecipe["sticker_identity"]>(initial?.sticker_identity ?? "neutral");
   const [frequency, setFrequency] = createSignal<CharacterRecipe["sticker_frequency"]>(initial?.sticker_frequency ?? "often");
@@ -58,7 +61,7 @@ export function CharacterEditor(props: {
     if (busy() || uploading() || avatarUploading() || disposed) return;
     setError(""); setUploading(true);
     try {
-      if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) throw new Error("仅支持 PNG、JPEG、WebP、GIF 图片");
+      if (!["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"].includes(file.type)) throw new Error("仅支持 PNG、JPEG、WebP、GIF、AVIF 图片");
       if (file.size > 5 * 1024 * 1024) throw new Error("背景图片不能超过 5 MiB");
       const result = await props.api.uploadBackground(file);
       const url = localImageUrl(result.url);
@@ -96,7 +99,7 @@ export function CharacterEditor(props: {
       if (missingPacks().length) throw new Error("请移除未加载的资源包后保存");
       await props.api.saveCharacter(initial?.id ?? null, {
         name: name().trim(), display_name: displayName().trim(), system_prompt: prompt(), model_id: modelId() || null,
-        parameters, enabled: enabled(), sort: order, avatar: avatar(), background: url ? { url, opacity: opacity() } : null,
+        parameters, enabled: enabled(), sort: order, avatar: avatar(), background: url ? { url, opacity: opacity(), position: position() } : null,
         resource_packs: packs(), sticker_identity: identity(), sticker_frequency: frequency(),
       });
       await props.onSaved();
@@ -128,9 +131,11 @@ export function CharacterEditor(props: {
           <For each={nativeNumberFields()}>{(field) => <label>{field.label}<input name={`character-${field.key}`} type="number" min={field.min} max={field.max} step={field.step} placeholder="服务端默认" value={numbers()[field.key]} onInput={(event) => { const value = event.currentTarget.value; setNumbers((current) => ({ ...current, [field.key]: value })); }} /></label>}</For>
         </div>
         <Show when={model()?.protocol === "chat_completions"} fallback={<p class="admin-note">{model()?.protocol === "chatgpt_responses" ? "ChatGPT 订阅仅接受思考档位，不支持采样、最大输出、seed、penalty、stop；切换绑定时清空这些参数。" : "Responses 不支持 seed、penalty、stop；切换绑定时清空这些参数。"}</p>}><label>Stop（每行一个停止字符串）<textarea name="character-stop" rows="3" value={stop()} onInput={(event) => setStop(event.currentTarget.value)} /></label></Show>
-        <h4>可选背景</h4><p class="admin-note">默认为无背景。仅可上传本站图片或选择下方本地素材；单层透明装饰，无滤镜或动画。</p>
-        <label>上传背景（≤ 5 MiB）<input name="character-background" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label>
-        <Show when={localImageUrl(background())}>{(url) => <div class="admin-background-preview"><img src={url()} alt="角色背景预览" loading="lazy" decoding="async" style={{ opacity: opacity() }} /><button type="button" onClick={() => { setBackground(""); setOpacity(0.15); }}>清除背景</button></div>}</Show>
+        <h4>可选背景</h4><p class="admin-note">默认为无背景。仅可上传本站图片或选择下方本地素材；图片等比完整展示，不拉伸、不裁切，不使用滤镜或动画。</p>
+        <label>上传背景（PNG / JPEG / WebP / GIF / AVIF，≤ 5 MiB）<input name="character-background" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label>
+        <label>背景位置<select name="character-background-position" value={position()} disabled={!background()} onChange={(event) => setPosition(event.currentTarget.value as BackgroundPosition)}><option value="center">居中</option><option value="right">偏右 · 黄金分割</option></select></label>
+        <p class="admin-note">偏右将图像中心放在可用区域 61.8% 处，适合窄幅角色形象；自动限制宽度并保留边距，保持图片完整。</p>
+        <Show when={localImageUrl(background())}>{(url) => <div class="admin-background-preview"><div class="admin-background-stage"><BackgroundImage background={{ url: url(), opacity: opacity(), position: position() }} alt="角色背景预览" /></div><button type="button" onClick={() => { setBackground(""); setOpacity(0.15); setPosition("center"); }}>清除背景</button></div>}</Show>
         <label>背景透明度：{Math.round(opacity() * 100)}%<input name="character-background-opacity" type="range" min="0" max="1" step="0.01" value={opacity()} disabled={!background()} onInput={(event) => setOpacity(Number(event.currentTarget.value))} /></label>
         <h4>授权资源包</h4><p class="admin-note">只把勾选包的静态指引与目录提供给此角色。预览素材不下载到外站，不运行 SKILL 中的工具。</p>
         <For each={missingPacks()}>{(id) => <p class="admin-error">资源包 {id} 未加载 <button type="button" onClick={() => setPacks((current) => current.filter((value) => value !== id))}>移除授权</button></p>}</For>

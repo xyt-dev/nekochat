@@ -70,9 +70,39 @@ fn signature(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
         Some(("gif", "image/gif"))
     } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
         Some(("webp", "image/webp"))
+    } else if avif_signature(bytes) {
+        Some(("avif", "image/avif"))
     } else {
         None
     }
+}
+
+fn avif_signature(bytes: &[u8]) -> bool {
+    let Some(header) = bytes.get(..16) else {
+        return false;
+    };
+    if &header[4..8] != b"ftyp" {
+        return false;
+    }
+    let size = u32::from_be_bytes(header[..4].try_into().unwrap());
+    let (size, header_len) = if size == 1 {
+        let extended = u64::from_be_bytes(header[8..16].try_into().unwrap());
+        let Ok(size) = usize::try_from(extended) else {
+            return false;
+        };
+        (size, 16)
+    } else {
+        (size as usize, 8)
+    };
+    let Some(ftyp) = bytes.get(..size) else {
+        return false;
+    };
+    if ftyp.len() < header_len + 8 || (ftyp.len() - header_len) % 4 != 0 {
+        return false;
+    }
+    let avif_brand = |brand: &[u8]| matches!(brand, b"avif" | b"avis");
+    avif_brand(&ftyp[header_len..header_len + 4])
+        || ftyp[header_len + 8..].chunks_exact(4).any(avif_brand)
 }
 
 fn background_file(file: &str) -> bool {
@@ -81,7 +111,7 @@ fn background_file(file: &str) -> bool {
     };
     component(file)
         && uuid::Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id)
-        && ["png", "jpg", "webp", "gif"].contains(&ext)
+        && ["png", "jpg", "webp", "gif", "avif"].contains(&ext)
 }
 
 async fn read_background(state: &AppState, file: &str) -> Option<Vec<u8>> {
@@ -166,7 +196,7 @@ pub async fn upload(
         ));
     }
     let (ext, mime) =
-        signature(&bytes).ok_or_else(|| ApiError::bad_request("仅支持 PNG/JPEG/WebP/GIF 图片"))?;
+        signature(&bytes).ok_or_else(|| ApiError::bad_request("仅支持 PNG/JPEG/WebP/GIF/AVIF 图片"))?;
     if headers.get("content-type").and_then(|h| h.to_str().ok()) != Some(mime) {
         return Err(ApiError::bad_request("图片签名与类型不匹配"));
     }
@@ -214,5 +244,26 @@ mod tests {
         assert!(signature(b"<svg></svg>").is_none());
         assert!(signature(b"<!doctype html>").is_none());
         assert!(!background_file("../../../etc/passwd"));
+    }
+
+    #[test]
+    fn avif_recognition_uses_file_type_brands_within_the_declared_box() {
+        for bytes in [
+            b"\0\0\0\x18ftypavif\0\0\0\0mif1miaf".as_slice(),
+            b"\0\0\0\x18ftypmif1\0\0\0\0miafavif".as_slice(),
+            b"\0\0\0\x18ftypavis\0\0\0\0msf1avif".as_slice(),
+            b"\0\0\0\x01ftyp\0\0\0\0\0\0\0\x20mif1\0\0\0\0miafavif".as_slice(),
+        ] {
+            assert_eq!(signature(bytes), Some(("avif", "image/avif")));
+        }
+        for bytes in [
+            b"\0\0\0\x18ftypheic\0\0\0\0mif1heic".as_slice(),
+            b"\0\0\0\x10ftypmif1\0\0\0\0\0\0\0\x0cmdatavif".as_slice(),
+            b"\0\0\0\x20ftypavif\0\0\0\0".as_slice(),
+            b"\0\0\0\x0cftypavif".as_slice(),
+            b"\0\0\0\x01ftyp\xff\xff\xff\xff\xff\xff\xff\xffavif\0\0\0\0".as_slice(),
+        ] {
+            assert!(signature(bytes).is_none());
+        }
     }
 }

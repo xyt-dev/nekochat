@@ -26,9 +26,11 @@ export function App(props: { offline?: boolean }) {
           <Sidebar />
           <button type="button" class="backdrop" aria-label="关闭对话列表" tabIndex={store.sidebarOpen() ? 0 : -1} onClick={() => store.setSidebarOpen(false)} />
           <main class="main">
-            <CharacterBackground />
             <TopBar />
-            <MessageList />
+            <div class="chat-content">
+              <CharacterBackground />
+              <MessageList />
+            </div>
             <Composer />
           </main>
           <Show when={store.treeOpen()}><TreePanel /></Show>

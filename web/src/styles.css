@@ -244,15 +244,41 @@ pre,
   isolation: isolate;
 }
 
+.chat-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  isolation: isolate;
+}
+
 /* One independent decoration: role changes only, never streaming-token work. */
 .character-background {
   position: absolute;
-  inset: 56px 0 0;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  overflow: hidden;
+}
+
+.character-background-image {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  width: auto;
+  height: calc(100% - 32px);
+  max-width: calc(100% - 32px);
+  object-fit: contain;
+  transform: translateX(-50%);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* A 61.8% center with a symmetric width cap leaves 16px gutters, even for wide art. */
+.character-background-image[data-position="right"] {
+  left: 61.8%;
+  max-width: calc(76.4% - 32px);
 }
 
 .topbar {

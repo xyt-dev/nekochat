@@ -101,7 +101,7 @@
 .admin-asset-grid figcaption { overflow-wrap: anywhere; }
 .admin-asset-grid button { font-size: 12px; margin-bottom: 6px; }
 .admin-background-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
-.admin-background-preview img { max-width: min(100%, 300px); max-height: 180px; object-fit: contain; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); }
+.admin-background-stage { position: relative; width: min(100%, 720px); aspect-ratio: 16 / 10; min-height: 220px; overflow: hidden; background: var(--nk-bg); border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); }
 .admin-editor h4 { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--nk-border); }
 .admin-editor .admin-form-grid { margin: 16px 0; }
 .admin-editor .admin-field-heading { grid-column: 1 / -1; margin: 8px 0 0; }

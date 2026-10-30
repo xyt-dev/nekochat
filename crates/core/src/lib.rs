@@ -65,12 +65,22 @@ impl GenerationParameters {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BackgroundPosition {
+    #[default]
+    Center,
+    Right,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Background {
     pub url: String,
     #[serde(default = "default_background_opacity")]
     pub opacity: f64,
+    #[serde(default)]
+    pub position: BackgroundPosition,
 }
 
 fn default_background_opacity() -> f64 {

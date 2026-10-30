@@ -58,9 +58,12 @@ export interface ConversationView {
   active_turn_id: string | null;
 }
 
+export type BackgroundPosition = "center" | "right";
+
 export interface CharacterBackground {
   url: string;
   opacity: number;
+  position?: BackgroundPosition;
 }
 
 export interface PickerCharacter {
