@@ -8,7 +8,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use nekochat_search::client::SearchClient;
 use nekochat_search::{AuthMode, SearchRequest, SearchResponse, ServiceView, ServiceWrite};
-use nekochat_store::{SearchUsageRecord, SettingKey, Store, new_id, now_ms};
+use nekochat_store::{SearchUsageDashboard, SearchUsageRecord, SettingKey, Store, new_id, now_ms};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -297,11 +297,13 @@ pub async fn test_service(State(state): State<AppState>, Path(id): Path<String>,
 #[serde(deny_unknown_fields)]
 pub struct UsageRange { from_ms: Option<i64>, to_ms: Option<i64> }
 
-pub async fn usage(State(state): State<AppState>, Query(range): Query<UsageRange>) -> Result<Json<Vec<SearchUsageRecord>>, ApiError> {
+pub async fn usage(State(state): State<AppState>, Query(range): Query<UsageRange>) -> Result<Json<SearchUsageDashboard>, ApiError> {
     const DAY: i64 = 86_400_000;
     let to = range.to_ms.unwrap_or_else(now_ms);
     let from = range.from_ms.unwrap_or_else(|| to.saturating_sub(7 * DAY).max(0));
     if from < 0 || to < from || to.checked_sub(from).is_none_or(|span| span > 31 * DAY) { return Err(ApiError::bad_request("搜索用量日期范围必须在 31 天以内")); }
+    let span = to - from;
+    let bucket_ms = if span <= DAY { 15 * 60_000 } else if span <= 7 * DAY { 60 * 60_000 } else { 6 * 60 * 60_000 };
     let store = state.store.clone();
-    Ok(Json(blocking(move || store.list_search_usage(from, to)).await?))
+    Ok(Json(blocking(move || store.search_usage_dashboard(from, to, bucket_ms)).await?))
 }

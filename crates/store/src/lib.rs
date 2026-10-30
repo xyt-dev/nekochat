@@ -18,7 +18,7 @@ pub use attachments::Attachment;
 pub use catalog::{Character, CharacterSpec, ListedModel, ModelSpec, SettingKey};
 pub use tree::{Conversation, DEFAULT_TITLE, Node, NodeRole, NodeStatus};
 pub use usage::{UsagePurpose, UsageRecord};
-pub use search_usage::SearchUsageRecord;
+pub use search_usage::{SearchServiceUsage, SearchUsageCost, SearchUsageDashboard, SearchUsagePoint, SearchUsageRecord, SearchUsageTotals};
 pub use usage_stats::{AllowanceWindow, ModelAllowance, ModelUsageStats, UsagePoint, UsageTotals};
 pub use users::{PasswordStorage, User, UserPublic};
 

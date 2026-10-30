@@ -99,6 +99,19 @@ export interface SearchResponse {
 export interface SearchUsageRecord {
   id: string; at_ms: number; service_id: string; status: string; usage: SearchUsage | null;
 }
+export interface SearchUsageCost { currency: string; amount: number }
+export interface SearchUsageTotals {
+  attempts: number; requests: number; cached_in: number; uncached_in: number; output: number; reasoning: number;
+  known_costs: SearchUsageCost[]; unknown_costs: number;
+}
+export interface SearchUsagePoint {
+  at_ms: number; attempts: number; requests: number; cached_in: number; uncached_in: number; output: number; reasoning: number;
+}
+export interface SearchServiceUsage { service_id: string; totals: SearchUsageTotals; points: SearchUsagePoint[] }
+export interface SearchUsageDashboard {
+  from_ms: number; to_ms: number; bucket_ms: number; totals: SearchUsageTotals;
+  services: SearchServiceUsage[]; records: SearchUsageRecord[];
+}
 export class AdminError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
@@ -143,7 +156,7 @@ export interface AdminApi {
   saveSearchService(serviceId: string | null, body: SearchServiceWrite, signal?: AbortSignal): Promise<SearchService>;
   deleteSearchService(serviceId: string, signal?: AbortSignal): Promise<void>;
   testSearchService(serviceId: string, query: string, signal?: AbortSignal): Promise<SearchResponse>;
-  searchUsage(from: number, to: number, signal?: AbortSignal): Promise<SearchUsageRecord[]>;
+  searchUsage(from: number, to: number, signal?: AbortSignal): Promise<SearchUsageDashboard>;
 }
 
 /** Admin requests never join the chat access-password queue or retain a password. */
@@ -207,7 +220,7 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     saveSearchService: (serviceId, body, signal) => request<SearchService>(`/search/services${serviceId ? `/${id(serviceId)}` : ""}`, serviceId ? "PUT" : "POST", body, signal),
     deleteSearchService: (serviceId, signal) => request<void>(`/search/services/${id(serviceId)}`, "DELETE", undefined, signal),
     testSearchService: (serviceId, query, signal) => request<SearchResponse>(`/search/services/${id(serviceId)}/test`, "POST", { query }, signal),
-    searchUsage: (from, to, signal) => request<SearchUsageRecord[]>(`/search/usage?${new URLSearchParams({ from_ms: String(from), to_ms: String(to) })}`, "GET", undefined, signal),
+    searchUsage: (from, to, signal) => request<SearchUsageDashboard>(`/search/usage?${new URLSearchParams({ from_ms: String(from), to_ms: String(to) })}`, "GET", undefined, signal),
   };
 }
 export const emptyModel = (provider: string, upstream_id = "", defaults: ModelDefaults | null = null): ModelSpec => ({

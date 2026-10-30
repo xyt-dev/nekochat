@@ -174,9 +174,18 @@ async fn connection_test_checks_both_auth_scopes_without_search_and_billed_test_
     let records = app.store.list_search_usage(0, i64::MAX).unwrap();
     assert_eq!(records.len(), 3);
     assert!(records.iter().any(|record| record.status == "error" && record.usage.is_none()));
-    let usage = app.client.get(app.url("/api/admin/search/usage")).send().await.unwrap().text().await.unwrap();
+    let response = app.client.get(app.url("/api/admin/search/usage")).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let usage = response.text().await.unwrap();
     assert!(!usage.contains("public test"));
     assert!(!usage.contains("sources"));
+    assert!(!usage.contains("rejected query"));
+    let dashboard: Value = serde_json::from_str(&usage).unwrap();
+    assert_eq!(dashboard["totals"], json!({
+        "attempts":3,"requests":2,"cached_in":0,"uncached_in":20,"output":4,"reasoning":0,
+        "known_costs":[],"unknown_costs":3
+    }));
+    assert_eq!(dashboard["records"].as_array().unwrap().len(), 3);
     assert_eq!(app.client.get(app.url("/api/admin/search/usage?from_ms=0&to_ms=9223372036854775807")).send().await.unwrap().status(), 400);
     engine.abort();
 }
@@ -191,6 +200,107 @@ async fn every_search_management_route_denies_ordinary_users() {
     ] {
         let response = app.client.request(method.parse().unwrap(), app.url(&format!("/api/admin/search{path}"))).json(&json!({})).send().await.unwrap();
         assert_eq!(response.status(), 401, "{method} {path}");
+    }
+}
+
+#[tokio::test]
+async fn usage_dashboard_returns_full_period_totals_and_sparse_points_with_latest_hundred_details() {
+    use nekochat_store::SearchUsageRecord;
+    let app = spawn_app(TestCfg { admin_password: Some("admin".into()), ..Default::default() }).await;
+    app.login_admin("admin").await;
+    for index in 0..100 {
+        app.store.insert_search_usage(&SearchUsageRecord {
+            id: format!("a-{index:03}"), at_ms: 900_000 + index, service_id: "deleted-service-a".into(),
+            status: "complete".into(),
+            usage: Some(json!({"requests":2,"cached_in":1,"uncached_in":2,"output":3,"reasoning":4,"cost":{"amount":0.5,"currency":"CNY"}})),
+        }).unwrap();
+    }
+    for (id, at_ms, status, usage) in [
+        ("b-zero", 1_800_000, "complete", Some(json!({"requests":1,"cached_in":5,"uncached_in":6,"output":7,"reasoning":8,"cost":{"amount":0.0,"currency":"USD"}}))),
+        ("b-paid", 1_800_001, "complete", Some(json!({"requests":1,"cached_in":1,"uncached_in":2,"output":3,"reasoning":4,"cost":{"amount":2.0,"currency":"USD"}}))),
+        ("b-unknown", 1_800_002, "complete", Some(json!({"requests":3,"cached_in":1,"uncached_in":2,"output":3,"reasoning":4,"cost":null}))),
+        ("b-error", 1_800_003, "error", None),
+        ("b-cancel", 1_800_004, "cancelled", None),
+    ] {
+        app.store.insert_search_usage(&SearchUsageRecord {
+            id: id.into(), at_ms, service_id: "deleted-service-b".into(), status: status.into(), usage,
+        }).unwrap();
+    }
+    for (id, at_ms) in [("excluded-before", 899_999), ("excluded-after", 1_800_005)] {
+        app.store.insert_search_usage(&SearchUsageRecord {
+            id: id.into(), at_ms, service_id: "excluded-service".into(), status: "error".into(), usage: None,
+        }).unwrap();
+    }
+    let response = app.client.get(app.url("/api/admin/search/usage?from_ms=900000&to_ms=1800004")).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let text = response.text().await.unwrap();
+    for private in ["query", "sources", "evidence", "url", "excluded-service", "excluded-before", "excluded-after"] {
+        assert!(!text.contains(private), "dashboard exposed excluded data: {private}");
+    }
+    let dashboard: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(dashboard["from_ms"], 900_000);
+    assert_eq!(dashboard["to_ms"], 1_800_004);
+    assert_eq!(dashboard["bucket_ms"], 900_000);
+    assert_eq!(dashboard["totals"], json!({
+        "attempts":105,"requests":205,"cached_in":107,"uncached_in":210,"output":313,"reasoning":416,
+        "known_costs":[{"currency":"CNY","amount":50.0},{"currency":"USD","amount":2.0}],"unknown_costs":3
+    }));
+    let services = dashboard["services"].as_array().unwrap();
+    assert_eq!(services.len(), 2);
+    assert_eq!(services[0]["service_id"], "deleted-service-a");
+    assert_eq!(services[0]["totals"]["attempts"], 100);
+    assert_eq!(services[0]["points"], json!([{"at_ms":900000,"attempts":100,"requests":200,"cached_in":100,"uncached_in":200,"output":300,"reasoning":400}]));
+    assert_eq!(services[1]["service_id"], "deleted-service-b");
+    assert_eq!(services[1]["totals"]["unknown_costs"], 3);
+    assert_eq!(services[1]["points"], json!([{"at_ms":1800000,"attempts":5,"requests":5,"cached_in":7,"uncached_in":10,"output":13,"reasoning":16}]));
+    let records = dashboard["records"].as_array().unwrap();
+    assert_eq!(records.len(), 100);
+    assert_eq!(records[0]["id"], "b-cancel");
+    assert_eq!(records[0]["usage"], Value::Null);
+    assert_eq!(records[2]["usage"]["cost"], Value::Null);
+    assert_eq!(records[99]["id"], "a-005");
+}
+
+#[tokio::test]
+async fn usage_dashboard_rejects_invalid_ranges_and_preserves_empty_and_inclusive_bounds() {
+    use nekochat_store::SearchUsageRecord;
+    const DAY: i64 = 86_400_000;
+    let app = spawn_app(TestCfg { admin_password: Some("admin".into()), ..Default::default() }).await;
+    let endpoint = app.url("/api/admin/search/usage");
+    let anonymous = reqwest::Client::new().get(&endpoint).send().await.unwrap();
+    assert_eq!(anonymous.status(), 401);
+    app.login_admin("admin").await;
+    for (id, at_ms) in [("before", 9), ("tie-a", 10), ("tie-b", 10), ("end", 20), ("after", 21)] {
+        app.store.insert_search_usage(&SearchUsageRecord {
+            id: id.into(), at_ms, service_id: "service".into(), status: "error".into(), usage: None,
+        }).unwrap();
+    }
+    let inclusive: Value = app.client.get(app.url("/api/admin/search/usage?from_ms=10&to_ms=20")).send().await.unwrap().json().await.unwrap();
+    assert_eq!(inclusive["totals"]["attempts"], 3);
+    assert_eq!(inclusive["totals"]["unknown_costs"], 3);
+    assert_eq!(inclusive["records"].as_array().unwrap().iter().map(|record| record["id"].as_str().unwrap()).collect::<Vec<_>>(),
+        vec!["end", "tie-b", "tie-a"]);
+    let single: Value = app.client.get(app.url("/api/admin/search/usage?from_ms=10&to_ms=10")).send().await.unwrap().json().await.unwrap();
+    assert_eq!(single["totals"]["attempts"], 2);
+    assert_eq!(single["services"][0]["points"][0]["attempts"], 2);
+    let empty: Value = app.client.get(app.url("/api/admin/search/usage?from_ms=11&to_ms=19")).send().await.unwrap().json().await.unwrap();
+    assert_eq!(empty["totals"], json!({
+        "attempts":0,"requests":0,"cached_in":0,"uncached_in":0,"output":0,"reasoning":0,"known_costs":[],"unknown_costs":0
+    }));
+    assert_eq!(empty["services"], json!([]));
+    assert_eq!(empty["records"], json!([]));
+    let maximum_range = app.client.get(format!("{endpoint}?from_ms=0&to_ms={}", 31 * DAY)).send().await.unwrap();
+    assert_eq!(maximum_range.status(), 200);
+    assert_eq!(maximum_range.json::<Value>().await.unwrap()["totals"]["attempts"], 5);
+    let default_from: Value = app.client.get(format!("{endpoint}?to_ms=1")).send().await.unwrap().json().await.unwrap();
+    assert_eq!(default_from["from_ms"], 0);
+    assert_eq!(default_from["to_ms"], 1);
+    for query in [
+        "from_ms=-1&to_ms=1", "from_ms=2&to_ms=1", "from_ms=0&to_ms=2678400001",
+        "from_ms=0&to_ms=9223372036854775807", "from_ms=-9223372036854775808&to_ms=9223372036854775807",
+        "from_ms=invalid&to_ms=1", "from_ms=0&to_ms=1&query=private",
+    ] {
+        assert_eq!(app.client.get(format!("{endpoint}?{query}")).send().await.unwrap().status(), 400, "{query}");
     }
 }
 

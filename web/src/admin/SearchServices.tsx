@@ -1,5 +1,6 @@
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { errorMessage, type AdminApi, type SearchConnection, type SearchResponse, type SearchService, type SearchServiceWrite, type SearchUsage, type SearchUsageRecord } from "./api";
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
+import { errorMessage, type AdminApi, type SearchConnection, type SearchResponse, type SearchService, type SearchServiceWrite, type SearchUsage, type SearchUsageDashboard } from "./api";
+import { metricLabels, tokens, UsageLineChart, type TokenMetric } from "./TokenChart";
 
 function citationUrl(value: string): string | undefined {
   try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : undefined; } catch { return undefined; }
@@ -9,7 +10,7 @@ function costLabel(usage: SearchUsage | null): string {
   return cost && Number.isFinite(cost.amount) && cost.amount >= 0 ? `${cost.amount.toLocaleString(undefined, { maximumSignificantDigits: 12 })} ${cost.currency}` : "费用未知（不是 0）";
 }
 function UsageDetails(props: { usage: SearchUsage }) {
-  return <div class="admin-search-usage-detail"><strong>{costLabel(props.usage)}</strong><span>请求 {props.usage.requests} · 缓存输入 {props.usage.cached_in} · 非缓存输入 {props.usage.uncached_in} · 输出 {props.usage.output} · 推理 {props.usage.reasoning}</span></div>;
+  return <div class="admin-search-usage-detail"><strong>{costLabel(props.usage)}</strong><span>已知请求 {props.usage.requests} · 缓存输入 {props.usage.cached_in} · 非缓存输入 {props.usage.uncached_in} · 输出（不含思考）{props.usage.output} · 思考 {props.usage.reasoning}</span></div>;
 }
 
 function ConnectionForm(props: { api: AdminApi; onSaved: () => Promise<void> }) {
@@ -137,31 +138,80 @@ function ServiceTest(props: { api: AdminApi; service: SearchService; onAttempted
   </details>;
 }
 
+type SearchMetric = "attempts" | TokenMetric;
+const searchMetricLabels: Record<SearchMetric, string> = { attempts: "搜索尝试次数", ...metricLabels };
+
 function UsagePanel(props: { api: AdminApi; services: SearchService[]; revision: number }) {
-  const [records, setRecords] = createSignal<SearchUsageRecord[]>([]);
+  const [dashboard, setDashboard] = createSignal<SearchUsageDashboard | null>(null);
   const [hours, setHours] = createSignal("24");
+  const [view, setView] = createSignal<"chart" | "details">("chart");
+  const [metric, setMetric] = createSignal<SearchMetric>("attempts");
   const [loading, setLoading] = createSignal(false);
-  const [loaded, setLoaded] = createSignal(false);
   const [error, setError] = createSignal("");
   let disposed = false;
   let controller: AbortController | undefined;
   let version = 0;
   onCleanup(() => { disposed = true; version++; controller?.abort(); });
-  const totals = createMemo(() => {
-    const currencies = new Map<string, number>(); let unknown = 0;
-    for (const record of records()) { const cost = record.usage?.cost; if (!cost || !Number.isFinite(cost.amount) || cost.amount < 0) unknown++; else currencies.set(cost.currency, (currencies.get(cost.currency) ?? 0) + cost.amount); }
-    return { currencies: Array.from(currencies), unknown };
+  const serviceNames = createMemo(() => new Map(props.services.map((service) => [service.id, service.name])));
+  const series = createMemo(() => {
+    const selected = metric();
+    return (dashboard()?.services ?? []).map((service) => ({
+      key: service.service_id,
+      label: serviceNames().get(service.service_id) ?? service.service_id,
+      points: service.points.map((point) => ({ at_ms: point.at_ms, value: selected === "attempts" ? point.attempts : tokens(point, selected) })),
+    }));
   });
   async function load() {
-    if (disposed || loading()) return;
+    if (disposed) return;
     const current = ++version; controller?.abort(); controller = new AbortController(); setLoading(true); setError("");
-    try { const to = Date.now(); const value = await props.api.searchUsage(to - Number(hours()) * 3600_000, to, controller.signal); if (!disposed && current === version) { setRecords(value); setLoaded(true); } }
+    try {
+      const to = Date.now();
+      const value = await props.api.searchUsage(to - Number(hours()) * 3600_000, to, controller.signal);
+      if (!disposed && current === version) setDashboard(value);
+    }
     catch (failure) { if (!disposed && current === version) setError(errorMessage(failure)); }
     finally { if (!disposed && current === version) setLoading(false); }
   }
-  onMount(() => void load());
-  return <section class="admin-card" aria-labelledby="search-usage-title" aria-busy={loading()}><div class="admin-section-heading"><div><h3 id="search-usage-title">搜索用量 · 独立于模型账单</h3><p class="admin-note">仅记录服务、时间、状态和真实用量元数据，不记录查询、来源 URL 或用户信息。不换算汇率，未知费用不视为零。</p><Show when={props.revision > 0}><p class="admin-note">本页已执行过测试，请刷新查看最新记录。</p></Show></div><div class="admin-actions"><label>时间范围<select value={hours()} disabled={loading()} onChange={(event) => { setHours(event.currentTarget.value); void load(); }}><option value="24">近 24 小时</option><option value="168">近 7 天</option><option value="720">近 30 天</option></select></label><button type="button" disabled={loading()} onClick={() => void load()}>{loading() ? "加载中…" : "刷新用量"}</button></div></div>
-    <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show><Show when={loaded()}><div class="admin-search-costs"><For each={totals().currencies}>{([currency, amount]) => <span class="admin-badge">已知费用 {amount.toLocaleString(undefined, { maximumSignificantDigits: 12 })} {currency}</span>}</For><span class="admin-note">{records().length} 条尝试 · {totals().unknown} 条费用未知</span></div><div class="admin-search-records"><For each={records()} fallback={<p class="admin-empty">此时间范围尚无搜索用量记录。</p>}>{(record) => <article class="admin-search-record"><div><strong>{props.services.find((service) => service.id === record.service_id)?.name ?? record.service_id}</strong><span class="admin-badge">{record.status}</span><small>{new Date(record.at_ms).toLocaleString()}</small></div><Show when={record.usage} fallback={<p class="admin-note">上游未提供用量 · 费用未知（不是 0）</p>}>{(usage) => <UsageDetails usage={usage()} />}</Show></article>}</For></div></Show>
+  createEffect(on(() => props.revision, () => void load()));
+  return <section class="admin-card admin-search-dashboard" aria-labelledby="search-usage-title" aria-busy={loading()}>
+    <div class="admin-section-heading">
+      <div><h3 id="search-usage-title">搜索用量 · 独立于模型账单</h3><p class="admin-note">仅记录服务、时间、状态和真实用量元数据，不记录查询、来源 URL 或用户信息。不换算汇率，未知费用不视为零。</p></div>
+      <div class="admin-actions">
+        <label>时间范围<select name="search-usage-range" value={hours()} disabled={loading()} onChange={(event) => { setHours(event.currentTarget.value); void load(); }}><option value="24">近 24 小时</option><option value="168">近 7 天</option><option value="720">近 30 天</option></select></label>
+        <button type="button" disabled={loading()} onClick={() => void load()}>{loading() ? "加载中…" : "刷新用量"}</button>
+      </div>
+    </div>
+    <Show when={error()}><p class="admin-error" role="alert">{error()}</p></Show>
+    <Show when={dashboard()}>{(data) => <>
+      <p class="admin-note">完整统计区间（本地时间，含首尾）：{new Date(data().from_ms).toLocaleString()} — {new Date(data().to_ms).toLocaleString()}</p>
+      <div class="admin-search-costs" aria-label="完整区间搜索用量">
+        <span class="admin-badge">全部尝试 {data().totals.attempts.toLocaleString()}</span>
+        <span class="admin-badge">上游已知请求 {data().totals.requests.toLocaleString()}</span>
+        <span class="admin-badge">已知总 token {tokens(data().totals, "total").toLocaleString()}</span>
+        <For each={data().totals.known_costs}>{(cost) => <span class="admin-badge">已知费用 {cost.amount.toLocaleString(undefined, { maximumSignificantDigits: 12 })} {cost.currency}</span>}</For>
+        <span class="admin-note">{data().totals.unknown_costs.toLocaleString()} 条尝试费用未知（不是 0）</span>
+      </div>
+      <p class="admin-note">尝试包含成功、失败和取消；已知请求与 token 只汇总上游已提供的用量，未提供不代表实际为零。总 token = 缓存输入 + 非缓存输入 + 输出（不含思考）+ 思考。</p>
+      <div class="admin-toolbar admin-search-usage-controls">
+        <div class="admin-actions" role="group" aria-label="搜索用量显示方式">
+          <button type="button" class={view() === "chart" ? "primary" : ""} aria-pressed={view() === "chart"} onClick={() => setView("chart")}>折线图</button>
+          <button type="button" class={view() === "details" ? "primary" : ""} aria-pressed={view() === "details"} onClick={() => setView("details")}>最新明细（最多 100 条）</button>
+        </div>
+        <Show when={view() === "chart"}><label>图表指标<select name="search-usage-metric" value={metric()} onChange={(event) => setMetric(event.currentTarget.value as SearchMetric)}><For each={Object.entries(searchMetricLabels)}>{([key, label]) => <option value={key}>{label}</option>}</For></select></label></Show>
+      </div>
+      <Show when={view() === "chart"} fallback={<>
+        <p class="admin-note">按时间从新到旧，仅显示本区间最新 {data().records.length} 条（最多 100 条）；上方合计与折线图始终覆盖完整区间，不受明细上限影响。</p>
+        <div class="admin-search-records"><For each={data().records} fallback={<p class="admin-empty">此时间范围尚无搜索用量记录。</p>}>{(record) => <article class="admin-search-record">
+          <div><strong>{serviceNames().get(record.service_id) ?? record.service_id}</strong><span class="admin-badge">{record.status}</span><small>{new Date(record.at_ms).toLocaleString()}</small></div>
+          <Show when={record.usage} fallback={<p class="admin-note">上游未提供用量 · 费用未知（不是 0）</p>}>{(usage) => <UsageDetails usage={usage()} />}</Show>
+        </article>}</For></div>
+      </>}>
+        <Show when={data().totals.attempts > 0} fallback={<p class="admin-empty">此时间范围尚无搜索尝试，暂无可绘制数据。未提供的费用与用量不视为零。</p>}>
+          <UsageLineChart from_ms={data().from_ms} to_ms={data().to_ms} bucket_ms={data().bucket_ms} inclusiveEnd
+            series={series()} metricLabel={searchMetricLabels[metric()]} label={`各搜索服务${searchMetricLabels[metric()]}时间图`} />
+        </Show>
+      </Show>
+    </>}</Show>
   </section>;
 }
 

@@ -73,11 +73,12 @@
 .admin-summary .admin-card { display: flex; flex-direction: column; gap: 6px; border-top: 3px solid var(--nk-accent); }
 .admin-summary strong { font-size: clamp(20px, 3vw, 30px); letter-spacing: -0.035em; line-height: 1.3; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .admin-summary small { color: var(--nk-text-muted); }
-.admin-chart { margin: 0; }
+.admin-chart { margin: 0; min-width: 0; }
 .admin-chart figcaption { font-weight: 650; margin-bottom: 8px; }
 .admin-token-canvas { display: block; width: 100%; height: 300px; touch-action: pan-y; }
+.admin-token-canvas:focus-visible { outline: 2px solid var(--nk-accent); outline-offset: 3px; }
 .admin-legend { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 9px 20px; font-size: 12px; }
-.admin-legend li { display: flex; align-items: baseline; gap: 5px; overflow-wrap: anywhere; }
+.admin-legend li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .admin-color-dot { display: inline-block; width: 10px; height: 10px; flex: none; border-radius: 50%; margin-right: 5px; }
 .admin-chart-values { padding: 12px; background: var(--nk-surface); border-radius: 7px; margin-top: 12px; font-size: 13px; }
 .admin-table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); overscroll-behavior-x: contain; }
@@ -143,6 +144,9 @@
 .admin-search-usage-detail { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; font-size: 13px; padding: 10px 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .admin-search-usage-detail > span { color: var(--nk-text-muted); }
 .admin-search-costs { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 14px; }
+.admin-search-dashboard :is(button, select) { font-size: 16px; min-height: 44px; }
+.admin-search-usage-controls > .admin-actions { flex: 1 1 280px; }
+.admin-search-usage-controls > label { flex: 0 1 260px; }
 .admin-search-records { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; min-width: 0; }
 .admin-search-record { padding: 14px 0; border-top: 1px solid var(--nk-border); min-width: 0; }
 .admin-search-record > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; overflow-wrap: anywhere; min-width: 0; }
