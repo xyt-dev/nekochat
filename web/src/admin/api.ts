@@ -8,6 +8,7 @@ export interface CharacterParameters {
 }
 export interface CharacterRecipe {
   name: string; display_name: string; system_prompt: string; model_id: string | null;
+  search_service_id: string | null;
   parameters: CharacterParameters; enabled: boolean; sort: number;
   avatar: string | null; background: CharacterBackground | null; resource_packs: string[];
   sticker_identity: "self" | "neutral"; sticker_frequency: "rare" | "normal" | "often";
@@ -66,6 +67,38 @@ export interface ChatgptStatus {
   welcome_required: boolean; usage_url: string;
 }
 export interface ChatgptAuthorization { authorization_url: string; expires_at: number; loopback_available: boolean }
+export interface SearchConnection {
+  enabled: boolean; base_url: string; timeout_secs: number; max_calls_per_turn: number; max_results: number;
+  has_access_token: boolean; has_admin_token: boolean;
+}
+export interface SearchConnectionWrite {
+  enabled: boolean; base_url: string; timeout_secs: number; max_calls_per_turn: number; max_results: number;
+  access_token?: string; admin_token?: string; clear_access_token?: boolean; clear_admin_token?: boolean;
+}
+export type SearchServiceKind = "deepseek" | "gpt";
+export type SearchAuthMode = "api_key" | "shared_chatgpt";
+export interface SearchService {
+  id: string; name: string; kind: SearchServiceKind; enabled: boolean; auth_mode: SearchAuthMode;
+  model: string | null; has_api_key: boolean; connected: boolean; supports_fetch: boolean;
+}
+export interface SearchServiceWrite {
+  name: string; kind: SearchServiceKind; enabled: boolean; auth_mode: SearchAuthMode;
+  model?: string | null; api_key?: string; clear_api_key?: boolean;
+}
+export interface SearchUsage {
+  requests: number; cached_in: number; uncached_in: number; output: number; reasoning: number;
+  cost: { amount: number; currency: string } | null;
+}
+export interface SearchSource {
+  id: string; title: string; url: string; snippet: string; summary?: string | null;
+  content?: string | null; published_at?: string | null;
+}
+export interface SearchResponse {
+  query: string; sources: SearchSource[]; summary?: string | null; retrieved_at_ms: number; usage: SearchUsage;
+}
+export interface SearchUsageRecord {
+  id: string; at_ms: number; service_id: string; status: string; usage: SearchUsage | null;
+}
 export class AdminError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
@@ -103,15 +136,23 @@ export interface AdminApi {
   chatgptLogout(): Promise<ChatgptStatus>;
   chatgptSelect(clientId: string): Promise<ChatgptStatus>;
   chatgptAcknowledge(): Promise<void>;
+  searchConnection(signal?: AbortSignal): Promise<SearchConnection>;
+  saveSearchConnection(body: SearchConnectionWrite, signal?: AbortSignal): Promise<SearchConnection>;
+  testSearchConnection(signal?: AbortSignal): Promise<{ ok: boolean; services: number }>;
+  searchServices(signal?: AbortSignal): Promise<SearchService[]>;
+  saveSearchService(serviceId: string | null, body: SearchServiceWrite, signal?: AbortSignal): Promise<SearchService>;
+  deleteSearchService(serviceId: string, signal?: AbortSignal): Promise<void>;
+  testSearchService(serviceId: string, query: string, signal?: AbortSignal): Promise<SearchResponse>;
+  searchUsage(from: number, to: number, signal?: AbortSignal): Promise<SearchUsageRecord[]>;
 }
 
 /** Admin requests never join the chat access-password queue or retain a password. */
 export function createAdminApi(onAccessError: (status: number) => void): AdminApi {
-  async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+  async function request<T>(path: string, method = "GET", body?: unknown, signal?: AbortSignal): Promise<T> {
     let response: Response;
     try {
       response = await fetch(`/api/admin${path}`, {
-        method, credentials: "same-origin", cache: "no-store",
+        method, credentials: "same-origin", cache: "no-store", signal,
         ...(body === undefined ? {} : body instanceof Blob
           ? { headers: { "content-type": body.type }, body }
           : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
@@ -159,6 +200,14 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     chatgptLogout: () => request<ChatgptStatus>("/chatgpt/logout", "POST"),
     chatgptSelect: (clientId: string) => request<ChatgptStatus>("/chatgpt/select", "POST", { client_id: clientId }),
     chatgptAcknowledge: () => request<void>("/chatgpt/acknowledge", "POST"),
+    searchConnection: (signal) => request<SearchConnection>("/search/connection", "GET", undefined, signal),
+    saveSearchConnection: (body, signal) => request<SearchConnection>("/search/connection", "PUT", body, signal),
+    testSearchConnection: (signal) => request<{ ok: boolean; services: number }>("/search/connection/test", "POST", {}, signal),
+    searchServices: (signal) => request<SearchService[]>("/search/services", "GET", undefined, signal),
+    saveSearchService: (serviceId, body, signal) => request<SearchService>(`/search/services${serviceId ? `/${id(serviceId)}` : ""}`, serviceId ? "PUT" : "POST", body, signal),
+    deleteSearchService: (serviceId, signal) => request<void>(`/search/services/${id(serviceId)}`, "DELETE", undefined, signal),
+    testSearchService: (serviceId, query, signal) => request<SearchResponse>(`/search/services/${id(serviceId)}/test`, "POST", { query }, signal),
+    searchUsage: (from, to, signal) => request<SearchUsageRecord[]>(`/search/usage?${new URLSearchParams({ from_ms: String(from), to_ms: String(to) })}`, "GET", undefined, signal),
   };
 }
 export const emptyModel = (provider: string, upstream_id = "", defaults: ModelDefaults | null = null): ModelSpec => ({

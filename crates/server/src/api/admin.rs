@@ -258,7 +258,11 @@ pub async fn create_character(
     State(state): State<AppState>,
     JsonBody(body): JsonBody<CharacterSpec>,
 ) -> Result<(StatusCode, Json<Character>), ApiError> {
+    let _guard = state.search.mutations.lock().await;
     check_character(&state, &body).await?;
+    if let Some(id) = &body.search_service_id {
+        state.search.validate_binding(id).await?;
+    }
     let store = state.store.clone();
     let c = blocking(move || store.create_character(&body)).await?;
     Ok((StatusCode::CREATED, Json(c)))
@@ -269,7 +273,16 @@ pub async fn update_character(
     Path(id): Path<String>,
     JsonBody(body): JsonBody<CharacterSpec>,
 ) -> Result<Json<Character>, ApiError> {
+    let _guard = state.search.mutations.lock().await;
+    let store = state.store.clone();
+    let existing_id = id.clone();
+    let previous = blocking(move || store.get_character(&existing_id)).await?.ok_or_else(ApiError::not_found)?;
     check_character(&state, &body).await?;
+    if body.search_service_id != previous.spec.search_service_id {
+        if let Some(id) = &body.search_service_id {
+            state.search.validate_binding(id).await?;
+        }
+    }
     let store = state.store.clone();
     Ok(Json(
         blocking(move || store.update_character(&id, &body)).await?,

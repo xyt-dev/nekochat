@@ -1285,6 +1285,11 @@ div.nk-math {
 /* ---- narrow screens: the sidebar becomes a drawer ---- */
 
 @media (max-width: 760px) {
+  .character-background-image[data-position="right"] {
+    left: 50%;
+    max-width: calc(100% - 32px);
+  }
+
   .menu-button {
     display: inline-flex;
   }

@@ -64,6 +64,7 @@ async fn local_images_are_encoded_as_protocol_image_parts_not_filename_text() {
             effort: None,
             session_id: "session",
             parameters: &parameters,
+            tools: None,
         };
         let http = reqwest::Client::new();
         let stream = if responses {

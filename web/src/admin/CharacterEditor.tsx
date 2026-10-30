@@ -1,8 +1,8 @@
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { BackgroundPosition } from "../api";
 import { BackgroundImage } from "../components/BackgroundImage";
 import { localImageUrl } from "../localImages";
-import { errorMessage, type AdminApi, type Character, type CharacterParameters, type CharacterRecipe, type ListedModel, type Provider, type ResourcePack } from "./api";
+import { errorMessage, type AdminApi, type Character, type CharacterParameters, type CharacterRecipe, type ListedModel, type Provider, type ResourcePack, type SearchService } from "./api";
 import { PackPreview } from "./ResourcePacks";
 import { AvatarInput } from "./AvatarInput";
 
@@ -25,6 +25,11 @@ export function CharacterEditor(props: {
   const [displayName, setDisplayName] = createSignal(initial?.display_name ?? "");
   const [prompt, setPrompt] = createSignal(initial?.system_prompt ?? "");
   const [modelId, setModelId] = createSignal(initial?.model_id ?? "");
+  const [searchServiceId, setSearchServiceId] = createSignal(initial?.search_service_id ?? "");
+  const [searchServices, setSearchServices] = createSignal<SearchService[]>([]);
+  const [searchLoading, setSearchLoading] = createSignal(false);
+  const [searchError, setSearchError] = createSignal("");
+  const searchController = new AbortController();
   const [enabled, setEnabled] = createSignal(initial?.enabled ?? true);
   const [sort, setSort] = createSignal(String(initial?.sort ?? 0));
   const [effort, setEffort] = createSignal(initial?.parameters.effort ?? "");
@@ -43,6 +48,16 @@ export function CharacterEditor(props: {
   const [error, setError] = createSignal("");
   let disposed = false;
   onCleanup(() => { disposed = true; });
+  onCleanup(() => searchController.abort());
+  const selectedSearchService = createMemo(() => searchServices().find((service) => service.id === searchServiceId()));
+  async function loadSearchServices() {
+    if (disposed || searchLoading()) return;
+    setSearchLoading(true); setSearchError("");
+    try { const services = await props.api.searchServices(searchController.signal); if (!disposed) setSearchServices(services); }
+    catch (failure) { if (!disposed) setSearchError(errorMessage(failure)); }
+    finally { if (!disposed) setSearchLoading(false); }
+  }
+  onMount(() => void loadSearchServices());
   const model = createMemo(() => props.models.find((item) => item.id === modelId()));
   const nativeNumberFields = createMemo(() => NUMBER_FIELDS.filter((field) =>
     model()?.protocol !== "chatgpt_responses" && (model()?.protocol !== "responses" || !["seed", "frequency_penalty", "presence_penalty"].includes(field.key))));
@@ -99,6 +114,7 @@ export function CharacterEditor(props: {
       if (missingPacks().length) throw new Error("请移除未加载的资源包后保存");
       await props.api.saveCharacter(initial?.id ?? null, {
         name: name().trim(), display_name: displayName().trim(), system_prompt: prompt(), model_id: modelId() || null,
+        search_service_id: searchServiceId() || null,
         parameters, enabled: enabled(), sort: order, avatar: avatar(), background: url ? { url, opacity: opacity(), position: position() } : null,
         resource_packs: packs(), sticker_identity: identity(), sticker_frequency: frequency(),
       });
@@ -122,6 +138,16 @@ export function CharacterEditor(props: {
           <label class="admin-check"><input name="character-enabled" type="checkbox" checked={enabled()} onChange={(event) => setEnabled(event.currentTarget.checked)} />启用角色</label>
         </div>
         <Show when={!model()}><p class="admin-note">未绑定可用模型的角色不会出现在聊天端，请先上架模型并绑定。</p></Show>
+        <h4>可选搜索服务（仅管理员）</h4>
+        <label>角色搜索绑定<select name="character-search-service" value={searchServiceId()} onChange={(event) => setSearchServiceId(event.currentTarget.value)}>
+          <option value="" selected={!searchServiceId()}>不使用搜索服务</option>
+          <Show when={searchServiceId() && !selectedSearchService()}><option value={searchServiceId()} selected>保留原绑定 · {searchServiceId()}（目录未加载或服务不可用）</option></Show>
+          <For each={searchServices()}>{(service) => <option value={service.id} selected={searchServiceId() === service.id} disabled={(!service.enabled || !service.connected) && service.id !== searchServiceId()}>{service.name} · {service.kind === "deepseek" ? "DeepSeek" : "GPT"}{!service.enabled ? "（已停用）" : !service.connected ? "（未授权）" : ""}</option>}</For>
+        </select></label>
+        <p class="admin-note">选填。模型只收到受限搜索证据；聊天端不会收到服务 ID、提供商配置或密钥。目录离线时保留原绑定，不妨碍修改其他角色字段。</p>
+        <Show when={searchLoading()}><p class="admin-note" role="status">正在独立加载搜索服务，不影响编辑角色…</p></Show>
+        <Show when={searchError()}><p class="admin-note" role="status">搜索目录暂不可用：{searchError()}。原绑定仍保留。<button type="button" disabled={searchLoading()} onClick={() => void loadSearchServices()}>重试搜索目录</button></p></Show>
+        <Show when={searchServiceId() && (!selectedSearchService() || !selectedSearchService()?.enabled || !selectedSearchService()?.connected)}><p class="admin-note">当前绑定不可用或状态未知，保存时不会自动替换或清除。可保留绑定，或明确选择「不使用搜索服务」。</p></Show>
         <h4>角色头像</h4><p class="admin-note">在角色卡片与角色回复旁显示；留空使用名称首字。</p>
         <AvatarInput api={props.api} name="character-avatar" value={avatar()} onChange={setAvatar} onUploading={setAvatarUploading} disabled={busy() || uploading()} />
         <label>系统提示词<textarea name="system-prompt" rows="9" value={prompt()} onInput={(event) => setPrompt(event.currentTarget.value)} /></label>
@@ -134,7 +160,7 @@ export function CharacterEditor(props: {
         <h4>可选背景</h4><p class="admin-note">默认为无背景。仅可上传本站图片或选择下方本地素材；图片等比完整展示，不拉伸、不裁切，不使用滤镜或动画。</p>
         <label>上传背景（PNG / JPEG / WebP / GIF / AVIF，≤ 5 MiB）<input name="character-background" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label>
         <label>背景位置<select name="character-background-position" value={position()} disabled={!background()} onChange={(event) => setPosition(event.currentTarget.value as BackgroundPosition)}><option value="center">居中</option><option value="right">偏右 · 黄金分割</option></select></label>
-        <p class="admin-note">偏右将图像中心放在可用区域 61.8% 处，适合窄幅角色形象；自动限制宽度并保留边距，保持图片完整。</p>
+        <p class="admin-note">桌面偏右将图像中心放在可用区域 61.8% 处，适合窄幅角色形象；手机窄屏自动居中，不改动保存的位置。两种布局均限制宽度并保留边距，保持图片完整。</p>
         <Show when={localImageUrl(background())}>{(url) => <div class="admin-background-preview"><div class="admin-background-stage"><BackgroundImage background={{ url: url(), opacity: opacity(), position: position() }} alt="角色背景预览" /></div><button type="button" onClick={() => { setBackground(""); setOpacity(0.15); setPosition("center"); }}>清除背景</button></div>}</Show>
         <label>背景透明度：{Math.round(opacity() * 100)}%<input name="character-background-opacity" type="range" min="0" max="1" step="0.01" value={opacity()} disabled={!background()} onInput={(event) => setOpacity(Number(event.currentTarget.value))} /></label>
         <h4>授权资源包</h4><p class="admin-note">只把勾选包的静态指引与目录提供给此角色。预览素材不下载到外站，不运行 SKILL 中的工具。</p>

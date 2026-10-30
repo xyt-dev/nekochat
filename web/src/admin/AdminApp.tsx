@@ -6,6 +6,7 @@ import { Models, Roles } from "./Management";
 import { Monitor } from "./Monitor";
 import { ResourcePacks } from "./ResourcePacks";
 import { Users } from "./Users";
+import { SearchServices } from "./SearchServices";
 import "./admin.css";
 
 function ThemeSelect() {
@@ -49,12 +50,13 @@ function Dashboard(props: { api: AdminApi; providers: Provider[] }) {
   }
   onMount(() => void initialize());
   return <>
-    <nav class="admin-nav" aria-label="管理功能"><For each={[["monitor", "用量监控"], ["users", "用户管理"], ["models", "模型管理"], ["roles", "角色管理"], ["resources", "资源包"]]}>{([key, label]) => <button type="button" aria-current={tab() === key ? "page" : undefined} classList={{ active: tab() === key }} onClick={() => setTab(key)}>{label}</button>}</For></nav>
+    <nav class="admin-nav" aria-label="管理功能"><For each={[["monitor", "用量监控"], ["users", "用户管理"], ["models", "模型管理"], ["roles", "角色管理"], ["search", "搜索服务"], ["resources", "资源包"]]}>{([key, label]) => <button type="button" aria-current={tab() === key ? "page" : undefined} classList={{ active: tab() === key }} onClick={() => setTab(key)}>{label}</button>}</For></nav>
     <main class="admin-main"><Show when={error()}><div class="admin-error" role="alert">{error()} <button type="button" disabled={loading()} onClick={() => void initialize()}>重试加载配置</button></div></Show>
       <Switch>
         <Match when={tab() === "monitor"}><Monitor api={props.api} /></Match>
         <Match when={tab() === "users"}><Users api={props.api} /></Match>
-        <Match when={tab() !== "monitor" && tab() !== "users"}>
+        <Match when={tab() === "search"}><SearchServices api={props.api} /></Match>
+        <Match when={tab() !== "monitor" && tab() !== "users" && tab() !== "search"}>
           <Show when={ready()} fallback={<p role="status">{loading() ? "正在加载管理配置…" : "配置加载失败，请重试。"}</p>}>
             <Switch>
               <Match when={tab() === "models"}><Models api={props.api} providers={providers()} models={models()} characters={characters()} packs={packs()} settings={settings()} reload={reload} onCommitted={afterCatalogCommit} /></Match>

@@ -39,6 +39,7 @@ async fn collect(events: &[Value]) -> Vec<Result<StreamEvent, GatewayError>> {
         effort: Some("high"),
         session_id: "stable-session",
         parameters: &parameters,
+        tools: None,
     };
     let result = stream_responses(&reqwest::Client::new(), &provider, &request)
         .await

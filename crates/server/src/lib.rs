@@ -4,11 +4,13 @@ pub mod assets;
 pub mod attachments;
 pub mod auth;
 pub mod chat;
+mod chat_search;
 pub mod codex;
 pub mod config;
 pub mod generation;
 mod model_defaults;
 mod observation;
+pub mod search;
 pub mod state;
 pub mod web;
 
@@ -132,6 +134,12 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
         .route("/api/admin/chatgpt/logout", post(codex::logout))
         .route("/api/admin/chatgpt/select", post(codex::select))
         .route("/api/admin/chatgpt/acknowledge", post(codex::acknowledge))
+        .route("/api/admin/search/connection", get(search::connection).put(search::save_connection))
+        .route("/api/admin/search/connection/test", post(search::test_connection))
+        .route("/api/admin/search/services", get(search::services).post(search::create_service))
+        .route("/api/admin/search/services/{id}", put(search::update_service).delete(search::delete_service))
+        .route("/api/admin/search/services/{id}/test", post(search::test_service))
+        .route("/api/admin/search/usage", get(search::usage))
         .route("/api/admin/providers", get(admin::list_providers))
         .route("/api/admin/stats", get(api::monitoring::stats))
         .route("/api/admin/quotas", get(api::monitoring::quotas))

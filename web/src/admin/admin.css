@@ -126,6 +126,27 @@
 .admin-app .mono { overflow-wrap: anywhere; }
 .admin-app [role="status"] { overflow-wrap: anywhere; }
 .admin-app .admin-notice { padding: 12px 14px; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); background: var(--nk-surface); color: var(--nk-accent); }
+.admin-search { min-width: 0; }
+.admin-search-secrets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 18px 0; margin-top: 16px; border-top: 1px solid var(--nk-border); }
+.admin-search-secrets > div { min-width: 0; }
+.admin-search-secrets .admin-check { margin-top: 10px; }
+.admin-search-services { min-width: 0; }
+.admin-search-test { padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--nk-border); min-width: 0; }
+.admin-search-test > summary { color: var(--nk-accent); font-weight: 600; }
+.admin-search-test fieldset { display: grid; gap: 14px; margin-bottom: 12px; }
+.admin-search-result { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--nk-border); min-width: 0; }
+.admin-search-result > h4 { margin-top: 20px; }
+.admin-search-text { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font: inherit; font-size: 13px; max-height: 360px; overflow-y: auto; padding: 14px; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); background: var(--nk-bg); margin: 8px 0 16px; min-width: 0; }
+.admin-search-source { padding: 16px; margin: 14px 0; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); background: var(--nk-bg); min-width: 0; }
+.admin-search-source > a { display: inline-block; max-width: 100%; font-size: 13px; margin-bottom: 12px; }
+.admin-search-source > p { white-space: pre-wrap; }
+.admin-search-usage-detail { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; font-size: 13px; padding: 10px 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.admin-search-usage-detail > span { color: var(--nk-text-muted); }
+.admin-search-costs { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 14px; }
+.admin-search-records { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; min-width: 0; }
+.admin-search-record { padding: 14px 0; border-top: 1px solid var(--nk-border); min-width: 0; }
+.admin-search-record > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; overflow-wrap: anywhere; min-width: 0; }
+.admin-search-record small { color: var(--nk-text-muted); font-size: 12px; }
 @media (max-width: 680px) {
   .admin-header { padding: 14px 16px; flex-wrap: wrap; }
   .admin-header > .admin-actions { width: 100%; justify-content: space-between; gap: 12px; }
@@ -145,6 +166,9 @@
   .admin-section-heading { gap: 12px; }
   .admin-section-heading > .admin-actions { flex-basis: 100%; }
   .admin-form-grid { grid-template-columns: 1fr; gap: 16px; }
+  .admin-search-secrets { grid-template-columns: 1fr; gap: 20px; }
+  .admin-search-source { padding: 12px; }
+  .admin-search-test form > button { width: 100%; min-height: 44px; }
   .admin-summary { grid-template-columns: 1fr; gap: 0; }
   .admin-summary .admin-card { margin-bottom: 10px; }
   .admin-summary strong { font-size: 26px; }

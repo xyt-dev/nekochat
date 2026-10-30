@@ -24,6 +24,7 @@ fn schema_one_migrates_without_losing_tree_usage_or_private_model_metadata() {
     assert_eq!(role.spec.display_name, "Old role");
     assert_eq!(role.spec.model_id.as_deref(), Some("model"));
     assert_eq!(role.spec.system_prompt, "SECRET");
+    assert!(role.spec.search_service_id.is_none());
     assert!(role.spec.background.is_none());
     assert!(role.spec.resource_packs.is_empty());
     let nodes = store.nodes("conv").unwrap();
@@ -60,7 +61,7 @@ fn schema_one_migrates_without_losing_tree_usage_or_private_model_metadata() {
     assert_eq!(
         conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
             .unwrap(),
-        4
+        6
     );
     drop(conn);
     assert_eq!(Store::open(&path).unwrap().nodes("conv").unwrap().len(), 2);

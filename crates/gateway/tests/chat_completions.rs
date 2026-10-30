@@ -23,6 +23,7 @@ fn req(style: ReasoningStyle, effort: Option<&'static str>) -> ChatRequest<'stat
         effort,
         session_id: "sess-1",
         parameters: &DEFAULT_PARAMETERS,
+        tools: None,
     }
 }
 

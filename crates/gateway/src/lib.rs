@@ -4,10 +4,12 @@ mod chat_completions;
 mod chatgpt;
 mod http;
 mod responses;
+mod tools;
 
 pub use chat_completions::{build_body, list_models, parse_usage, stream_chat};
 pub use chatgpt::stream_chatgpt;
 pub use responses::stream_responses;
+pub use tools::{MAX_ARGUMENT_BYTES, ToolAccumulator, ToolCall, ToolCallDelta, ToolContext, ToolDefinition, ToolExchange, ToolResult};
 
 use nekochat_core::{GenerationParameters, ReasoningStyle, Usage};
 
@@ -57,6 +59,7 @@ pub struct ChatRequest<'a> {
     pub effort: Option<&'a str>,
     pub session_id: &'a str,
     pub parameters: &'a GenerationParameters,
+    pub tools: Option<&'a ToolContext>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -64,6 +67,9 @@ pub enum StreamEvent {
     Reasoning(String),
     Text(String),
     Usage(Usage),
+    ToolCallDelta(ToolCallDelta),
+    /// Complete native output items, including encrypted reasoning for stateless continuation.
+    ResponseItem(serde_json::Value),
 }
 
 #[derive(Debug, thiserror::Error)]
