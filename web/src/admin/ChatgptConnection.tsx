@@ -9,12 +9,18 @@ export function ChatgptConnection(props: { api: AdminApi; onChanged: () => Promi
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   const [welcome, setWelcome] = createSignal(false);
+  const activeAccount = () => status()?.accounts.find((account) => account.client_id === status()?.active_client_id);
+  const selectedIsActive = () => !!status()?.connected && selected() === status()?.active_client_id;
   let disposed = false;
   let polling = false;
   let statusVersion = 0;
   async function update(next: ChatgptStatus) {
     if (disposed) return;
-    const changed = status()?.connected !== next.connected || status()?.active_client_id !== next.active_client_id;
+    const previous = status();
+    const changed = previous?.connected !== next.connected || previous?.active_client_id !== next.active_client_id;
+    if (!previous || previous.active_client_id !== next.active_client_id || selected() && !next.accounts.some((account) => account.client_id === selected())) {
+      setSelected(next.active_client_id ?? "");
+    }
     setStatus(next); setWelcome(next.welcome_required);
     if (!next.pending) setAuthorizationUrl("");
     if (changed) await props.onChanged();
@@ -62,9 +68,10 @@ export function ChatgptConnection(props: { api: AdminApi; onChanged: () => Promi
     <h3 id="chatgpt-connection-title">连接官方ChatGPT账号（订阅）</h3>
     <p class="admin-note">通过 OpenAI 官方 Sign in with ChatGPT 授权，使用账号允许的 ChatGPT 订阅或 credits；与 API key 计费分开。只有管理员可以连接，凭证仅保存在本服务器，不发送给浏览器。不自动修改现有角色或默认角色设置。</p>
     <p role="status">{status() ? status()!.connected ? "已连接 · 使用 ChatGPT 订阅" : "尚未连接可用的 ChatGPT 账号" : "正在读取连接状态…"} <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">Manage usage · 管理 ChatGPT 用量</a></p>
-    <Show when={status()?.active_client_id}><p class="admin-note">当前账号：{status()?.accounts.find((account) => account.client_id === status()?.active_client_id)?.label}</p></Show>
-    <label>ChatGPT 账号 / 工作区<select name="chatgpt-account" value={selected()} disabled={busy()} onChange={(event) => setSelected(event.currentTarget.value)}><option value="">添加新的账号 / 工作区</option><For each={status()?.accounts ?? []}>{(account) => <option value={account.client_id}>{account.label}{account.connected ? "（已保存会话）" : "（需重新授权）"}</option>}</For></select></label>
-    <div class="admin-actions"><button type="button" class="primary" disabled={busy() || !status() || !!status()?.pending} onClick={() => void begin()}>Continue with ChatGPT</button><Show when={selected() && status()?.accounts.some((account) => account.client_id === selected() && account.connected)}><button type="button" disabled={busy()} onClick={() => void action(() => props.api.chatgptSelect(selected()))}>切换至此账号</button></Show><Show when={status()?.connected}><button type="button" disabled={busy()} onClick={() => void action(() => props.api.chatgptLogout())}>退出当前账号</button></Show><button type="button" disabled={busy()} onClick={() => void refresh()}>刷新状态</button></div>
+    <p class="admin-note" aria-live="polite">当前使用账号：<strong>{status() ? status()!.connected ? activeAccount()?.label ?? status()!.active_client_id ?? "账号信息暂不可用" : "无（尚未连接）" : "正在读取…"}</strong></p>
+    <label>ChatGPT 账号 / 工作区<select name="chatgpt-account" value={selected()} disabled={busy() || !status()} onChange={(event) => setSelected(event.currentTarget.value)}><option value="" selected={selected() === ""}>添加新的账号 / 工作区</option><For each={status()?.accounts ?? []}>{(account) => <option value={account.client_id} selected={selected() === account.client_id}>{account.label}{account.client_id === status()?.active_client_id && status()?.connected ? "（正在使用）" : account.connected ? "（已保存会话）" : "（需重新授权）"}</option>}</For></select></label>
+    <p class="admin-note">订阅请求固定使用当前账号。选择其他已保存账号后，点击「切换至此账号」才会用于后续请求。</p>
+    <div class="admin-actions"><button type="button" class="primary" disabled={busy() || !status() || !!status()?.pending} onClick={() => void begin()}>Continue with ChatGPT</button><Show when={selected() && status()?.accounts.some((account) => account.client_id === selected() && account.connected)}><button type="button" disabled={busy() || selectedIsActive()} onClick={() => void action(() => props.api.chatgptSelect(selected()))}>{selectedIsActive() ? "正在使用此账号" : "切换至此账号"}</button></Show><Show when={status()?.connected}><button type="button" disabled={busy()} onClick={() => void action(() => props.api.chatgptLogout())}>退出当前账号</button></Show><button type="button" disabled={busy()} onClick={() => void refresh()}>刷新状态</button></div>
     <Show when={status()?.pending || authorizationUrl()}><div class="admin-oauth-pending">
       <p>请在 OpenAI 页面完成授权。本次授权十分钟后失效；返回地址仅绑定本服务器的安全环回监听器。</p>
       <Show when={authorizationUrl()}><p><a href={authorizationUrl()} target="_blank" rel="noopener noreferrer">重新打开本次官方授权页面</a></p></Show>
