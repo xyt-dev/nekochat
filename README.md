@@ -1,6 +1,6 @@
 # 🐾 nekochat
 
-LARGE SLOP MACHINE 的优质垃圾。
+THIS IS LARGE SLOP MACHINE 的无害垃圾。
 
 拿个大模型开发还真把你当架构师了？？？？
 
