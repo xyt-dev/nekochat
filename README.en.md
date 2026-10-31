@@ -228,6 +228,14 @@ For reverse proxies and the `allowed_hosts` allowlist, completing ChatGPT OAuth 
 
 ---
 
+## 📄 License
+
+Except for third-party content with its own notices, this project's original source code is **dual-licensed under Apache-2.0 or MIT, at your option**. The SPDX expression is `Apache-2.0 OR MIT`. See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT) for the full terms.
+
+Third-party code and assets, including character artwork shown in screenshots, retain their own licenses and attribution requirements and are excluded from this choice of licenses. See the artwork notices below and the search service's [THIRD_PARTY_LICENSES](crates/search/THIRD_PARTY_LICENSES).
+
+---
+
 ## 🙏 Artwork and acknowledgments
 
 - The bundled **Big Fat Fish** and **Big Fat Fish & GPT Girl** stickers and annotations come from [Loping151/dsh-nekowhale-stickers](https://github.com/Loping151/dsh-nekowhale-stickers).

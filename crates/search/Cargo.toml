@@ -2,7 +2,7 @@
 name = "nekochat-search"
 version = "0.2.0"
 edition = "2024"
-license = "MIT"
+license = "Apache-2.0 OR MIT"
 description = "Independent authenticated search service for DeepSeek and ChatGPT native web search"
 
 [lib]

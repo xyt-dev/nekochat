@@ -2,6 +2,7 @@
   "name": "nekochat-web",
   "version": "0.13.0",
   "private": true,
+  "license": "(Apache-2.0 OR MIT)",
   "type": "module",
   "scripts": {
     "dev": "vite",

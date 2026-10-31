@@ -228,6 +228,14 @@ nekochat/
 
 ---
 
+## 📄 许可证
+
+除另有注明的第三方内容外，本项目自有源代码采用 **Apache-2.0 或 MIT 双重许可**，你可以任选其一。SPDX 标识为 `Apache-2.0 OR MIT`，完整条款见 [LICENSE-APACHE](LICENSE-APACHE) 与 [LICENSE-MIT](LICENSE-MIT)。
+
+第三方代码与素材（包括截图中的角色图片）保留原有许可和署名要求，不适用上述任选条款。素材条件见下方声明，独立搜索底座的第三方代码说明见 [THIRD_PARTY_LICENSES](crates/search/THIRD_PARTY_LICENSES)。
+
+---
+
 ## 🙏 素材来源与致谢
 
 - 内置「大肥鱼」「大肥鱼和 GPT 娘」表情包与标注整理自 [Loping151/dsh-nekowhale-stickers](https://github.com/Loping151/dsh-nekowhale-stickers)。
