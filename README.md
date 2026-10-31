@@ -1,5 +1,7 @@
 # nekochat
 
+LARGE SLOP MACHINE SOFTWARE
+
 自托管的角色扮演网页聊天。
 
 源码仓库：[xyt-dev/nekochat](https://github.com/xyt-dev/nekochat)，默认分支为 `main`。版本发布见 [Releases](https://github.com/xyt-dev/nekochat/releases)，变更记录见 [CHANGELOG](CHANGELOG.md)。
