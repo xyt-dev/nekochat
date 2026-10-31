@@ -132,7 +132,7 @@ In `crates/server/src/generation.rs`, an independent server-side Tokio task owns
 
 ## 🚀 Quickstart
 
-Build and run the web app and bundled search service directly with a **Rust toolchain** and **Bun**; a container is optional. The commands below use a shell with `source`, and token generation requires the OpenSSL command-line tool.
+Run the deployment script on **Linux** with **Python 3.11+**. The first build also needs a **Rust toolchain** and **Bun**; a container is optional. The script installs the programs outside the build directory and removes build artifacts after verification. Initial setup below uses a shell with `source` and the OpenSSL command-line tool.
 
 ### 1. Install the WASM build tools
 
@@ -143,7 +143,7 @@ cargo install wasm-bindgen-cli --version 0.2.129
 
 ### 2. Initialize configuration and search tokens
 
-Copy the web and search service configuration examples, then generate two different persistent search tokens in `.env.local`, which is excluded by `.gitignore`. Generate them on first setup; on later starts, source the existing file so the tokens stay the same.
+Run these initialization commands only for a new installation. For an existing site, preserve its configuration, `.env.local`, search tokens, and `data/`; do not overwrite or regenerate them. On first setup, copy the web and search service examples and generate two different persistent search tokens in `.env.local`, which is excluded by `.gitignore`.
 
 ```sh
 cp config.example.toml config.toml
@@ -162,23 +162,28 @@ Adjust `config.toml` for your model connection:
 - **Official ChatGPT subscription only (Plus / Pro):** comment out or remove the example `[[providers]]` sections and set `admin_password = "your-admin-password"`.
 - **DeepSeek / OpenCode Go API keys:** retain the relevant `[[providers]]` sections and set `export DEEPSEEK_API_KEY=...` or `export OPENCODE_API_KEY=...`. Each configured provider requires its corresponding environment variable to be nonempty at startup.
 
-### 3. Build the frontend and Rust release binaries
+### 3. Build, deploy, and clean with one command
+
+From the repository root, run:
 
 ```sh
-cd web && bun install && bun run build && cd ..
-cargo build --release -p nekochat-server -p nekochat-search
+python3 scripts/deploy.py
 ```
 
-Release builds embed `web/dist` into the `nekochat` binary, so a separate static-file deployment is not required.
+The script first reuses a complete binary pair in `target/release/`, then checks `runtime/bin/`. It builds the frontend, WASM, and both Rust release programs only when neither location has a complete pair. It installs `nekochat` and `nekochat-search` in `runtime/bin/`, stops the site's old processes, and starts the deployment in the background. After verifying listener ownership, the homepage, and health, it removes the entire `target/` directory. The frontend and bundled stickers are embedded in the program, so no separate static-resource deployment is needed.
 
-### 4. Start the web app and search service together
+Configuration and `data/` keep their original repository paths; retain them and the deployment script. Logs are written to `runtime/service.log`. Required credentials and proxy environment settings are saved privately in `runtime/environment.json` with mode `0600`. The entire runtime directory is ignored by Git and should not be committed or shared.
 
-```sh
-source .env.local
-./target/release/nekochat serve --config config.toml
-```
+### 4. Start, stop, and update
 
-`nekochat serve` first starts `nekochat-search` from the same binary directory. Once the child reports that authorization initialization and listener binding are complete through the private pipe, the web service starts. Open `http://127.0.0.1:10000`.
+| Action | Command |
+| :--- | :--- |
+| Show this site's web and search process status | `python3 scripts/deploy.py status` |
+| Start installed programs without building or cleaning | `python3 scripts/deploy.py start` |
+| Stop the site's web process and its search child | `python3 scripts/deploy.py stop` |
+| Rebuild and deploy after source changes | `python3 scripts/deploy.py --rebuild` |
+
+Existing programs are reused without checking source modification times, so explicitly use `--rebuild` after updating source. Open `http://127.0.0.1:10000` after startup. See the [deployment guide](docs/guide.md#一键部署与清理) (Chinese) for retaining build artifacts, custom paths, and failure recovery.
 
 ### 5. Configure a character and start chatting
 

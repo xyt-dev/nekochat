@@ -6,3 +6,6 @@ cookies.txt
 web/node_modules/
 web/dist/
 web/src/wasm/
+runtime/
+__pycache__/
+.deploy.lock

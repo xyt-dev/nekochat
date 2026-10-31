@@ -132,7 +132,7 @@ flowchart LR
 
 ## 🚀 Quickstart
 
-无需容器，在一台装有 **Rust (1.85+)** 与 **Bun** 的机器上即可直接编译并启动 Web 与内置搜索底座。
+无需容器，在 **Linux** 上使用 **Python 3.11+** 运行部署脚本；首次构建还需 **Rust 工具链** 与 **Bun**。脚本会把程序放到独立目录，验证成功后清理编译缓存。
 
 ### 1. 安装前端 WASM 构建工具
 
@@ -143,7 +143,7 @@ cargo install wasm-bindgen-cli --version 0.2.129
 
 ### 2. 初始化配置文件与搜索令牌
 
-复制 Web 与搜索底座的示例配置，并生成两枚互不相同的持久化搜索令牌写入 `.env.local`（已在 `.gitignore` 中忽略）：
+以下初始化命令仅用于首次部署；已有站点保留原来的配置、`.env.local`、搜索令牌和 `data/`，不要覆盖或重新生成。首次复制 Web 与搜索底座的示例配置，并生成两枚互不相同的持久化搜索令牌写入 `.env.local`（已在 `.gitignore` 中忽略）：
 
 ```sh
 cp config.example.toml config.toml
@@ -162,23 +162,28 @@ source .env.local
 - **仅使用官方 ChatGPT 订阅（Plus / Pro）**：将 `config.toml` 中示例的 `[[providers]]` 段落注释或删除，设置 `admin_password = "你的管理密码"` 即可直接启动。
 - **使用 DeepSeek / OpenCode Go API Key**：保留对应 `[[providers]]` 段落，并在环境中 `export DEEPSEEK_API_KEY=...` 或 `export OPENCODE_API_KEY=...`（配置中声明的提供商在启动时会校验对应环境变量非空）。
 
-### 3. 构建前端与 Rust Release 二进制
+### 3. 一键构建、部署与清理
+
+在仓库根目录执行：
 
 ```sh
-cd web && bun install && bun run build && cd ..
-cargo build --release -p nekochat-server -p nekochat-search
+python3 scripts/deploy.py
 ```
 
-`web/dist` 会在 release 编译时嵌入 `nekochat` 二进制，无需额外部署静态文件目录。
+脚本优先复用完整的 `target/release/` 程序，其次复用 `runtime/bin/`；两处都没有完整的程序时，才构建前端、WASM 与两个 Rust release 程序。它会将 `nekochat` 和 `nekochat-search` 安装到 `runtime/bin/`，停止本站旧进程，在后台启动新程序；确认监听端口归属、首页和健康检查通过后，删除整个 `target/`。`web/dist` 和内置表情图片已嵌入程序，无需额外部署静态资源。
 
-### 4. 一键启动 Web 与搜索底座
+配置和 `data/` 继续使用原仓库中的路径；保留这些文件与部署脚本。运行日志为 `runtime/service.log`。启动所需的密钥和代理环境变量会私密保存在 `runtime/environment.json`（权限 `0600`）；整个 `runtime/` 已忽略，不要提交或分享。
 
-```sh
-source .env.local
-./target/release/nekochat serve --config config.toml
-```
+### 4. 日常启动、停止与更新
 
-`nekochat serve` 会先启动同目录的 `nekochat-search`，待其通过私有管道报告授权初始化与端口绑定完成后，再启动 Web 服务监听 `http://127.0.0.1:10000`。
+| 操作 | 命令 |
+| :--- | :--- |
+| 查看本站 Web 与搜索进程状态 | `python3 scripts/deploy.py status` |
+| 启动已部署程序，不构建或清理 | `python3 scripts/deploy.py start` |
+| 停止本站主进程及其搜索子进程 | `python3 scripts/deploy.py stop` |
+| 修改源码后重新构建并部署 | `python3 scripts/deploy.py --rebuild` |
+
+已有程序不会自动按源码修改时间重新构建，因此更新源码后需显式使用 `--rebuild`。启动后打开 `http://127.0.0.1:10000`；保留编译缓存、自定义路径及失败恢复说明见[一键部署与清理](docs/guide.md#一键部署与清理)。
 
 ### 5. 进入后台配置角色并开始对话
 
