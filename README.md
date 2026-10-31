@@ -1,293 +1,230 @@
-# nekochat
+# 🐾 nekochat
 
 LARGE SLOP MACHINE SOFTWARE
 
-自托管的角色扮演网页聊天。
+**专注于角色沉浸感、高可玩性卡片配置与零卡顿流式体验的自托管角色扮演网页聊天。**
 
-源码仓库：[xyt-dev/nekochat](https://github.com/xyt-dev/nekochat)，默认分支为 `main`。版本发布见 [Releases](https://github.com/xyt-dev/nekochat/releases)，变更记录见 [CHANGELOG](CHANGELOG.md)。
+📦 源码仓库：[xyt-dev/nekochat](https://github.com/xyt-dev/nekochat)（默认分支 `main`） · 🏷️ 版本发布：[Releases](https://github.com/xyt-dev/nekochat/releases) · 📖 运维与接口文档：[docs/guide.md](docs/guide.md) · 📝 变更记录：[CHANGELOG.md](CHANGELOG.md)
 
-## 运行
+`nekochat` 采用**「管理端全量编排 + 聊天端纯粹交互」**的设计：管理员在 `/admin` 将底层模型、思考档位、系统提示词、联网搜索服务、立绘背景与本地表情包组合成完整的「角色卡」；普通聊天页面完全隐藏模型名称、提供商、参数滑块与账单来源，打开即可直接与角色对话。
 
-1. 复制 Web 和项目内搜索底座的示例配置：
+---
 
-   ```sh
-   cp config.example.toml config.toml
-   cp crates/search/config.example.toml crates/search/config.toml
-   ```
+## ✨ 聊天界面实拍（Claude Dark）
 
-2. 按需修改 `config.toml`，并为每个提供商设置 `api_key_env` 指定的环境变量：
+内置「大肥鱼」「大肥鱼和 GPT 娘」两套共 **322 张本地 GIF 表情包**。角色会根据语境与情绪在流式回复中自然穿插表情，配合立绘背景与首字/速率指标展示，桌面端与移动端均保持干净紧凑的交互体验：
 
-   ```sh
-   export DEEPSEEK_API_KEY=...
-   export OPENCODE_API_KEY=...
-   ```
+<table>
+  <tr>
+    <td width="68%" valign="top">
+      <img src="docs/screenshots/nekowhale-chat-desktop.webp" alt="Claude Dark 桌面端大肥鱼酱带表情回复实拍" />
+      <p align="center"><sub>🖥️ 桌面端（Claude Dark，演示账号 Lina）：左侧切换角色卡，搭配立绘背景，揉脸扯尾巴互动下实时渲染本地表情包</sub></p>
+    </td>
+    <td width="32%" valign="top">
+      <img src="docs/screenshots/nekowhale-chat-mobile.webp" alt="Claude Dark 移动端大肥鱼酱带表情回复实拍" />
+      <p align="center"><sub>📱 移动端（412px 窄屏，演示账号 Lina）：保留完整立绘，消息气泡与表情自适应</sub></p>
+    </td>
+  </tr>
+</table>
 
-   同时在运行环境中设置两个不同的高强度搜索连接令牌 `NEKOCHAT_SEARCH_RUNTIME_TOKEN`、`NEKOCHAT_SEARCH_ADMIN_TOKEN`。令牌在重启后应保持不变，并与管理端保存的搜索连接一致；不要每次启动重新生成。实际配置和数据不提交到版本库。
+---
 
-3. 构建网页前端（需要 bun、`wasm32-unknown-unknown` 目标和 0.2.129 版的 `wasm-bindgen` CLI）：
+## 🎭 角色卡片制作与 🔍 搜索对接：直观方便，可玩性拉满
 
-   ```sh
-   cd web && bun install && bun run build && cd ..
-   ```
+在 `/admin` 管理端，创建和调教一个角色不需要写复杂的配置文件，所有能力都做成了可视化开关与实时预览，几分钟就能搭出性格鲜明、带专属技能的角色卡：
 
-   产物在 `web/dist`。release 构建会把它嵌进二进制；debug 构建运行时直接读磁盘上的 `web/dist`。
+### 🛠️ 一站式角色卡片工作台
 
-   构建 Web 与底座两个程序，产物保持在同一个目录：
+- **模型与思考深度独立绑定**：每张角色卡可自由绑定 DeepSeek、OpenCode Go 或官方 ChatGPT 订阅（SIWC）下的任意上架模型，并单独固定思考档位（`none` / `low` / `high` / `max`）与采样参数。
+- **立绘背景与实时预览**：支持上传 PNG / JPEG / WebP / GIF / AVIF 背景图（至多 5 MiB），可调节透明度并实时预览；图片等比完整显示，适配桌面与手机。
+- **本地表情包与自定义 Skill 挂载**：一键勾选内置的 `大肥鱼（286 张）`、`大肥鱼和 GPT 娘（36 张）` 或自定义 `skills/` 资源包，自由调节表情身份（`角色本人 self` / `中立引用 neutral`）与发送频率（`偶尔` / `适中` / `经常`）。
 
-   ```sh
-   cargo build --release -p nekochat-server -p nekochat-search
-   ```
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/character-editor-dark.webp" alt="角色卡片制作：模型、搜索服务、头像、提示词与思考档位" />
+      <p align="center"><sub>🎛️ 角色卡片上半区：绑定底层模型、专属联网搜索服务、角色头像、系统提示词与服务端思考档位</sub></p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/character-assets-dark.webp" alt="角色卡片制作：立绘背景实时预览与表情资源包挂载" />
+      <p align="center"><sub>🖼️ 角色卡片下半区：立绘背景与透明度预览、322 张表情包勾选与表情频率控制</sub></p>
+    </td>
+  </tr>
+</table>
 
-4. 一次启动整个项目，然后用浏览器打开 `http://127.0.0.1:10000`：
+### 🌐 零门槛联网搜索对接
 
-   ```sh
-   ./target/release/nekochat serve --config config.toml
-   ```
+- **双引擎开箱即用**：内置独立搜索底座 `nekochat-search`，支持对接 **DeepSeek 官方搜索 + 网页获取**，以及 **GPT 原生 Web Search + 本地受限网页正文提取**。
+- **直接复用本站 ChatGPT 订阅**：已在「模型管理」登录过官方 ChatGPT 账号（Plus / Pro）后，新建 GPT 搜索服务时可直接勾选复用同一份订阅，**无需二次登录，也不会偷偷消耗 API Key 余额**。
+- **按角色精细授权 + 独立用量折线图**：在角色卡片上按需选择是否挂载搜索服务；服务端在单次回复内自动完成多轮 `模型 → web_search / web_fetch → 模型` 闭环，并提供独立于对话账单的 15 分钟粒度调用与 Token 折线图。
 
-   默认先启动同目录的 `nekochat-search`，读取项目内 `crates/search/config.toml`；底座完成授权初始化并绑定监听地址，通过只属于该子进程的管道报告就绪后才启动 Web。启动检查不向可能被抢占的本地端口发送令牌。底座仅在回环地址监听，示例数据目录为项目下的 `data/search-engine/`。停止项目会回收自己启动的底座；底座启动失败、监听冲突或运行中退出时明确失败，不继续留下不可用的 Web。
+<p align="center">
+  <img src="docs/screenshots/search-services-dark.webp" width="92%" alt="搜索服务目录与独立搜索用量折线图" />
+  <br />
+  <sub>🔍 搜索服务管理：支持 DeepSeek API 与本站 ChatGPT 订阅双通道，自带不计费连接测试、真实搜索测试与分服务折线统计</sub>
+</p>
 
-   自定义路径使用 `--search-config <path>`、`--search-program <path>`。已有独立或远程底座时，显式加 `--no-local-search` 启动 Web，并继续使用管理端保存的搜索地址；该模式不启动或终止外部底座。配置里的相对路径仍以启动时的工作目录解析，建议从项目根目录启动。
+---
 
-默认宿主机直接运行，监听 `0.0.0.0:10000`，无需容器。通过服务器 IP 或域名访问前，把实际地址加入 `allowed_hosts`；只允许本机访问时可显式改为 `listen = "127.0.0.1:10000"`。公网部署请设置强 `admin_password`、按需设置站点 `access_password`，并放在 HTTPS 反向代理之后（配置 `trusted_proxies`）；不要用默认弱密码对外开放管理端。
+## ⚡ 架构设计：为什么流式生成与长对话绝不会卡
 
-为防 DNS 重绑定，服务只接受 `Host` 为 `localhost`、`127.0.0.1`、`::1` 或监听地址本身（监听具体 IP 时）的请求，其他一律返回 421。通过反向代理或 Tailscale 主机名访问时，把这些主机名（不带端口）写进 `allowed_hosts`，例如 `allowed_hosts = ["chat.example.com"]`。
+`nekochat` 从服务端状态机、浏览器渲染管线、静态资源分发到数据库与子进程隔离，核心目标只有一个：**无论流式输出多快、历史消息多长、或者网络与外部搜索多慢，主界面输入、滚动与生成恢复始终保持零卡顿。**
 
-## 用户与会话
+```mermaid
+flowchart LR
+  subgraph Browser["🖥️ 浏览器前端 · SolidJS"]
+    UI["虚拟消息列表<br/>@tanstack/solid-virtual"]
+    Worker["Web Worker 增量渲染线程<br/>nekochat-mdwasm + KaTeX + hljs"]
+    UI <-->|"仅重算末尾生长块"| Worker
+  end
 
-聊天需要先注册或登录。站点访问密码是可选的外层门禁，与用户密码、管理密码分别管理；不设置站点密码时，能访问页面的人都可以自行注册，部署者须按需限制网络或设置外层门禁。
+  subgraph Server["⚙️ 主服务进程 · nekochat (Rust / Axum)"]
+    Gen["Generation 核心状态机<br/>独立 Tokio 任务 · 快照 + Broadcast"]
+    Res["nekochat-resources<br/>322 张内置 GIF · Bytes 零拷贝"]
+    Store["nekochat-store<br/>SQLite WAL · spawn_blocking 隔离"]
+    Gw["nekochat-gateway<br/>Chat Completions / Responses / SIWC"]
+    Gen --> Res
+    Gen --> Store
+    Gen --> Gw
+  end
 
-- 主题右侧的用户头像菜单提供「用户信息」与「退出登录」，可修改用户名、头像、密码。用户与角色头像都由本站上传；未设置头像时显示名字首字。新访客默认 Claude Dark，保留已有主题偏好。
-- 对话、分支、上传附件和起轮权限按用户 ID 隔离，不能靠更换 URL 读取别人的数据。每个账号在服务端记忆上次选择的角色和对话，重新登录或换浏览器后恢复；不是全站共享的 localStorage 状态。
-- 角色以卡片形式放在左侧「新对话」按钮上方；输入区只保留主题化附件图标和发送/停止，消息不再显示名称标题，双方头像位于对话两侧并与首行对齐。
-- 升级前的旧对话不删除，也不自动分给第一个注册者。管理员在「用户管理」中明确将未归属旧对话分配给指定账号；新账号起初只看到自己的内容。
-- 注册账号只提供本地数据隔离，不授予共享或转售上游订阅的权利。部署者仍需按上游条款限制可访问人员。
+  subgraph Search["🔍 独立搜索子进程 · nekochat-search"]
+    SProc["私有管道就绪握手<br/>连接层公网 DNS 锁死 Reader"]
+  end
 
-## 生成、刷新与停止
-
-模型请求由 Rust core 独立维护。刷新网页、切换对话、关闭页面或 HTTP 观察流断线不会结束模型连接；回到会话会先取得完整的最新进度，再继续接收增量，不重新调用模型。无观察者或慢观察者都不会阻塞生成；历史树与附件仍按用户归属隔离。
-
-- 手动「停止」调用当前生成 ID 对应的服务端接口，保存已生成内容为中断回复；旧页面的停止动作不能停止另一条新生成。
-- 强制删除会话会取消其生成并清除数据；生成中 `/clear` 会提示先停止，不能用清空或断网偷偷替代停止。
-- 退出、停用、密码重置会关闭相应 HTTP 观察权限，但 core 仍完成原账号的生成；重新登录后可恢复。服务进程重启不在网页刷新保证范围内，升级前请先结束进行中的回复。
-- 输入区以固定位置显示正在连接、思考中、恢复观察和停止状态；“思考中”是界面文案，不改变模型实际的推理或输出模式。正文不靠逐 token 测量或动画维持反馈。
-- `/tree` 支持键盘选择分支。选择用户消息会恢复其文本与附件进入编辑，发送后形成新分支；跳转到回复节点会清理未发送的编辑与附件，再切换上下文。
-- 代码块复制优先使用浏览器 Clipboard API；普通 HTTP 环境未提供该 API 时使用真实的系统复制回退。复制保留键盘焦点与选区；权限拒绝或复制失败会明确提示手动选择，不显示假成功。
-
-## 管理端与监控
-
-在 `config.toml` 设置 `admin_password` 后，访问 `http://127.0.0.1:10000/admin`。未设置管理密码时管理 API 不开放；管理密码独立于可选的网页访问密码。
-
-- **角色卡**：绑定实际模型、生成参数、提示词、公开显示名、本地头像/背景和资源包。卡片上可直接「设为默认」，不可用角色不能设为默认；用户已有可用选择仍优先。前端只在侧栏选择整套角色，不显示底层模型、提供商、思考等级或套餐来源。
-- **背景图**：本地上传支持 PNG、JPEG、WebP、GIF 和 AVIF，单张至多 5 MiB，不扩展头像或聊天附件的格式范围。角色编辑器提供「居中」与「偏右 · 黄金分割」；旧卡片默认居中。偏右将图像中心置于消息区域宽度约 61.8% 处，等比完整显示原图，并限制宽度、保留边距，不拉伸或裁切；背景不覆盖顶栏和输入区。预览与聊天复用同一摆放组件，位置随角色保存在服务端，普通用户不能自行修改。
-- **手机背景**：沿用页面的 760px 移动布局断点，窄屏统一居中并保留完整图片与边距；不会改写角色卡保存的位置，回到宽屏后仍按「居中 / 偏右」设置展示。
-- **模型**：按提供商刷新上游模型目录，选择上架哪些模型，设置显示名、排序、思考档位与默认档、图片能力、上下文窗口，以及每百万 token 的美元价格。API key 仍只在服务端环境变量中管理，网页不能查看或修改。支持 Chat Completions、标准 Responses，以及通过 OAuth 使用官方 ChatGPT 订阅的 Responses；Messages / Gemini 尚未接入。标准 Responses 不接受 seed、penalty、stop 或 DeepSeek thinking；官方订阅当前只允许思考档位，不能设置输出上限、temperature、top_p 等不受支持参数。
-- **用户**：创建、编辑、停用、删除、重置密码、设置头像和分配旧对话。密码策略仅决定此后新建账号使用明文还是 Argon2id 哈希（新安装默认明文）；既有账号不因策略切换、登录或重置而转换，也不弹转换确认。明文仅管理端显式查看。实际改密码/停用会撤销认证及观察权限，凭据版本阻止旧验证恢复会话；不会终止 core 生成。数据库、WAL/SHM 和备份仍须保护。
-- **统计**：按时间、提供商和模型查看费用与 token 用量；图表颜色区分「提供商 + 模型」，可分别查看缓存输入、无缓存输入、思考和输出。输出数不含思考，图中的总计包含这四类。费用保留调用当时的记录，改价或下架不会改写历史。
-- **未知费用**：未设置价格且上游未返回费用的请求标记为未定价，不当作免费。部分已知时显示已知费用和未定价请求数。
-- **额度**：DeepSeek 查询官方余额，按原币种显示；OpenCode Go 根据本机记录的 `opencode.allowance` 估算最近 5 小时、7 天、30 天的用量。它不是账户的权威余额，不包含其他客户端的调用，滚动窗口也不代表服务商实际重置时刻。缺失额度计数或限额时显示未知，不伪造剩余数。
-
-角色、模型和用户编辑器在实际保存失败时保留草稿。写入已明确成功、但后续列表刷新失败时，会关闭已提交的编辑器并区分提示「已保存，但列表刷新失败」，使用页面重试加载控件恢复列表，不自动重发写操作。切换管理页不会丢掉已完成保存对共享目录的刷新；默认角色以服务端确认的设置为准。
-
-官方 `api.deepseek.com` / `opencode.ai` 地址可自动识别监控类型；自定义代理地址需要在提供商的 `monitoring` 中指定。OpenCode 默认按 Go 计划，可配置 `plan = "go_plus"`，或用 `monthly_limits` 按上游模型 ID 覆盖月额度；5 小时与每周额度分别按月额度的 20% / 50% 估算。示例见 `config.example.toml`。
-
-额度与余额接口来源：[OpenCode Go](https://opencode.ai/v2/docs/console/go/)、[DeepSeek 余额](https://api-docs.deepseek.com/api/get-user-balance)。价格和计划可能变化，上架前请核对服务商当期信息。
-
-## 图片与文件输入
-
-输入框支持直接粘贴 PNG、拖放、点击「上传附件」或输入 `/upload`，共用 `POST /api/conversations/{id}/attachments` 接口。图片在编辑框内显示，发送后与文字保留在同一消息气泡；PDF、Markdown、文本及常见代码文件在编辑框上方排列，可以移除或下载。
-
-- 图片支持 PNG / JPEG / WebP / GIF，单张至多 8 MiB；可以只发送图片。角色必须绑定支持视觉的模型，否则前后端明确拒绝，不会悄悄丢图。
-- PDF 与 UTF-8 文本文件单个至多 16 MiB，服务端真实提取内容（至多 2 MiB 文本）并放入所属用户消息，而非系统指令；不会把文档错误地作为图片转发。损坏、加密、无可提取文字的扫描 PDF 或超限文件会明确报错，不伪装 OCR，不静默截断。
-- 每条消息图片和文件合计至多 5 个。原始文件、名称和提取文本保存在本地 SQLite，随历史、编辑、重新生成及分支保留。读取需要对应用户的会话归属权限；不使用外链或公共缓存。
-- 清空或彻底删除对话会删除全部关联文件，包括已经上传但尚未发送的附件。
-
-已实际验证 Go GPT 同时读取图片、Markdown 与 PDF 的真实内容；其他上游的图片能力仍需管理员确认后启用。
-
-## 连接官方 ChatGPT 账号
-
-1. 打开 `/admin` → **模型管理** → **连接官方ChatGPT账号（订阅）**，点击 **Continue with ChatGPT**。
-2. 本人在 OpenAI 页面登录并同意 ChatGPT plan usage。这里使用官方 SIWC 动态注册与公开 `api.openai.com/v1`，不代理网页 Cookie，也不借用 pi / Codex 保存的其他应用凭证。
-3. 本机浏览器会回到临时 `127.0.0.1` 回调。远程浏览器若打不开回调，请把地址栏完整的最终回调 URL 粘贴到管理端「完整回调 URL」后完成授权，或使用 SSH 转发相应端口。不要分享、截图或记录该 URL。
-4. 连接后在提供商中选 **ChatGPT 订阅（官方账号）**，刷新实际账号模型目录、选择上架，再在角色管理中绑定。不会自动替换原有 GPT娘、其他角色或默认配置。
-
-授权凭证保存在 `<data_dir>/chatgpt-account.json`，采用私密 `0600` 权限与原子替换；支持账号/工作区选择、自动刷新、取消和退出。退出清除当前会话令牌，保留注册映射和稳定主机标识，便于下次重新授权。同一数据目录只运行一个服务实例，不把同一轮换令牌交给多个进程同时刷新。
-
-清理不再需要的本地账号记录：在同一账号选择框中选中「需重新授权」或「未完成注册」条目，再点「移除本地记录」。已保存会话的账号必须先切换到它并退出；授权处理中也不能移除。操作只删除选中的本地注册映射，保留其他账号、凭证和主机标识；以后重新添加可能生成新的应用注册，仍要使用原账号时优先保留记录并重新授权。
-
-OpenAI 侧的授权需在 [ChatGPT 设置](https://chatgpt.com/settings/usage) 管理：应用用量限制页关闭不再使用的应用开关并保存，可停止其使用套餐额度；不保证删除官方注册条目。本地移除不会删除官方应用，[官方会话说明](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions#end-the-renewable-session) 也明确指出撤销会话不删除客户端注册。
-
-普通聊天页和公开角色接口不再暴露 ChatGPT 套餐来源；首次授权说明、真实来源与管理用量入口保留在管理端。token 统计按真实提供商记录，未知余额、额度与金钱成本保持未知；达到订阅限额不会自动改用 API key。OpenAI 的套餐、工作区与应用权限仍然有效，OAuth 技术接入不等于允许公开共享或转售订阅。
-
-官方参考：[Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source)、[模型与推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)、[UI 要求](https://developers.openai.com/siwc/ui-ux-guidelines)。
-
-## 独立搜索底座
-
-搜索源码已经作为子目录放在本项目的 `crates/search/`，由独立 Rust 程序 `nekochat-search` 提供，网页和角色只通过 Nekochat 后端调用它。项目默认统一启动底座和 Web；搜索服务仍可独立构建运行，不依赖聊天数据库或 Nekochat crate，未来其他应用可复用同一 HTTP 协议。它不是 shell、裸 curl 或本地文件搜索器。
-
-1. 按上方运行步骤设置两个不同的环境变量并复制 `crates/search/config.example.toml` 到 `crates/search/config.toml`。默认仅监听 `127.0.0.1:10011`，数据保存在项目下的 `data/search-engine/`，目录应限制访问权限。
-2. 默认只需启动项目的 `nekochat serve --config config.toml`，底座会先启动。需要单独运行时使用 `cargo run -p nekochat-search -- --config crates/search/config.toml`，此时 Web 加 `--no-local-search`；单独构建时可复制整个 `crates/search` 目录，其依赖不继承主工作区。
-3. 在 `/admin` → **搜索服务** 填入后端地址、两种令牌和预算，再保存。**测试已保存连接**只验证运行与管理授权，不调用收费搜索。远程部署使用 HTTPS；委托订阅访问凭据只允许 HTTPS 或明确的本机回环 HTTP，不经环境代理或重定向。
-4. 新建 DeepSeek Search / Fetch 服务并填写官方 API key，或新建 GPT Web Search 服务。GPT 默认**复用本站已连接的 ChatGPT 订阅**，账号仍在「模型管理」连接、选择与退出，不需要第二次登录。填写该账号实际获准使用的搜索模型；显式选择 API key 模式才按 OpenAI API 计费，绝不自动切换账单来源。
-5. 在**角色管理**为角色选择一个已启用、已连接的搜索服务。未绑定的角色没有搜索工具；普通用户不能覆盖服务、模型、密钥或绑定。已绑定服务离线时编辑器保留原选择，不会静默解除，重新分配必须明确保存。
-
-服务 API key 保存在底座的私密 `0600` 数据文件；管理接口只返回是否配置，不回读原值。连接令牌保存在 Nekochat 的本地设置中，因此数据库、WAL/SHM、底座数据与备份都必须限制权限。GPT 订阅凭据仍只有现有 SIWC 管理器负责保存与刷新，底座只接收单次请求的短期 access token，不保存 refresh/id token，也不执行授权或刷新。浏览器不直接访问底座，不会拿到这些凭据。
-
-### 搜索、读取与多轮回答
-
-角色可以调用 `web_search(query)`，再通过 `web_fetch(source_id)` 读取**本轮搜索已返回的来源 ID**，不能提交任意 URL、路径或请求头。DeepSeek 的 Search / Fetch 都由其官方远端执行；GPT 使用原生 Web Search，进一步读取链接由底座内的受限 HTTP Reader 完成，不需要再接一个模型。结果统一保留来源 URL、标题、摘要、可用正文、提供商生成摘要与检索时间；生成摘要不会伪装成网页原文。
-
-搜索不是“先给用户返回一轮，再手动接续”：Rust core 在同一条回复内部执行有限次模型→工具→模型调用，最终带真实来源链接回答。默认每轮最多 3 次工具调用、每次最多 5 条来源，管理端分别可设 1–8、1–10；请求超时可设 1–180 秒，默认 60 秒。预算耗尽后不再提供工具，不重试、不换服务；全部模型轮次与已经发生的搜索用量均记账。这不是把多轮 `max` 伪装成 `ultra`。
-
-网页刷新、关闭或观察连接断线不会重新搜索，也不会中止 core；重新进入先同步最新进度。手动停止和强制删除对话会取消模型与当前底座请求，删除正文不会抹掉已经发生的匿名用量。
-
-网页与搜索摘要按不可信资料处理，不获得系统指令权限。只转发模型提出的查询或获准来源，不将整段会话自动作为查询；模型仍可能将用户内容写入查询，使用第三方搜索前应避免提交敏感信息。
-
-### 访问边界与费用
-
-- 只接受无账号凭据的公开 HTTP(S) 来源，拒绝 `file:`、本地路径、环回/内网字面地址和本地域名。DeepSeek Fetch 只把来源作为 JSON 发送至固定官方接口，由提供商解析、获取并实施远端安全策略，不访问服务器本地文件。
-- 本地 Reader 在实际连接时验证并固定公开 DNS 地址，混合公开/私网结果也拒绝；禁用代理、Cookie、认证和重定向，并限制响应大小、类型、正文和解析工作量。不读取 PDF/二进制、不运行网页 JS。Fake-IP DNS（如 `198.18.0.0/15`）会被安全拒绝，部署者需要为该进程提供真实公开 DNS，不能通过放开私网地址“修复”。
-- 管理页的**真实搜索测试**需要明确确认，确实消耗上游额度。按当前官方标价，DeepSeek 成功且非空的 Search 或 Fetch 各记录 `0.005 CNY`，空搜索记录 `0 CNY`；这是按公开标价计算的成本，不是账户账单对账。GPT 未返回金钱成本时显示未知，不当作免费。不同币种分开统计、不擅自换汇；每轮模型 token 费用与搜索费用分开记。
-- 官方订阅的 Web Search 仍受模型、账号、工作区及套餐政策约束；技术接入不授权公开共享或转售订阅。失败会明确返回，不伪造答案、来源或成功用量。
-- 管理端「搜索服务」的用量默认显示折线图，按服务区分颜色。默认查看调用尝试次数，也可切换缓存输入、无缓存输入、思考与输出（不含思考）等 token 指标；未返回 token 的原生搜索不代表没有发生搜索。
-- 图表与费用汇总覆盖完整所选时段；切到明细后只显示该时段最新 100 条，按时间降序排列。费用未知次数明确列出，CNY / USD 不混加；最长查询范围仍为 31 天，不通过限制明细来少算历史用量。
-
-接口与政策参考：[DeepSeek Search / Fetch 与定价](https://api-docs.deepseek.com/zh-cn/guides/search/)、[SIWC 当前能力与限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.md)。0.10.0 提供独立搜索底座及管理入口；连接后仍由管理员明确给角色绑定服务，不自动改变旧角色的搜索权限。
-
-
-## 本地 skill 资源包
-
-内置 [dsh-nekowhale-stickers](https://github.com/Loping151/dsh-nekowhale-stickers) 的「大肥鱼」「大肥鱼和 GPT 娘」两套标注与完整 322 张 GIF。图片随程序本地提供，浏览器不向作者站点或 CDN 拉图，服务运行时也不下载素材。
-
-内置图片约 388 MiB，会增加 Rust 二进制体积，但不会进入网页 JS 包或模型提示词；内置资源按静态字节共享，自定义资源请求也不复制整份图片缓冲。
-
-管理员在角色编辑器中勾选资源包。服务端仅把已勾选包的静态说明和表情目录放进该角色的提示词；模型按描述输出 `[sticker:名字]`，服务端精确解析成本站图片。未授权、未知、歧义或近轮重复的表情不会随机替代，半截标记不发到前端。身份 `self` / `neutral` 和频率由管理端设置。
-
-大肥鱼身份提示词可参考上游 `src/index.ts` 的 `PERSONA.self.skill`；GPT 娘在原仓库中有形象与互动方向资料，但没有独立的完整性格提示词，需据此适配。GPT 娘使用 Go GPT 时选标准 Responses，使用官方 ChatGPT 账号时选官方订阅协议；不要把角色名称当成实际模型身份。两张角色卡均可由管理员继续编辑，原有默认角色无需改动。
-
-自定义包放在 `<data_dir>/skills/<pack_id>/`，每包包含 `SKILL.md`、`pack.json`、`stickers.json` 和 `assets/`，重启后加载。这里的 skill 是**只读资源包**，不是可执行插件，不给模型命令或任意文件访问。背景图也只接受本地上传或本地包素材，默认不设背景。
-
-一个最小自定义包示例（目录名必须与清单 id 一致，不允许符号链接或 `..` 路径）：
-
-```text
-skills/my-pack/
-  pack.json
-  SKILL.md
-  stickers.json
-  assets/wave.gif
+  UI <-->|"SSE 观察流 / 修订号快照重连"| Gen
+  Gen <-->|"多轮工具调用 · 短期令牌委托"| SProc
+  Gw <-->|"流式推理 / OAuth PKCE"| Upstream["DeepSeek / OpenCode / OpenAI"]
 ```
 
-`pack.json`：
-```json
-{"id":"my-pack","name":"我的资源包","description":"自用招呼表情","attribution":"填写实际作者与使用许可"}
-```
+### 1. 🧵 前端主线程零解析开销：Web Worker + Rust WASM 增量块管线
 
-`stickers.json`：
-```json
-[{"id":"wave.gif","name":"挥手","file":"assets/wave.gif","aliases":["打招呼"],"emotion":"开心","tags":["问候"],"use":"见面或友好打招呼时","dir":""}]
-```
+许多网页聊天在流式输出时每收到一个 token 就在主线程全量重跑 Markdown、LaTeX 公式和代码高亮，回复越长界面越卡。`nekochat` 将排版计算彻底移出主线程（`crates/mdwasm` + `web/src/md/md.worker.ts`）：
 
-`SKILL.md` 写静态的素材使用说明；文件里的工具、命令不会被执行。复制真实图片到 `assets/` 后重启，再在角色编辑器勾选 `my-pack`。
+- **Rust WASM 块级切分**：`pulldown-cmark` 编译为 WebAssembly（`nekochat_mdwasm`），在独立 Web Worker 内将流式文本切分为顶层 Markdown 块。
+- **已封口段落缓存复用**：Worker 按消息 `key` 缓存已完成块的文本与 HTML；流式追加期间**只重新渲染末尾正在生长的那一个块**，已完成的上下文段落零重复计算。
+- **重型渲染延后封口**：代码块语法高亮（`highlight.js`）与数学公式排版（`KaTeX`）仅在段落闭合时于 Worker 内一次性填充占位符，不在逐 token 热路径中反复执行。
+- **虚拟列表与细粒度 DOM 更新**：主线程使用 SolidJS 细粒度响应式配合 `@tanstack/solid-virtual` 虚拟滚动，仅挂载可视区域消息节点，也不使用逐 token DOM 测量动画，打字与滚动始终满帧。
 
-资源包页把补充信息统一显示为「描述」，其中保留原作者、来源及许可内容；显示名称变化不取消素材的使用条件。
+### 2. 🔄 服务端生成与慢客户端彻底解耦：Core 独占 `Generation` 状态机
 
-少量通用知识也可以写入资源包的 `SKILL.md`，例如科研方法、术语定义和写作规范；纯文本包可把 `stickers.json` 设为 `[]`，不必添加图片。管理员仍需在角色编辑器勾选该包。当前会将整份 `SKILL.md` 加入每轮模型上下文，消耗上下文与 token，并不是训练模型或按需检索知识库。
+在 `crates/server/src/generation.rs` 中，上游模型流由服务端 Tokio 任务独立持有，浏览器连接只是订阅 `broadcast` 通道的**观察者（Observer）**：
 
-当前不会自动读取包目录中的其他 `.md` 或 `.pdf` 文件，也不解析 `SKILL.md` 中的文件链接。PDF 自动提取目前仅用于聊天附件；要在现有资源包中使用其内容，应先人工整理成 `SKILL.md`。独立文档导入、PDF 知识资源和大文献库检索尚未实现。
+- **零反向阻塞（No Backpressure Stall）**：观察通道采用有界缓冲；某个客户端网络卡顿、切到后台或断开连接时，绝不会反压阻塞上游模型读取，也不会拖慢同一会话的其他观察端。
+- **F5 刷新与断线毫秒级快照恢复**：刷新网页或切换设备后，前端通过 `GET /api/conversations/{id}/turns` 订阅现有生成，服务端先返回带单调递增 `revision` 的内存快照（`snapshot`），再无缝衔接后续增量事件，不重发模型请求、不丢字。
+- **流式数据内存聚合，非逐 Token 刷盘**：流式 token 与思考片段在内存状态机内聚合，仅在生成启动与结束（完成 / 中断 / 出错）时写入 SQLite，避免高频磁盘 I/O 抖动。
 
-知识库采用 CC BY-NC 4.0，GIF 的使用条件见随包保留的 `LICENSE-ASSETS`；非商业分享必须保留作者与网站署名，禁止收费和其他商业用途。作者：[可以叫我云大人/雾雪](https://space.bilibili.com/103739)，[kiriyuki.com](https://kiriyuki.com)。复用代码的 Apache-2.0 许可、NOTICE 和形象设计者署名一并保留。署名链接只用于来源说明，不作为图片外链。
+### 3. 🖼️ 322 张内置 GIF 零拷贝分发与流式标签状态机
 
-角色、参数与资源授权在 Rust 端解析；起轮服务和资源事件可供其他 Rust 通道复用。Web 只负责角色卡和图片呈现，未来微信等应用不需要复制这套策略。本轮没有接入微信 bot。
+- **静态字节零拷贝（`Bytes`）**：`crates/resources` 在编译期嵌入内置表情包，运行时通过引用计数 `Bytes` 直接构造 HTTP 响应并附带 `Cache-Control: private, max-age=86400`，不进前端 JS 包、不复制整块图片缓冲，也不依赖外部 CDN。
+- **O(1) 流式 `[sticker:...]` 解析**：服务端状态机在文本流经过时实时匹配并替换已授权表情标签，无全文正则回溯，且半截未闭合标签不会泄漏到前端造成界面闪烁。
 
+### 4. 🗄️ SQLite WAL 并发读写与独立搜索进程隔离
 
-## 自定义主题
+- **存储层阻塞隔离**：`crates/store` 开启 `PRAGMA journal_mode = WAL` 与 `busy_timeout = 5000ms`，所有 SQLite 操作均通过 `tokio::task::spawn_blocking` 运行在专用阻塞线程池，绝不占用 Tokio 异步网络工作线程。
+- **搜索与正文解析子进程隔离**：联网搜索与 HTML 清洗运行在独立的 `nekochat-search` 子进程中，通过父子私有管道（`--ready-fd`）完成启动就绪握手；外网慢请求或大网页解析完全与主聊天进程隔离，且内置 Reader 在连接层锁定公网 DNS，杜绝 SSRF 与 DNS Rebinding。
 
-把 CSS 文件放进 `<data_dir>/themes/<名字>.css`（名字只能用字母、数字、`_`、`-`），它会出现在右上角主题菜单的「自定义」分组里。变量清单与写法见 `web/THEMES.md`。
+---
 
-## 已有数据升级
+## 🚀 Quickstart
 
-0.13.0 沿用 schema 6，无新增迁移；0.10.0 引入的 schema 6 兼容已有 schema 1–5，新增可空的角色搜索服务绑定和独立搜索用量表，旧角色默认不启用搜索。保留对话树、模型、计量、账号及官方 GPT 授权；早期未绑定可用模型的角色不发布，旧未归属对话须在管理端用户页明确分配，不自动交给第一个注册者。升级前先结束进行中的回复、停止服务并备份数据目录；旧程序不能直接读取更高版本 schema，回退旧程序必须恢复配套的升级前数据库，验证实例不要复用线上数据目录。已有账号、角色与 OAuth 无需重建，会话按原有效期验证；进程重启不等同于网页刷新，不能恢复旧上游连接。
+无需容器，在一台装有 **Rust (1.85+)** 与 **Bun** 的机器上即可直接编译并启动 Web 与内置搜索底座。
 
-## curl 冒烟
-
-以下流程走一遍管理端与对话接口，需要 `curl` 与 `jq`，并在 `config.toml` 里设置了 `admin_password`（未设置时管理接口一律 404）。示例假定默认地址与上面配置里的 `deepseek` 提供商；请把 `你的管理密码` 换成实际值。
+### 1. 安装前端 WASM 构建工具
 
 ```sh
-BASE=http://127.0.0.1:10000
-JAR=$(mktemp)
-
-# 健康检查，输出 ok
-curl -s $BASE/api/health
-
-# 管理端登录：会话 cookie（nk_admin）存进 $JAR，成功返回 204
-curl -s -c $JAR -H 'Content-Type: application/json' \
-  -d '{"password":"你的管理密码"}' $BASE/api/admin/session
-# 若设置了 access_password，再登录一次访问端（cookie nk_access 写入同一个 $JAR）：
-# curl -s -b $JAR -c $JAR -H 'Content-Type: application/json' \
-#   -d '{"password":"你的访问密码"}' $BASE/api/session
-
-# 提供商上游的模型列表；listed_model_id 非空表示已上架
-curl -s -b $JAR $BASE/api/admin/providers/deepseek/models
-
-# 上架模型（先从上面的目录核对 ID；价格单位：美元/百万 token，未知可填 null）
-MODEL_ID=$(curl -s -b $JAR -H 'Content-Type: application/json' -d '{
-    "provider": "deepseek",
-    "upstream_id": "deepseek-flash",
-    "display_name": "DeepSeek V4.1 Flash",
-    "sort": 0,
-    "protocol": "chat_completions",
-    "reasoning": {"style": "deepseek", "levels": ["none", "low", "high", "max"], "default": "high"},
-    "vision": false,
-    "context_window": null,
-    "price": {"cached_in": null, "uncached_in": null, "output": null}
-  }' $BASE/api/admin/models | jq -r .id)
-
-# 建立绑定模型的完整角色；思考等级在这里由管理员固定
-CHAR_ID=$(curl -s -b $JAR -H 'Content-Type: application/json' \
-  -d "{\"name\":\"猫娘\",\"display_name\":\"小雪\",\"system_prompt\":\"你是一只友好的猫娘。\",\"model_id\":\"$MODEL_ID\",\"parameters\":{\"effort\":\"high\"},\"resource_packs\":[\"nekowhale\",\"nekowhale-gpt\"],\"sticker_identity\":\"neutral\",\"sticker_frequency\":\"often\"}" \
-  $BASE/api/admin/characters | jq -r .id)
-
-# 仅设置默认角色，没有全局默认模型
-curl -s -b $JAR -X PUT -H 'Content-Type: application/json' \
-  -d "{\"default_character_id\":\"$CHAR_ID\"}" \
-  $BASE/api/admin/settings
-
-# 用户账号登录（管理会话不能代替用户会话），成功设置 nk_user：
-# 首次使用先在网页注册，或将下面 login 改为 register。
-curl -s -b $JAR -c $JAR -H 'Content-Type: application/json' \
-  -d '{"username":"你的用户名","password":"你的用户密码"}' \
-  $BASE/api/account/login
-
-# 聊天端只取得角色公开名称、头像、背景和图片能力，不返回模型/提示词/参数/套餐来源
-curl -s -b $JAR $BASE/api/characters
-
-# 用角色建立对话
-CONV_ID=$(curl -s -b $JAR -H 'Content-Type: application/json' \
-  -d "{\"character_id\":\"$CHAR_ID\"}" $BASE/api/conversations | jq -r .id)
-
-# 发一轮；不允许附带 model_id、effort 或 parameters 覆盖
-curl -s -N -b $JAR -H 'Content-Type: application/json' \
-  -d "{\"action\":\"send\",\"content\":\"你好\",\"character_id\":\"$CHAR_ID\"}" \
-  $BASE/api/conversations/$CONV_ID/turns
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.129
 ```
 
-最后一步依次输出 `start`（新用户消息与回复节点 id）、若干 `reasoning`/`text` 增量，最后是 `done`（完整的回复节点，含 `metrics.usage`）；上游出错时以 `error` 结束。形如：
+### 2. 初始化配置文件与搜索令牌
+
+复制 Web 与搜索底座的示例配置，并生成两枚互不相同的持久化搜索令牌写入 `.env.local`（已在 `.gitignore` 中忽略）：
+
+```sh
+cp config.example.toml config.toml
+cp crates/search/config.example.toml crates/search/config.toml
+
+cat > .env.local <<EOF
+export NEKOCHAT_SEARCH_RUNTIME_TOKEN="$(openssl rand -hex 32)"
+export NEKOCHAT_SEARCH_ADMIN_TOKEN="$(openssl rand -hex 32)"
+EOF
+chmod 600 .env.local
+source .env.local
+```
+
+按你的模型接入方式调整 `config.toml`：
+
+- **仅使用官方 ChatGPT 订阅（Plus / Pro）**：将 `config.toml` 中示例的 `[[providers]]` 段落注释或删除，设置 `admin_password = "你的管理密码"` 即可直接启动。
+- **使用 DeepSeek / OpenCode Go API Key**：保留对应 `[[providers]]` 段落，并在环境中 `export DEEPSEEK_API_KEY=...` 或 `export OPENCODE_API_KEY=...`（配置中声明的提供商在启动时会校验对应环境变量非空）。
+
+### 3. 构建前端与 Rust Release 二进制
+
+```sh
+cd web && bun install && bun run build && cd ..
+cargo build --release -p nekochat-server -p nekochat-search
+```
+
+`web/dist` 会在 release 编译时嵌入 `nekochat` 二进制，无需额外部署静态文件目录。
+
+### 4. 一键启动 Web 与搜索底座
+
+```sh
+source .env.local
+./target/release/nekochat serve --config config.toml
+```
+
+`nekochat serve` 会先启动同目录的 `nekochat-search`，待其通过私有管道报告授权初始化与端口绑定完成后，再启动 Web 服务监听 `http://127.0.0.1:10000`。
+
+### 5. 进入后台配置角色并开始对话
+
+1. 打开 `http://127.0.0.1:10000/admin`，使用 `admin_password` 登录。
+2. 在 **模型管理** 连接 **官方 ChatGPT 账号（Sign in with ChatGPT）** 或刷新 API 提供商模型目录，将需要的模型点「上架」。
+3. 在 **搜索服务**（可选）填入 `.env.local` 中的两枚令牌保存底座连接，新建 DeepSeek 或复用本站 ChatGPT 订阅的搜索服务。
+4. 在 **角色管理** 创建角色：绑定上架模型、勾选 `nekowhale` / `nekowhale-gpt` 表情包、按需挂载搜索服务、上传头像与立绘背景，并设为默认角色。
+5. 返回 `http://127.0.0.1:10000/` 注册聊天账号即可开始对话。
+
+---
+
+## 🧩 其他核心特性
+
+| 模块 | 功能说明 |
+| :--- | :--- |
+| **🌳 完整 SQLite 对话树** | 编辑任意历史用户消息或对同一轮回复点「重新生成」都会在树上创建新分支；支持通过 `/tree` 或分支按钮随时在平行分支间切换。 |
+| **📎 图片与文档真实提取** | 支持粘贴、拖拽或 `/upload` 上传 PNG / JPEG / WebP / GIF 图片，以及 PDF、Markdown、文本与代码文件。PDF 与文本在服务端真实提取内容后送入用户消息，加密或无字扫描 PDF 明确报错，绝不拿文件名充当正文。 |
+| **🔐 官方 ChatGPT 订阅 (SIWC)** | 原生实现 OpenAI 官方 Sign in with ChatGPT 动态客户端注册与 OAuth PKCE；每个账号/工作区独立保存 `client_id` 与稳定 `ext_agent_host_id`，支持退出后保留注册映射重连及清理已退出本地记录。 |
+| **🎨 8 套内置主题 + 自定义 CSS** | 内置 Claude（Dark / Light）、Catppuccin（Latte / Frappé / Macchiato / Mocha）、Gruvbox（Dark / Light）8 套主题；在 `<data_dir>/themes/<name>.css` 放入自定义样式即可在主题菜单中切换（详见 [`web/THEMES.md`](web/THEMES.md)）。 |
+| **👥 多用户隔离与密码策略** | 对话、分支、附件与上次所选角色均按登录用户 ID 在服务端隔离。后台支持创建/停用用户、分配旧未归属对话，并可切换新建账号默认使用明文或 Argon2id 哈希存储。 |
+| **📊 费用与滚动配额监控** | 按「提供商 + 模型」展示缓存输入、无缓存输入、思考与输出四类 Token 及历史单价费用；支持查询 DeepSeek 官方实时余额及估算 OpenCode Go 的 5h / 7d / 30d 滚动窗口用量。 |
+
+### 📂 仓库目录结构
 
 ```text
-event: start
-data: {"assistant_node_id":"…","character_id":"…","character_name":"小雪","user_node":{"role":"user","content":"你好",…}}
-
-event: reasoning
-data: {"t":"…"}
-
-event: text
-data: {"t":"…"}
-
-event: done
-data: {"node":{"role":"assistant","status":"complete","character_name":"小雪","content":"…","reasoning":"…","metrics":{"ttft_ms":…,"total_ms":…,"tokens_per_sec":…,"usage":{"cached_in":…,"uncached_in":…,"reasoning":…,"output":…}},…}}
+nekochat/
+├── crates/
+│   ├── core/        # 角色、消息树、指标与生成参数核心数据结构
+│   ├── store/       # SQLite (WAL) 存储、schema 迁移、用户与对话树持久化
+│   ├── gateway/     # Chat Completions、标准 Responses 与官方 ChatGPT 订阅流式网关
+│   ├── resources/   # 内置 322 张 GIF 嵌入、自定义资源包校验与流式 [sticker:...] 状态机
+│   ├── server/      # Axum HTTP 服务、Generation 状态机、SIWC OAuth、搜索子进程托管
+│   ├── mdwasm/      # 编译为 WebAssembly 的 pulldown-cmark 分块与 HTML 渲染器
+│   └── search/      # 独立 nekochat-search 二进制：DeepSeek / GPT 搜索、反 SSRF Reader 与账本
+├── web/             # SolidJS + TypeScript 前端、Web Worker 渲染管线与 8 套内置主题
+├── resource-packs/  # 内置大肥鱼 / GPT 娘表情包清单、图片素材与原始许可说明
+└── docs/            # 实拍截图 (docs/screenshots/) 与完整运维/API 指南 (docs/guide.md)
 ```
 
-`GET $BASE/api/conversations/$CONV_ID` 可查看整棵消息树。
+---
 
-`GET $BASE/api/conversations/$CONV_ID/turns` 只观察现有生成，先返回 `snapshot`（`node`、原始 `start` 与已耗时/思考时间），再继续增量；无活动生成时为 204。`GET` 对话包含 `active_turn_id`，用于刷新恢复，不能把重连实现成重发 `POST`。
+## 📖 进阶配置与接口手册
 
-手动停止使用 `POST $BASE/api/conversations/$CONV_ID/turns/$TURN_ID/stop`，`TURN_ID` 取 `active_turn_id` 或 `start.assistant_node_id`。成功/已结束为 204；另一个生成正在运行时旧 ID 返回 409。会话与这两个接口均校验账号归属，认证撤销会关闭观察，不取消模型。
+如需了解反向代理与 `allowed_hosts` 白名单、远程浏览器完成 ChatGPT OAuth 回调、独立部署 `nekochat-search`、编写自定义 `skills/` 资源包、数据库升级说明或完整 `curl` 冒烟脚本，请参阅：
+
+👉 **[完整使用与运维指南 (`docs/guide.md`)](docs/guide.md)**
+
+---
+
+## 🙏 素材来源与致谢
+
+- 内置「大肥鱼」「大肥鱼和 GPT 娘」表情包与标注整理自 [Loping151/dsh-nekowhale-stickers](https://github.com/Loping151/dsh-nekowhale-stickers)。
+- 形象与表情包原作者为 **[可以叫我云大人 / 雾雪](https://space.bilibili.com/103739)**（[kiriyuki.com](https://kiriyuki.com)）。知识库遵循 CC BY-NC 4.0，图片素材使用条件见随仓保留的 [`resource-packs/LICENSE-ASSETS`](resource-packs/LICENSE-ASSETS)、[`resource-packs/LICENSE`](resource-packs/LICENSE) 与 [`resource-packs/NOTICE`](resource-packs/NOTICE)（非商业分享请保留原作者与网站署名，禁止用于收费或其他商业用途）。
