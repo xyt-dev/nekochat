@@ -1,6 +1,8 @@
 # 🐾 nekochat
 
-LARGE SLOP MACHINE SOFTWARE
+LARGE SLOP MACHINE 的优质垃圾。
+
+拿个大模型开发还真把你当架构师了？？？？
 
 **专注于角色沉浸感、高可玩性卡片配置与零卡顿流式体验的自托管角色扮演网页聊天。**
 
