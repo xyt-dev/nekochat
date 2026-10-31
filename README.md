@@ -1,5 +1,7 @@
 # 🐾 nekochat
 
+[简体中文](README.md) | [English](README.en.md)
+
 THIS IS LARGE SLOP MACHINE 的无害垃圾。
 
 拿个大模型开发还真把你当工程师了？？？？
@@ -8,7 +10,7 @@ THIS IS LARGE SLOP MACHINE 的无害垃圾。
 
 📦 源码仓库：[xyt-dev/nekochat](https://github.com/xyt-dev/nekochat)（默认分支 `main`） · 🏷️ 版本发布：[Releases](https://github.com/xyt-dev/nekochat/releases) · 📖 运维与接口文档：[docs/guide.md](docs/guide.md) · 📝 变更记录：[CHANGELOG.md](CHANGELOG.md)
 
-`nekochat` 采用**「管理端全量编排 + 聊天端纯粹交互」**的设计：管理员在 `/admin` 将底层模型、思考档位、系统提示词、联网搜索服务、立绘背景与本地表情包组合成完整的「角色卡」；普通聊天页面完全隐藏模型名称、提供商、参数滑块与账单来源，打开即可直接与角色对话。
+`nekochat` 采用 **「管理端全量编排 + 聊天端纯粹交互」** 的设计：管理员在 `/admin` 将底层模型、思考档位、系统提示词、联网搜索服务、立绘背景与本地表情包组合成完整的「角色卡」；普通聊天页面完全隐藏模型名称、提供商、参数滑块与账单来源，打开即可直接与角色对话。
 
 ---
 
