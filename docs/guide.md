@@ -87,7 +87,7 @@ cp search-config.example.toml search-config.toml
 ./nekochat serve --config config.toml --search-config search-config.toml
 ```
 
-运行配置、数据库、上传内容、OAuth 凭证以及自定义主题和资源包继续保存在外部，升级时保留，不随发布包分发。`scripts/import-nekowhale.py` 仅供源码维护时重新同步上游素材，正常构建和运行不调用，二进制包不包含它。
+运行配置、数据库、上传内容、OAuth 凭证以及自定义主题和资源包继续保存在外部，升级时保留，不随发布包分发。内置素材已随源码收录并嵌入二进制，无需额外导入步骤。
 
 ## 用户与会话
 

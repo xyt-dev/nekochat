@@ -1,4 +1,4 @@
-Imported by scripts/import-nekowhale.py; all 322 GIFs verified using manifest SHA-1 prefixes.
+Vendored upstream nekowhale packs; all 322 GIFs verified using manifest SHA-1 prefixes.
 Original annotations are unmodified in upstream/nekowhale.json and retained per sticker.
 Per-pack SKILL.md is adapted for static local-only use: no tools, rendering or random selection.
 Upstream SKILL.md retained for provenance only; never loaded as runtime instructions.
