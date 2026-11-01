@@ -42,6 +42,7 @@ Create and customize characters in `/admin` using visual controls and live previ
 - **Choose the model and reasoning level per character.** Bind a card to a listed DeepSeek, OpenCode Go, or officially connected ChatGPT subscription model through Sign in with ChatGPT (SIWC). Configure the reasoning level, such as `none`, `low`, `high`, or `max`, and sampling settings supported by that model.
 - **Upload artwork and preview it live.** Backgrounds support PNG, JPEG, WebP, GIF, and AVIF up to 5 MiB. Adjust opacity in the editor and preview the result. Images retain their proportions and adapt to desktop and mobile layouts.
 - **Attach local sticker packs and custom skills.** Enable the bundled **Big Fat Fish (286 images)** and **Big Fat Fish & GPT Girl (36 images)** packs, or your own `skills/` resource packs. Set whether stickers represent the character (`self`) or a neutral reference (`neutral`), and choose their frequency: `rare`, `normal`, or `often`.
+- **Interactive graphics.** Enable the **通用图形** instruction pack for layouts, metric cards, data charts, parameterized plots, node diagrams, and static SVG inside replies. Colors follow the theme; chart selection, colors, and plot sliders run locally. See the [graphics guide and examples](docs/guide.md#通用图形输出).
 
 <table>
   <tr>

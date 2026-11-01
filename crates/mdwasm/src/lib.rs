@@ -10,6 +10,24 @@ use pulldown_cmark::{CowStr, Event, LinkType, Options, Parser, Tag, TagEnd};
 use pulldown_cmark_escape::{escape_href, escape_html};
 use wasm_bindgen::prelude::wasm_bindgen;
 
+/// Validates a v1 inline graphic and returns its normalized JSON.
+#[wasm_bindgen]
+pub fn validate_graphic(source: &str) -> Result<String, wasm_bindgen::JsValue> {
+    nekochat_core::graphics::validate_graphic_json(source).map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+}
+
+/// Rebuilds static SVG through the core allowlist.
+#[wasm_bindgen]
+pub fn sanitize_graphic_svg(source: &str) -> Result<String, wasm_bindgen::JsValue> {
+    nekochat_core::graphics::sanitize_graphic_svg(source).map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+}
+
+/// Samples a plot locally, using null points for nonfinite function values.
+#[wasm_bindgen]
+pub fn sample_graphic_plot(source: &str, values: &str) -> Result<String, wasm_bindgen::JsValue> {
+    nekochat_core::graphics::sample_graphic_plot(source, values).map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+}
+
 fn options() -> Options {
     Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH

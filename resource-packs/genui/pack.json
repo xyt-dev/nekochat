@@ -1,0 +1,6 @@
+{
+  "id": "genui",
+  "name": "通用图形",
+  "description": "随主题变化的布局、指标卡、图表、可调函数图、节点图和静态 SVG；所有交互在本地完成。",
+  "attribution": "nekochat contributors；Apache-2.0 OR MIT。原创声明式协议与示例，不包含第三方素材。"
+}

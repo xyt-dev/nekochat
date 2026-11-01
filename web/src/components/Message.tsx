@@ -13,7 +13,7 @@ function MessageShell(props: { class: string; children: JSX.Element }) {
       class={`msg ${props.class}`}
       classList={{ tapped: tapped() }}
       onClick={(e) => {
-        if ((e.target as HTMLElement).closest("button, a, summary")) return;
+        if ((e.target as HTMLElement).closest("button, a, summary, input, select, textarea, label, [role='button']")) return;
         setTapped((t) => !t);
       }}
     >

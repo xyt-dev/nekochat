@@ -1,5 +1,7 @@
 //! Shared domain types for nekochat.
 
+pub mod graphics;
+
 use serde::{Deserialize, Serialize};
 
 /// Administrator-controlled, typed generation settings. Never a raw upstream-body override.

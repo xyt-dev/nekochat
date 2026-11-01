@@ -21,6 +21,7 @@ import { inNextFrame } from "./frame";
 import { indexTree, pathTo, type TreeIndex } from "./tree";
 import { resetAccountUi, toast } from "./ui";
 import { resetMarkdownCache } from "./md/client";
+import { resetGraphicsRuntime } from "./graphics/state";
 
 export type ConnectionState = "connecting" | "streaming" | "reconnecting";
 
@@ -154,7 +155,11 @@ function createAppStore() {
       list.find((item) => item.id === characters().default_character_id);
   });
 
-  function resetSession() {
+  function resetSession(preserveGraphics = false) {
+    if (!preserveGraphics) {
+      resetGraphicsRuntime();
+      try { sessionStorage.removeItem("nk.graphics.account"); } catch { /* Storage may be unavailable. */ }
+    }
     sessionEpoch++;
     setSessionVersion(sessionEpoch);
     resetAccountRequests();
@@ -199,8 +204,13 @@ function createAppStore() {
     });
   }
 
-  async function enterSession(account: UserPublic, requestedConversation: string | null = null) {
-    resetSession();
+  async function enterSession(account: UserPublic, requestedConversation: string | null = null, restoreGraphics = false) {
+    let preserveGraphics = false;
+    if (restoreGraphics) {
+      try { preserveGraphics = sessionStorage.getItem("nk.graphics.account") === account.id; } catch { /* Memory-only preferences cannot survive reload. */ }
+    }
+    resetSession(preserveGraphics);
+    try { sessionStorage.setItem("nk.graphics.account", account.id); } catch { /* Storage may be unavailable. */ }
     setUser(account);
     const epoch = sessionEpoch;
     await Promise.all([loadCharacters(), loadConversations()]);
@@ -220,7 +230,7 @@ function createAppStore() {
     try {
       const account = await api.session();
       if (epoch !== sessionEpoch) return;
-      if (account) await enterSession(account, requested);
+      if (account) await enterSession(account, requested, true);
       else resetSession();
     } catch (error) {
       if (epoch === sessionEpoch) toast(error instanceof ApiError ? error.message : "加载登录状态失败");

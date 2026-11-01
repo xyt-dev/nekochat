@@ -2,15 +2,15 @@
 // in the frame loop, rendered blocks cached per message so virtual scrolling can remount cheaply.
 import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js";
 import { inNextFrame } from "../frame";
-import type { MdRequest, MdResponse } from "./protocol";
+import type { MdBlock, MdRequest, MdResponse } from "./protocol";
 
 interface Entry {
   key: string;
-  /** Source of `html`; `null` until the first response. */
+  /** Source of `blocks`; `null` until the first response. */
   text: string | null;
   final: boolean;
-  html: string[];
-  listeners: Set<(html: string[]) => void>;
+  blocks: MdBlock[];
+  listeners: Set<(blocks: MdBlock[]) => void>;
   inflight: boolean;
   want: { text: string; final: boolean } | null;
 }
@@ -31,7 +31,7 @@ function entry(key: string): Entry {
     entries.set(key, e);
     return e;
   }
-  e = { key, text: null, final: false, html: [], listeners: new Set(), inflight: false, want: null };
+  e = { key, text: null, final: false, blocks: [], listeners: new Set(), inflight: false, want: null };
   entries.set(key, e);
   if (entries.size > MAX_ENTRIES) {
     for (const old of entries.values()) {
@@ -51,12 +51,12 @@ function pump(e: Entry) {
   if (text === e.text && final === e.final) return;
   e.inflight = true;
   sentText.set(e.key, { text, final });
-  post({ key: e.key, text, final, base: e.html.length });
+  post({ key: e.key, text, final, base: e.blocks.length });
 }
 
 // What each in-flight request rendered, applied with its response.
 const sentText = new Map<string, { text: string; final: boolean }>();
-/** Remove every account's source, HTML and queued render result on logout/switch. */
+/** Remove every account's source, blocks and queued render result on logout/switch. */
 export function resetMarkdownCache(): void {
   if (entries.size === 0 && sentText.size === 0 && arrived.length === 0) return;
   worker.terminate();
@@ -74,12 +74,17 @@ function applyArrived() {
     const sent = sentText.get(res.key);
     sentText.delete(res.key);
     if (!e || !sent) continue;
-    e.html = e.html.slice(0, res.start).concat(res.html);
-    e.html.length = res.total;
+    const updates = res.blocks.map((next, index) => {
+      const previous = e.blocks[res.start + index];
+      return next.kind === "graphic" && previous?.kind === "graphic" && next.source === previous.source
+        ? previous : next;
+    });
+    e.blocks = e.blocks.slice(0, res.start).concat(updates);
+    e.blocks.length = res.total;
     e.text = sent.text;
     e.final = sent.final;
     e.inflight = false;
-    for (const l of e.listeners) l(e.html);
+    for (const l of e.listeners) l(e.blocks);
     pump(e);
   }
 }
@@ -98,22 +103,22 @@ function request(key: string, text: string, final: boolean) {
 }
 
 /**
- * Rendered HTML blocks of `text`; `null` until the first rendering arrives. A message streaming
- * passes `final = false`; finished blocks stay frozen and only the last one is redone.
+ * Typed rendered blocks of `text`; `null` until the first response. While streaming,
+ * finished blocks stay frozen and only the last block is redone.
  */
 export function createMarkdown(
   key: Accessor<string>,
   text: Accessor<string>,
   final: Accessor<boolean>,
-): Accessor<string[] | null> {
-  const [html, setHtml] = createSignal<string[] | null>(null, { equals: false });
+): Accessor<MdBlock[] | null> {
+  const [blocks, setBlocks] = createSignal<MdBlock[] | null>(null, { equals: false });
   createEffect(() => {
     const e = entry(key());
-    const listener = (h: string[]) => setHtml(h);
+    const listener = (value: MdBlock[]) => setBlocks(value);
     e.listeners.add(listener);
-    setHtml(e.text === null ? null : e.html);
+    setBlocks(e.text === null ? null : e.blocks);
     onCleanup(() => e.listeners.delete(listener));
   });
   createEffect(() => request(key(), text(), final()));
-  return html;
+  return blocks;
 }

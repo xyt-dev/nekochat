@@ -1698,15 +1698,16 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nekochat-core"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
+ "roxmltree",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "nekochat-gateway"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "axum",
  "eventsource-stream",
@@ -1720,8 +1721,9 @@ dependencies = [
 
 [[package]]
 name = "nekochat-mdwasm"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
+ "nekochat-core",
  "pulldown-cmark",
  "pulldown-cmark-escape",
  "wasm-bindgen",
@@ -1729,7 +1731,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-resources"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1764,7 +1766,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-server"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1804,7 +1806,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-store"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "argon2",
  "getrandom 0.3.4",
@@ -2424,6 +2426,15 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

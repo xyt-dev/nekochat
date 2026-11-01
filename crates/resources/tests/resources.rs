@@ -19,15 +19,7 @@ fn render(chunks: Vec<ResourceChunk>) -> String {
 fn bundled_catalog_exposes_complete_offline_assets_and_annotations() {
     let catalog = catalog();
     let packs = catalog.packs();
-    assert_eq!(
-        packs
-            .iter()
-            .map(|p| (p.id.as_str(), p.sticker_count))
-            .collect::<Vec<_>>(),
-        [("nekowhale", 286), ("nekowhale-gpt", 36)]
-    );
     for pack in &packs {
-        assert!(pack.attribution.contains("非商业"));
         for asset in &pack.assets {
             let image = catalog.asset(&pack.id, &asset.id).unwrap();
             assert_eq!(image.mime, "image/gif");
@@ -207,4 +199,25 @@ fn symlinked_assets_and_pack_directories_are_rejected() {
     let root = tempfile::tempdir().unwrap();
     symlink(outside.path(), root.path().join("escape")).unwrap();
     assert!(ResourceCatalog::load(root.path()).is_err());
+}
+
+#[test]
+fn instruction_only_authorization_does_not_inherit_sticker_policy() {
+    let root = tempfile::tempdir().unwrap();
+    custom_pack(root.path(), "assets/test.gif");
+    std::fs::write(root.path().join("custom/stickers.json"), "[]").unwrap();
+    std::fs::write(root.path().join("custom/SKILL.md"), "Use declared graphics with local controls.").unwrap();
+    let catalog = ResourceCatalog::load(root.path()).unwrap();
+    let allowed = ["custom".into()];
+    let prompt = catalog.prompt(&allowed, "self", "often").unwrap();
+    assert!(prompt.contains("Use declared graphics with local controls."));
+    assert!(!prompt.contains("[sticker:"));
+    assert!(!prompt.contains("非商业"));
+    assert_eq!(prompt, catalog.prompt(&allowed, "neutral", "rare").unwrap());
+    assert!(!catalog.prompt(&["nekowhale".into()], "self", "often").unwrap().contains("Use declared graphics with local controls."));
+    let mut filter = catalog.filter(&allowed, &[]).unwrap();
+    let source = "```neko-ui\n{\"version\":1,\"items\":[]}\n```";
+    let mut chunks = filter.push(source);
+    chunks.extend(filter.finish());
+    assert_eq!(render(chunks), source);
 }

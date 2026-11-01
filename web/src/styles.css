@@ -1407,3 +1407,8 @@ div.nk-math {
   .act, .sibling-nav button { min-height: 36px; }
   .editor-image button { width: 32px; height: 32px; }
 }
+
+.md-graphic-pending, .md-graphic-error { margin-block: 8px; padding: 12px; border: 1px solid var(--nk-border); border-radius: 8px; font-size: 13px; overflow-wrap: anywhere; }
+.md-graphic-pending { color: var(--nk-text-muted); }
+.md-graphic-error { color: var(--nk-red); }
+.md-block > details > pre { max-height: 360px; overflow: auto; }

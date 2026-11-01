@@ -1,23 +1,25 @@
-// Messages between the main thread and the markdown worker.
+// Typed blocks exchanged with the Markdown worker. Graphics are validated by core/WASM.
+import type { GraphicSpec } from "../graphics/types";
+
+export type MdBlock =
+  | { kind: "html"; html: string }
+  | { kind: "graphic"; spec: GraphicSpec; source: string }
+  | { kind: "graphic-pending" }
+  | { kind: "graphic-error"; error: string; source: string };
 
 export interface MdRequest {
-  /** Message identity (node id); the worker remembers what it last sent per key. */
   key: string;
   text: string;
-  /** `false` while streaming: the last block is rendered without math and highlighting. */
   final: boolean;
-  /** Blocks the main thread already holds from the previous response for this key. */
+  /** Blocks the main thread holds; unchanged leading blocks are not resent. */
   base: number;
-  /** Forget the key. */
   drop?: boolean;
 }
 
 export interface MdResponse {
   key: string;
-  /** Block count of the whole message. */
   total: number;
-  /** Index of `html[0]`; blocks before it are unchanged. */
   start: number;
-  html: string[];
+  blocks: MdBlock[];
   dropped?: boolean;
 }

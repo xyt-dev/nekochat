@@ -2,7 +2,7 @@
 // Markdown worker: pulldown-cmark (wasm) splits and renders blocks, then KaTeX and highlight.js
 // fill the math and code placeholders. Finished blocks are rendered once; while a message
 // streams only its last block is re-rendered, without math or highlighting until it completes.
-import init, { render_html, split_blocks } from "../wasm/nekochat_mdwasm.js";
+import init, { render_html, split_blocks, validate_graphic, sanitize_graphic_svg } from "../wasm/nekochat_mdwasm.js";
 import katex from "katex";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
@@ -29,7 +29,7 @@ import swift from "highlight.js/lib/languages/swift";
 import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
-import type { MdRequest, MdResponse } from "./protocol";
+import type { MdBlock, MdRequest, MdResponse } from "./protocol";
 
 const languages = {
   bash, c, cpp, csharp, css, diff, go, ini, java, javascript, json, kotlin, lua, markdown, php,
@@ -74,6 +74,28 @@ function finish(html: string): string {
   });
 }
 
+/** Only top-level, explicitly tagged graphics fences enter the graphical renderer. */
+function graphicFence(text: string, final: boolean): MdBlock | null {
+  const open = /^ {0,3}(`{3,}|~{3,})(neko-ui|svg)[\t ]*\r?\n/.exec(text);
+  if (!open) return null;
+  const marker = open[1];
+  const close = new RegExp(`^ {0,3}${marker[0]}{${marker.length},}[\\t ]*$`);
+  const lines = text.slice(open[0].length).split(/\r?\n/);
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const closed = lines.length > 0 && close.test(lines[lines.length - 1]);
+  if (closed) lines.pop();
+  const source = lines.join("\n").trim();
+  try {
+    const spec = open[2] === "svg"
+      ? { version: 1, items: [{ type: "svg", code: sanitize_graphic_svg(source) }] }
+      : JSON.parse(validate_graphic(source));
+    return { kind: "graphic", spec, source };
+  } catch (err) {
+    if (!closed && !final) return { kind: "graphic-pending" };
+    return { kind: "graphic-error", error: err instanceof Error ? err.message : String(err), source };
+  }
+}
+
 interface KeyState {
   texts: string[];
   /** The last sent block was rendered unfinished. */
@@ -87,7 +109,7 @@ const MAX_STATES = 400;
 function handle(req: MdRequest): MdResponse {
   if (req.drop) {
     states.delete(req.key);
-    return { key: req.key, total: 0, start: 0, html: [], dropped: true };
+    return { key: req.key, total: 0, start: 0, blocks: [], dropped: true };
   }
   const texts = split_blocks(req.text);
   const prev = req.base > 0 ? states.get(req.key) : undefined;
@@ -101,16 +123,20 @@ function handle(req: MdRequest): MdResponse {
       if (last !== texts.length - 1 || req.final) start = last;
     }
   }
-  const html: string[] = [];
+  const blocks: MdBlock[] = [];
   for (let i = start; i < texts.length; i++) {
-    const raw = render_html(texts[i]);
     const done = req.final || i < texts.length - 1;
-    html.push(done ? finish(raw) : raw);
+    const graphic = graphicFence(texts[i], done);
+    if (graphic) blocks.push(graphic);
+    else {
+      const raw = render_html(texts[i]);
+      blocks.push({ kind: "html", html: done ? finish(raw) : raw });
+    }
   }
   states.delete(req.key);
   states.set(req.key, { texts, partialLast: !req.final && texts.length > 0 });
   if (states.size > MAX_STATES) states.delete(states.keys().next().value!);
-  return { key: req.key, total: texts.length, start, html };
+  return { key: req.key, total: texts.length, start, blocks };
 }
 
 const ready = init();
@@ -122,7 +148,7 @@ self.onmessage = async (e: MessageEvent<MdRequest>) => {
   } catch (err) {
     states.delete(e.data.key);
     const msg = err instanceof Error ? err.message : String(err);
-    res = { key: e.data.key, total: 1, start: 0, html: [`<p class="nk-md-error">渲染失败：${escapeAttr(msg)}</p>`] };
+    res = { key: e.data.key, total: 1, start: 0, blocks: [{ kind: "html", html: `<p class="nk-md-error">渲染失败：${escapeAttr(msg)}</p>` }] };
   }
   (self as unknown as DedicatedWorkerGlobalScope).postMessage(res);
 };
