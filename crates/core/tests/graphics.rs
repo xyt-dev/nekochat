@@ -1,4 +1,4 @@
-use nekochat_core::graphics::{sanitize_graphic_svg, sample_graphic_plot, validate_graphic_json};
+use nekochat_core::graphics::{sanitize_graphic_svg, sample_graphic_plot, validate_complete_graphic_json, validate_graphic_json};
 use serde_json::{Value, json};
 
 #[test]
@@ -134,5 +134,32 @@ fn question_choices_reject_ambiguous_empty_unbounded_or_executable_options() {
     ] {
         let source = json!({"version":1,"items":[{"type":"choices","options":options}]}).to_string();
         assert!(validate_graphic_json(&source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn completed_graphics_recover_missing_container_ends_without_changing_choices() {
+    let source = r#"{"version":1,"items":[{"type":"choices","options":[{"label":"看例子","prompt":"请举一个具体例子。"},{"label":"比较方案","prompt":"比较这两个方案。"},{"label":"解释符号","prompt":"请解释 \"a]}\" 的含义。"}]}"#;
+    assert!(validate_graphic_json(source).is_err());
+    let checked: Value = serde_json::from_str(&validate_complete_graphic_json(source).unwrap()).unwrap();
+    assert_eq!(checked["items"][0]["options"], json!([
+        {"label":"看例子","prompt":"请举一个具体例子。"},
+        {"label":"比较方案","prompt":"比较这两个方案。"},
+        {"label":"解释符号","prompt":"请解释 \"a]}\" 的含义。"}
+    ]));
+}
+
+#[test]
+fn container_completion_rejects_missing_content_invalid_syntax_and_unsafe_fields() {
+    for source in [
+        r#"{"version":1,"items":[{"type":"choices","options":[{"label":"例子","prompt":"未完成"#,
+        r#"{"version":1,"items":[{"type":"choices","options":[{"label":"例子"}"#,
+        r#"{"version":1,"items":[{"type":"choices","options":[{"label":"例子","prompt":"请举例。"},"#,
+        r#"{"version":1,"items":[{"type":"choices" "options":[]"#,
+        r#"{"version":1,"version":1,"items":[]"#,
+        r#"{"version":1,"items":[{"type":"choices","options":[{"label":"例子","prompt":"请举例。","url":"https://example.com"}]}"#,
+        r#"{"version":1,"items":[{"type":"text","content":"正文","color":"url(https://example.com)"}"#,
+    ] {
+        assert!(validate_complete_graphic_json(source).is_err(), "{source}");
     }
 }

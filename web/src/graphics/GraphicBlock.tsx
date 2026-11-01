@@ -132,17 +132,13 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
     <Show when={choicesOnly() && props.spec.title}><h3 class="nk-graphic-questions-title">{props.spec.title}</h3></Show>
     <Show when={!choicesOnly()}>
     <div class="nk-graphic-heading"><Show when={props.spec.title}><h2>{props.spec.title}</h2></Show><div class="nk-graphic-actions">
-      <button type="button" onClick={() => {
+      <div class="nk-graphic-layout-settings" role="group" aria-label="配色"><ColorSettings label="配色"><For each={layoutColors()}>{entry => <ColorControl colorKey={`${entry.key}:color`} label={entry.label} declared={entry.node.color} fallback="surface" />}</For><button type="button" class="nk-graphic-color-reset" onClick={() => {
         const next = { ...state(), colors: {}, views: { ...state().views, [stateKey("all-theme-colors")]: 1 } };
         setState(writeGraphicState(props.id, next));
-      }}>主题配色</button>
-      <button type="button" aria-expanded={sourceOpen()} onClick={() => setSourceOpen(value => !value)}>源规范</button>
-      <button type="button" onClick={() => { void copySource(); }}>复制</button>
-      <Show when={layoutColors().length}><div class="nk-graphic-layout-settings" role="group" aria-label="配色"><ColorSettings label="配色"><For each={layoutColors()}>{entry => <ColorControl colorKey={`${entry.key}:color`} label={entry.label} declared={entry.node.color} fallback="surface" />}</For></ColorSettings></div></Show>
+      }}>恢复主题配色</button></ColorSettings></div>
     </div></div>
     </Show>
-    <Show when={copyStatus()}><p class="nk-graphic-status" role="status">{copyStatus()}</p></Show>
     <div class="nk-graphic-items" style={{ gap: `${props.spec.gap ?? 12}px` }}><NodeList items={props.spec.items} path="root" /></div>
-    <Show when={sourceOpen()}><pre class="nk-graphic-source" tabindex="0" role="region" aria-label="图形源规范"><code>{props.source}</code></pre></Show>
+    <Show when={!choicesOnly()}><details class="nk-graphic-source-details" open={sourceOpen()} onToggle={event => setSourceOpen(event.currentTarget.open)}><summary>源规范</summary><Show when={sourceOpen()}><div class="nk-graphic-source-actions"><button type="button" onClick={() => { void copySource(); }}>复制</button><Show when={copyStatus()}><span class="nk-graphic-status" role="status">{copyStatus()}</span></Show></div><pre class="nk-graphic-source" tabindex="0" role="region" aria-label="图形源规范"><code>{props.source}</code></pre></Show></details></Show>
   </div></GraphicsContext.Provider>;
 }

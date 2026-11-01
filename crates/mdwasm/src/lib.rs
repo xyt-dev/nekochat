@@ -10,10 +10,15 @@ use pulldown_cmark::{CowStr, Event, LinkType, Options, Parser, Tag, TagEnd};
 use pulldown_cmark_escape::{escape_href, escape_html};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-/// Validates a v1 inline graphic and returns its normalized JSON.
+/// Validates a v1 graphic, completing missing container ends only for finished blocks.
 #[wasm_bindgen]
-pub fn validate_graphic(source: &str) -> Result<String, wasm_bindgen::JsValue> {
-    nekochat_core::graphics::validate_graphic_json(source).map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+pub fn validate_graphic(source: &str, complete: bool) -> Result<String, wasm_bindgen::JsValue> {
+    let checked = if complete {
+        nekochat_core::graphics::validate_complete_graphic_json(source)
+    } else {
+        nekochat_core::graphics::validate_graphic_json(source)
+    };
+    checked.map_err(|error| wasm_bindgen::JsValue::from_str(&error))
 }
 
 /// Rebuilds static SVG through the core allowlist.

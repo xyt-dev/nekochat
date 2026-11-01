@@ -88,7 +88,7 @@ function graphicFence(text: string, final: boolean): MdBlock | null {
   try {
     const spec = open[2] === "svg"
       ? { version: 1, items: [{ type: "svg", code: sanitize_graphic_svg(source) }] }
-      : JSON.parse(validate_graphic(source));
+      : JSON.parse(validate_graphic(source, closed || final));
     return { kind: "graphic", spec, source };
   } catch (err) {
     if (!closed && !final) return { kind: "graphic-pending" };

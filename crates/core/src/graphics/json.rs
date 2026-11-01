@@ -42,3 +42,36 @@ impl<'de> Deserialize<'de> for UniqueValue {
         deserializer.deserialize_any(JsonVisitor)
     }
 }
+
+pub(super) fn complete_containers(source: &str) -> Option<String> {
+    let mut closers = [0u8; 128];
+    let mut depth = 0;
+    let mut quoted = false;
+    let mut escaped = false;
+    for byte in source.bytes() {
+        if quoted {
+            if escaped { escaped = false; }
+            else if byte == b'\\' { escaped = true; }
+            else if byte == b'"' { quoted = false; }
+        } else {
+            match byte {
+                b'"' => quoted = true,
+                b'[' | b'{' => {
+                    if depth == closers.len() { return None; }
+                    closers[depth] = if byte == b'[' { b']' } else { b'}' };
+                    depth += 1;
+                }
+                b']' | b'}' => {
+                    if depth == 0 || closers[depth - 1] != byte { return None; }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+        }
+    }
+    if quoted || depth == 0 { return None; }
+    let mut completed = String::with_capacity(source.len() + depth);
+    completed.push_str(source);
+    for &closer in closers[..depth].iter().rev() { completed.push(char::from(closer)); }
+    Some(completed)
+}

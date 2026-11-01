@@ -107,6 +107,18 @@ pub fn validate_graphic_json(source: &str) -> Checked<String> {
     serde_json::to_string(&value).map_err(|e| e.to_string())
 }
 
+/// Validates a completed graphic while retaining strict field and content checks.
+pub fn validate_complete_graphic_json(source: &str) -> Checked<String> {
+    match validate_graphic_json(source) {
+        Ok(checked) => Ok(checked),
+        Err(error) => {
+            if source.len() > JSON_BYTES { return Err(error); }
+            let Some(completed) = json::complete_containers(source) else { return Err(error); };
+            validate_graphic_json(&completed)
+        }
+    }
+}
+
 struct Budget { nodes: usize, ids: HashSet<String> }
 
 fn validate_node(value: &mut Value, depth: usize, budget: &mut Budget) -> Checked<()> {
