@@ -72,6 +72,23 @@ python3 scripts/deploy.py start    # 从独立目录启动，不构建、不清�
 
 停止按程序、工作目录、配置路径、父子关系和进程身份匹配，保留使用其他网站配置的隔离实例，即使它使用相同的搜索配置；等待正常退出，不直接强杀。`--runtime-dir <path>`、`--config <path>` 和 `--search-config <path>` 可指定独立目录及配置，后续命令应继续使用相同参数。已有 `bin/` 必须由本站脚本管理，不能指定含其他工具的目录；仓库锁与部署目录锁防止不同目标目录绕过并发保护。程序独立放置后仍需保留仓库里的脚本、两份配置及原数据目录。
 
+### 二进制发布包
+
+GitHub Release 的 Linux x86_64 GNU 包要求 glibc 2.39 或更新版本，包含同目录的 `nekochat`、`nekochat-search`、两份配置示例和许可说明。网页、WASM、通用图形指令及全部 322 张内置表情已嵌入主程序，不必携带 `web/dist` 或 `resource-packs`，无需 Node、Bun、Rust 或 Python。解压后先为新安装复制配置：
+
+```sh
+cp config.example.toml config.toml
+cp search-config.example.toml search-config.toml
+```
+
+按上文初始化两个搜索令牌并载入环境，设置管理密码及所需模型提供商，再在解压目录启动：
+
+```sh
+./nekochat serve --config config.toml --search-config search-config.toml
+```
+
+运行配置、数据库、上传内容、OAuth 凭证以及自定义主题和资源包继续保存在外部，升级时保留，不随发布包分发。`scripts/import-nekowhale.py` 仅供源码维护时重新同步上游素材，正常构建和运行不调用，二进制包不包含它。
+
 ## 用户与会话
 
 聊天需要先注册或登录。站点访问密码是可选的外层门禁，与用户密码、管理密码分别管理；不设置站点密码时，能访问页面的人都可以自行注册，部署者须按需限制网络或设置外层门禁。

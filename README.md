@@ -173,6 +173,8 @@ python3 scripts/deploy.py
 
 脚本优先复用完整的 `target/release/` 程序，其次复用 `runtime/bin/`；两处都没有完整的程序时，才构建前端、WASM 与两个 Rust release 程序。它会将 `nekochat` 和 `nekochat-search` 安装到 `runtime/bin/`，停止本站旧进程，在后台启动新程序；确认监听端口归属、首页和健康检查通过后，删除整个 `target/`。`web/dist` 和内置表情图片已嵌入程序，无需额外部署静态资源。
 
+内置通用图形指令、322 张表情及其清单也随主程序嵌入，正常构建和部署都不需要运行 `scripts/import-nekowhale.py`；该脚本仅供维护者重新同步上游素材。配置、数据库、用户上传及自定义资源包仍保存在外部。GitHub 二进制发布包提供两个已编译程序、配置示例与许可说明，不含导入脚本；Linux x86_64 包要求 glibc 2.39 或更新版本，解压启动见[使用指南](docs/guide.md#二进制发布包)。
+
 配置和 `data/` 继续使用原仓库中的路径；保留这些文件与部署脚本。运行日志为 `runtime/service.log`。启动所需的密钥和代理环境变量会私密保存在 `runtime/environment.json`（权限 `0600`）；整个 `runtime/` 已忽略，不要提交或分享。
 
 ### 4. 日常启动、停止与更新

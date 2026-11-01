@@ -173,6 +173,8 @@ python3 scripts/deploy.py
 
 The script first reuses a complete binary pair in `target/release/`, then checks `runtime/bin/`. It builds the frontend, WASM, and both Rust release programs only when neither location has a complete pair. It installs `nekochat` and `nekochat-search` in `runtime/bin/`, stops the site's old processes, and starts the deployment in the background. After verifying listener ownership, the homepage, and health, it removes the entire `target/` directory. The frontend and bundled stickers are embedded in the program, so no separate static-resource deployment is needed.
 
+The built-in graphics instructions, all 322 stickers, and their catalogs are also embedded in the main executable. Normal builds and deployments never run `scripts/import-nekowhale.py`; it is a maintainer tool for refreshing upstream assets. Configuration, databases, uploads, and custom resource packs remain external. GitHub binary releases contain both compiled programs, configuration examples, and license notices, without the importer. The Linux x86_64 package requires glibc 2.39 or newer; see the [binary package instructions](docs/guide.md#二进制发布包).
+
 Configuration and `data/` keep their original repository paths; retain them and the deployment script. Logs are written to `runtime/service.log`. Required credentials and proxy environment settings are saved privately in `runtime/environment.json` with mode `0600`. The entire runtime directory is ignored by Git and should not be committed or shared.
 
 ### 4. Start, stop, and update
