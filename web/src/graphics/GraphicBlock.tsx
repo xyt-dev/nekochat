@@ -138,7 +138,7 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
       }}>主题配色</button>
       <button type="button" aria-expanded={sourceOpen()} onClick={() => setSourceOpen(value => !value)}>源规范</button>
       <button type="button" onClick={() => { void copySource(); }}>复制</button>
-      <Show when={layoutColors().length}><div class="nk-graphic-layout-settings" role="group" aria-label="布局配色"><ColorSettings label="布局配色"><For each={layoutColors()}>{entry => <ColorControl colorKey={`${entry.key}:color`} label={entry.label} declared={entry.node.color} fallback="surface" />}</For></ColorSettings></div></Show>
+      <Show when={layoutColors().length}><div class="nk-graphic-layout-settings" role="group" aria-label="配色"><ColorSettings label="配色"><For each={layoutColors()}>{entry => <ColorControl colorKey={`${entry.key}:color`} label={entry.label} declared={entry.node.color} fallback="surface" />}</For></ColorSettings></div></Show>
     </div></div>
     </Show>
     <Show when={copyStatus()}><p class="nk-graphic-status" role="status">{copyStatus()}</p></Show>
