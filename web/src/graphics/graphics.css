@@ -15,7 +15,6 @@
 .nk-graphic-block .nk-graphic-heading > h2 { flex: 1 1 180px; margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
 .nk-graphic-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
 .nk-graphic-layout-settings { display: flex; align-items: flex-start; gap: 2px; margin-left: auto; padding-left: 8px; border-left: 1px solid var(--nk-border); color: var(--nk-text-muted); font-size: 11px; }
-.nk-graphic-layout-settings > span { line-height: 28px; }
 .nk-graphic-actions:has(.nk-graphic-colors[open]) { flex-basis: 100%; }
 .nk-graphic-layout-settings:has(.nk-graphic-colors[open]) { width: 100%; margin-left: 0; padding-left: 0; border-left: 0; }
 .nk-graphic-block button, .nk-graphic-block select {
@@ -59,6 +58,7 @@
 .nk-graphic-colors[open] { width: 100%; }
 .nk-graphic-widget-tools > .nk-graphic-colors[open] { flex-basis: 100%; }
 .nk-graphic-block .nk-graphic-colors > summary { display: flex; align-items: center; justify-content: center; width: 28px; min-height: 28px; margin-left: auto; padding: 0; list-style: none; border: 1px solid transparent; border-radius: 7px; color: var(--nk-text-muted); cursor: pointer; }
+.nk-graphic-block .nk-graphic-colors-labelled > summary { width: auto; gap: 6px; min-height: 32px; padding: 5px 8px; border-color: var(--nk-border); font-size: 11px; white-space: nowrap; }
 .nk-graphic-colors > summary::-webkit-details-marker { display: none; }
 .nk-graphic-block .nk-graphic-colors > summary:hover, .nk-graphic-block .nk-graphic-colors[open] > summary { color: var(--nk-accent); background: var(--nk-bg-raised, var(--nk-bg)); border-color: var(--nk-border); }
 .nk-graphic-data summary { cursor: pointer; color: var(--nk-text-muted); padding: 6px 0; }
@@ -136,9 +136,9 @@
   .nk-graphic-block button.nk-graphic-question { min-height: 44px; }
   .nk-graphic-block :is(select, input) { font-size: 16px; }
   .nk-graphic-block .nk-graphic-colors > summary { width: 44px; min-height: 44px; }
+  .nk-graphic-block .nk-graphic-colors-labelled > summary { width: auto; }
   .nk-graphic-stat > .nk-graphic-muted { padding-right: 44px; }
   .nk-graphic-block .nk-graphic-param input[type="range"] { height: 44px; min-height: 44px; }
   .nk-graphic-block .nk-graphic-color-swatches { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
-  .nk-graphic-layout-settings > span { line-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .nk-graphic-updating { opacity: 1; } }

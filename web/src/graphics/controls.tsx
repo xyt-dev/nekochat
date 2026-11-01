@@ -26,10 +26,10 @@ export function frameAction<T>(apply: (value: T) => void): (value: T) => void {
     if (!frame) frame = requestAnimationFrame(() => { frame = 0; apply(latest); });
   };
 }
-export function ColorSettings(props: { children: JSX.Element }) {
+export function ColorSettings(props: { children: JSX.Element; label?: string }) {
   const [open, setOpen] = createSignal(false);
-  return <details class="nk-graphic-colors" name="nk-graphic-palette" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary aria-label="调整配色" title="调整配色"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10 2.5a7.5 7.5 0 1 0 0 15h1a2 2 0 0 0 1.4-3.4.8.8 0 0 1 .6-1.4h1.3a3.2 3.2 0 0 0 3.2-3.2A7.1 7.1 0 0 0 10 2.5Z"/><circle cx="6" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="10" cy="5.5" r=".8" fill="currentColor" stroke="none"/><circle cx="14" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="5" cy="11" r=".8" fill="currentColor" stroke="none"/></svg></summary><Show when={open()}><div class="nk-graphic-color-list">{props.children}</div></Show>
+  return <details class="nk-graphic-colors" classList={{ "nk-graphic-colors-labelled": !!props.label }} name="nk-graphic-palette" onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary aria-label={props.label ?? "调整配色"} title={props.label ?? "调整配色"}><Show when={props.label}><span>{props.label}</span></Show><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10 2.5a7.5 7.5 0 1 0 0 15h1a2 2 0 0 0 1.4-3.4.8.8 0 0 1 .6-1.4h1.3a3.2 3.2 0 0 0 3.2-3.2A7.1 7.1 0 0 0 10 2.5Z"/><circle cx="6" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="10" cy="5.5" r=".8" fill="currentColor" stroke="none"/><circle cx="14" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="5" cy="11" r=".8" fill="currentColor" stroke="none"/></svg></summary><Show when={open()}><div class="nk-graphic-color-list">{props.children}</div></Show>
   </details>;
 }
 export function ColorControl(props: { colorKey: string; label: string; declared?: Color; fallback?: Color }) {
