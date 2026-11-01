@@ -9,6 +9,7 @@ interface Entry {
   /** Source of `blocks`; `null` until the first response. */
   text: string | null;
   final: boolean;
+  graphics: boolean;
   blocks: MdBlock[];
   listeners: Set<(blocks: MdBlock[]) => void>;
   inflight: boolean;
@@ -24,14 +25,14 @@ function post(req: MdRequest) {
   worker.postMessage(req);
 }
 
-function entry(key: string): Entry {
+function entry(key: string, graphics = true): Entry {
   let e = entries.get(key);
   if (e) {
     entries.delete(key);
     entries.set(key, e);
     return e;
   }
-  e = { key, text: null, final: false, blocks: [], listeners: new Set(), inflight: false, want: null };
+  e = { key, text: null, final: false, graphics, blocks: [], listeners: new Set(), inflight: false, want: null };
   entries.set(key, e);
   if (entries.size > MAX_ENTRIES) {
     for (const old of entries.values()) {
@@ -51,7 +52,7 @@ function pump(e: Entry) {
   if (text === e.text && final === e.final) return;
   e.inflight = true;
   sentText.set(e.key, { text, final });
-  post({ key: e.key, text, final, base: e.blocks.length });
+  post({ key: e.key, text, final, base: e.blocks.length, graphics: e.graphics });
 }
 
 // What each in-flight request rendered, applied with its response.
@@ -96,8 +97,8 @@ function receiveMarkdown(ev: MessageEvent<MdResponse>) {
 worker.onmessage = receiveMarkdown;
 
 /** Asks for `text` rendered under `key`; only the newest wish is kept while one is in flight. */
-function request(key: string, text: string, final: boolean) {
-  const e = entry(key);
+function request(key: string, text: string, final: boolean, graphics: boolean) {
+  const e = entry(key, graphics);
   e.want = { text, final };
   pump(e);
 }
@@ -110,15 +111,17 @@ export function createMarkdown(
   key: Accessor<string>,
   text: Accessor<string>,
   final: Accessor<boolean>,
+  graphics = true,
 ): Accessor<MdBlock[] | null> {
+  const renderKey = () => `${graphics ? "message" : "text"}:${key()}`;
   const [blocks, setBlocks] = createSignal<MdBlock[] | null>(null, { equals: false });
   createEffect(() => {
-    const e = entry(key());
+    const e = entry(renderKey(), graphics);
     const listener = (value: MdBlock[]) => setBlocks(value);
     e.listeners.add(listener);
     setBlocks(e.text === null ? null : e.blocks);
     onCleanup(() => e.listeners.delete(listener));
   });
-  createEffect(() => request(key(), text(), final()));
+  createEffect(() => request(renderKey(), text(), final(), graphics));
   return blocks;
 }

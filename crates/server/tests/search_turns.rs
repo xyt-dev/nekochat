@@ -10,6 +10,22 @@ use tokio_util::sync::CancellationToken;
 
 const SERVICE: &str = "0196f817-1eb0-7000-8000-000000000009";
 
+const CHOICES: &str = "```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"choices\",\"options\":[{\"label\":\"看例子\",\"prompt\":\"请举例。\"}]}]}\n```";
+const STICKER: &str = "![本地表情](/api/resources/fixture/sticker.webp)";
+
+fn model_answer() -> String {
+    let mut answer = String::from("WAL 允许读写并发，但同一时刻只有一个写者。[1]\n\n");
+    answer.push_str(CHOICES);
+    answer.push_str("\n\n**参考来源**\n\n");
+    for index in 1..=5 {
+        let url = if index == 1 { "https://sqlite.org/wal.html".to_owned() } else { format!("https://sqlite.org/source-{index}.html") };
+        answer.push_str(&format!("[{index}] [模型来源 {index}]({url})\n"));
+    }
+    answer.push_str("\n");
+    answer.push_str(STICKER);
+    answer
+}
+
 struct Research {
     native: bool,
     invalid_read: bool,
@@ -67,12 +83,12 @@ async fn model(State(state): State<Arc<Research>>, Json(body): Json<Value>) -> R
         }
         if state.native {
             sse(vec![
-                json!({"type":"response.output_text.delta","delta":"WAL 允许读写并发，但同一时刻只有一个写者。[1]"}),
+                json!({"type":"response.output_text.delta","delta":model_answer()}),
                 json!({"type":"response.completed","response":{"usage":{"input_tokens":20,"input_tokens_details":{"cached_tokens":5},"output_tokens":6}}}),
             ], false)
         } else {
             sse(vec![
-                json!({"choices":[{"delta":{"content":"WAL 允许读写并发，但同一时刻只有一个写者。[1]"}}]}),
+                json!({"choices":[{"delta":{"content":model_answer()}}]}),
                 json!({"choices":[],"usage":{"prompt_tokens":20,"prompt_tokens_details":{"cached_tokens":5},"completion_tokens":6}}),
             ], true)
         }
@@ -97,7 +113,8 @@ async fn search(State(state): State<Arc<Research>>, headers: HeaderMap, Json(bod
             () = state.cancellation.cancelled() => return Err(StatusCode::from_u16(499).unwrap()),
         }
     }
-    Ok(Json(json!({"query":"SQLite WAL","sources":[{"id":"provider-source","title":"Write-Ahead Logging","url":"https://sqlite.org/wal.html","snippet":"Only one writer at a time.","summary":null,"content":"Readers and a writer may proceed concurrently.","published_at":null}],"summary":null,"retrieved_at_ms":1,"usage":{"requests":1,"cached_in":0,"uncached_in":0,"output":0,"reasoning":0,"cost":{"currency":"CNY","amount":0.005}}})))
+    let sources: Vec<_> = (1..=10).map(|index| json!({"id":format!("provider-source-{index}"),"title":format!("Source {index}"),"url":if index == 1 { "https://sqlite.org/wal.html".to_owned() } else { format!("https://sqlite.org/source-{index}.html") },"snippet":"Only one writer at a time.","summary":null,"content":"Readers and a writer may proceed concurrently.","published_at":null})).collect();
+    Ok(Json(json!({"query":"SQLite WAL","sources":sources,"summary":null,"retrieved_at_ms":1,"usage":{"requests":1,"cached_in":0,"uncached_in":0,"output":0,"reasoning":0,"cost":{"currency":"CNY","amount":0.005}}})))
 }
 
 async fn cancel(State(state): State<Arc<Research>>, headers: HeaderMap, Json(body): Json<Value>) -> StatusCode {
@@ -118,7 +135,7 @@ async fn rig(native: bool, invalid_read: bool, wait: bool) -> (TestApp, String, 
     let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap(); });
     let app = spawn_app(TestCfg { upstream: Some(base.clone()), admin_password: Some("admin".into()), ..Default::default() }).await;
     app.login_admin("admin").await;
-    let response = app.client.put(app.url("/api/admin/search/connection")).json(&json!({"enabled":true,"base_url":base,"access_token":"runtime-test","admin_token":"admin-test","max_calls_per_turn":1,"max_results":5,"timeout_secs":10})).send().await.unwrap();
+    let response = app.client.put(app.url("/api/admin/search/connection")).json(&json!({"enabled":true,"base_url":base,"access_token":"runtime-test","admin_token":"admin-test","max_calls_per_turn":1,"max_results":10,"timeout_secs":10})).send().await.unwrap();
     assert_eq!(response.status(), 200);
     let model = app.store.insert_model(&serde_json::from_value(json!({"provider":PROVIDER_KEY,"upstream_id":"fixture","display_name":"private-model-name","sort":0,"protocol":if native {"responses"} else {"chat_completions"},"reasoning":{"style":"none","levels":[],"default":null},"vision":false,"context_window":null,"price":{"cached_in":1.0,"uncached_in":2.0,"output":3.0}})).unwrap()).unwrap();
     let role = app.store.create_character(&serde_json::from_value(json!({"name":"research","display_name":"Research","model_id":model.id,"system_prompt":"PRIVATE ROLE INSTRUCTIONS","search_service_id":SERVICE})).unwrap()).unwrap();
@@ -146,7 +163,21 @@ async fn search_rounds_persist_sources_and_all_usage_without_exposing_private_co
         let nodes = app.store.nodes(&conv).unwrap();
         let answer = nodes.iter().find(|node| node.role == nekochat_store::NodeRole::Assistant).unwrap();
         assert_eq!(answer.status, nekochat_store::NodeStatus::Complete);
-        assert!(answer.content.contains("https://sqlite.org/wal.html"));
+        assert_eq!(answer.content.matches("**参考来源**").count(), 1, "{}", answer.content);
+        for index in 1..=10 {
+            let url = if index == 1 { "https://sqlite.org/wal.html".to_owned() } else { format!("https://sqlite.org/source-{index}.html") };
+            assert_eq!(answer.content.matches(url.as_str()).count(), 1, "{}", answer.content);
+        }
+        assert!(answer.content.contains("WAL 允许读写并发，但同一时刻只有一个写者。[1]"));
+        assert!(answer.content.contains(STICKER));
+        assert!(answer.content.trim_end().ends_with(CHOICES), "{}", answer.content);
+        assert_eq!(answer.content.matches(CHOICES).count(), 1);
+        assert!(answer.content.find(STICKER).unwrap() < answer.content.find("**参考来源**").unwrap());
+        let terminal: Value = stream.split("\n\n").find_map(|event| {
+            if !event.lines().any(|line| line == "event: done") { return None; }
+            event.lines().find_map(|line| line.strip_prefix("data: ")).map(|data| serde_json::from_str(data).unwrap())
+        }).expect("terminal node");
+        assert_eq!(terminal["node"]["content"], answer.content);
         let usage = &answer.metrics.as_ref().unwrap().usage;
         assert_eq!((usage.cached_in, usage.uncached_in, usage.reasoning, usage.output), (5, 25, 2, 8));
         let bills = app.store.usage_between(0, nekochat_store::now_ms() + 1000).unwrap();

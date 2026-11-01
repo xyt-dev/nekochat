@@ -4,6 +4,7 @@ import type { Color } from "./types";
 import type { GraphicState } from "./state";
 
 export interface GraphicsContextValue {
+  id: Accessor<string>;
   state: Accessor<GraphicState>;
   themeRevision: Accessor<number>;
   color: (key: string, declared?: Color, fallback?: Color) => string;

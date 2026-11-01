@@ -98,6 +98,7 @@ function graphicFence(text: string, final: boolean): MdBlock | null {
 
 interface KeyState {
   texts: string[];
+  graphics: boolean;
   /** The last sent block was rendered unfinished. */
   partialLast: boolean;
 }
@@ -112,7 +113,9 @@ function handle(req: MdRequest): MdResponse {
     return { key: req.key, total: 0, start: 0, blocks: [], dropped: true };
   }
   const texts = split_blocks(req.text);
-  const prev = req.base > 0 ? states.get(req.key) : undefined;
+  const graphics = req.graphics !== false;
+  const cached = req.base > 0 ? states.get(req.key) : undefined;
+  const prev = cached?.graphics === graphics ? cached : undefined;
   let start = 0;
   if (prev) {
     const limit = Math.min(req.base, prev.texts.length, texts.length);
@@ -126,7 +129,7 @@ function handle(req: MdRequest): MdResponse {
   const blocks: MdBlock[] = [];
   for (let i = start; i < texts.length; i++) {
     const done = req.final || i < texts.length - 1;
-    const graphic = graphicFence(texts[i], done);
+    const graphic = graphics ? graphicFence(texts[i], done) : null;
     if (graphic) blocks.push(graphic);
     else {
       const raw = render_html(texts[i]);
@@ -134,7 +137,7 @@ function handle(req: MdRequest): MdResponse {
     }
   }
   states.delete(req.key);
-  states.set(req.key, { texts, partialLast: !req.final && texts.length > 0 });
+  states.set(req.key, { texts, graphics, partialLast: !req.final && texts.length > 0 });
   if (states.size > MAX_STATES) states.delete(states.keys().next().value!);
   return { key: req.key, total: texts.length, start, blocks };
 }

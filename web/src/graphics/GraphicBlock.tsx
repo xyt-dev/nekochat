@@ -6,6 +6,7 @@ import { readGraphicState, writeGraphicState, runtimeEpoch, stateKey, type Graph
 import { subscribeTheme } from "./theme";
 import { ColorControl, ColorSettings } from "./controls";
 import { copyText } from "../clipboard";
+import { Markdown } from "../components/Markdown";
 import Chart from "./Chart";
 import Plot from "./Plot";
 import Diagram from "./Diagram";
@@ -29,10 +30,9 @@ function NodeList(props: { items: GraphicNode[]; path: string; columns?: number 
 }
 function Text(props: { node: TextNode; nodeKey: string }) {
   const context = useGraphics();
-  return <><Show when={props.node.palette}><div class="nk-graphic-widget-tools"><ColorSettings><ColorControl colorKey={`${props.nodeKey}:color`} label={props.node.title ?? "文字颜色"} declared={props.node.color} fallback={props.node.size === "muted" ? "muted" : "text"} /></ColorSettings></div></Show><div style={{ color: context.color(`${props.nodeKey}:color`, props.node.color, props.node.size === "muted" ? "muted" : "text") }}><Switch fallback={<p>{props.node.content}</p>}>
-    <Match when={props.node.size === "h2"}><h2>{props.node.content}</h2></Match>
-    <Match when={props.node.size === "h3"}><h3>{props.node.content}</h3></Match>
-  </Switch></div></>;
+  return <><Show when={props.node.palette}><div class="nk-graphic-widget-tools"><ColorSettings><ColorControl colorKey={`${props.nodeKey}:color`} label={props.node.title ?? "文字颜色"} declared={props.node.color} fallback={props.node.size === "muted" ? "muted" : "text"} /></ColorSettings></div></Show><div class={`nk-graphic-text nk-graphic-text-${props.node.size ?? "body"}`} role={props.node.size === "h2" || props.node.size === "h3" ? "heading" : undefined} aria-level={props.node.size === "h2" ? 2 : props.node.size === "h3" ? 3 : undefined} style={{ color: context.color(`${props.nodeKey}:color`, props.node.color, props.node.size === "muted" ? "muted" : "text") }}>
+    <Markdown id={`${context.id()}:text:${props.nodeKey}`} text={() => props.node.content} final={() => true} graphics={false} />
+  </div></>;
 }
 function Stat(props: { node: StatNode; nodeKey: string }) {
   const context = useGraphics();
@@ -95,7 +95,7 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
     setState(writeGraphicState(props.id, next));
   }
   const context: GraphicsContextValue = {
-    state, themeRevision,
+    id: () => props.id, state, themeRevision,
     canQuestion: () => props.onQuestion !== undefined && !props.questionsDisabled,
     chooseQuestion(prompt) { if (context.canQuestion()) props.onQuestion?.(prompt); },
     color(key: string, declared?: Color, fallback: Color = "accent"): string {

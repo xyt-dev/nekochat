@@ -5,8 +5,8 @@ import type { MdBlock } from "../md/protocol";
 const GraphicBlock = lazy(() => import("../graphics/GraphicBlock"));
 
 /** The Index keeps message block elements stable while the last block streams. */
-export function Markdown(props: { id: string; text: Accessor<string>; final: Accessor<boolean>; onQuestion?: (prompt: string) => void; questionsDisabled?: boolean }) {
-  const blocks = createMarkdown(() => props.id, props.text, props.final);
+export function Markdown(props: { id: string; text: Accessor<string>; final: Accessor<boolean>; graphics?: boolean; onQuestion?: (prompt: string) => void; questionsDisabled?: boolean }) {
+  const blocks = createMarkdown(() => props.id, props.text, props.final, props.graphics !== false);
   return (
     <div class="md">
       <Show when={blocks()} fallback={<div class="md-plain">{props.text()}</div>}>

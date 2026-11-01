@@ -31,6 +31,7 @@ libc = "0.2"
 mime_guess.workspace = true
 pdf-extract = "0.12.1"
 percent-encoding = "2"
+pulldown-cmark = "0.13"
 reqwest.workspace = true
 rustix = { version = "1", features = ["fs"] }
 rust-embed.workspace = true

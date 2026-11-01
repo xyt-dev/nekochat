@@ -144,6 +144,13 @@ impl Generation {
         self.lock().progress.usage = Some(usage);
     }
 
+    /// Edits the accumulated reply once, before immutable finalization and persistence.
+    pub(crate) fn finalize_content(&self, finalize: impl FnOnce(&mut String)) {
+        if let Some(node) = &mut self.lock().node {
+            finalize(&mut node.content);
+        }
+    }
+
     /// Moves the accumulated strings into a shared immutable node, also visible while saving.
     pub(crate) fn finalize(
         &self,
@@ -390,6 +397,9 @@ mod tests {
         assert!(
             matches!(next.as_ref(), TurnEvent::Chunk(ResourceChunk::Text(text)) if text == "tail")
         );
+        generation.finalize_content(|content| {
+            content.push_str("\n\n**参考来源**\n\n[1] [Source](<https://example.com/>)");
+        });
         let (node, _) = generation.finalize(
             NodeStatus::Complete,
             "model".into(),
@@ -397,7 +407,13 @@ mod tests {
             None,
         );
         let node = node.unwrap();
-        assert_eq!(node.content, format!("{}tail", "x".repeat(count)));
+        assert_eq!(node.content, format!("{}tail\n\n**参考来源**\n\n[1] [Source](<https://example.com/>)", "x".repeat(count)));
+        let mut saving_observer = generation.observe(true);
+        let snapshot = saving_observer.next().await.unwrap();
+        let TurnEvent::Snapshot { node: saving_node, .. } = snapshot.as_ref() else {
+            panic!("saving must expose the finalized source content");
+        };
+        assert!(Arc::ptr_eq(saving_node, &node));
         generation.finish(TurnEvent::Done(node));
         assert!(matches!(
             observer.next().await.unwrap().as_ref(),

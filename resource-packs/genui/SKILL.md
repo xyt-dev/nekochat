@@ -18,7 +18,7 @@
 
 默认省略 `palette`，图形与各组件不显示调色入口。只有用户明确要求“可调色”“加调色板”或手动选颜色时，才在对应的 text/stat/row/col/grid/card/chart/plot/diagram/svg 节点设置 `"palette":true`；例如 `{"type":"stat","label":"完成","value":42,"palette":true}`。每个调色控件仅改变自己的组件，不作用于整图或其他组件，父节点的 palette 不对子节点生效；choices 不支持此字段。颜色字段或主题适配本身不表示需要调色控件。裸 svg 围栏默认没有调色入口；需要可调色 SVG 时使用带 palette 的 neko-ui svg 节点。
 
-- `text`：`{"type":"text","content":"内容","size":"body"}`；size 可为 body/h2/h3/muted，可选 color 设置文字颜色（支持上述语义色或十六进制色）。
+- `text`：`{"type":"text","content":"内容","size":"body"}`；content 支持 Markdown 加粗、列表、链接、代码及 KaTeX 公式，行内公式使用 `$...$`，独立公式使用 `$$...$$`，也支持 `\\(...\\)` / `\\[...\\]`；JSON 中 LaTeX 的每个反斜杠须写成 `\\`。例如 `{"type":"text","content":"**不可压缩条件**：$\\nabla \\cdot \\mathbf{u}=0$"}`。文本内的图形围栏只作为代码显示，不嵌套交互图形。size 可为 body/h2/h3/muted，可选 color 设置文字颜色（支持上述语义色或十六进制色）。
 - `stat`：`{"type":"stat","label":"完成","value":42,"delta":"+6","color":"green"}`；value 为字符串或数字。
 - `choices`：`{"type":"choices","title":"你可以继续问","options":[{"label":"看个例子","prompt":"请用一个具体例子解释刚才的概念。"},{"label":"比较方案","prompt":"刚才这两种方案各适合什么情况？"},{"label":"避开误区","prompt":"使用这个方法时，最容易犯哪些错误？"},{"label":"开始实践","prompt":"请把刚才的方法整理成可以直接执行的步骤。"}]}`。一般对话默认恰好 4 项；协议接受 1–6 项，label 为 1–80 字符的简短显示文案，prompt 为 1–500 字符、用用户口吻写的完整提问；文案和提问均须非空、互不重复。点击只将 prompt 填入输入框，保留已有草稿和附件，用户编辑后通过正常发送按钮提交；不能让选项执行代码、打开链接或自动请求模型。建议独立输出只含 choices 的围栏，界面会呈现紧凑选项框。
 - `row/col/grid/card`：`{"type":"grid","cols":2,"gap":12,"items":[节点]}`。cols 仅 grid 使用，1–4；gap 0–32；card 可有 title/color，子节点可用 span。手机自动换行。

@@ -743,8 +743,8 @@ impl Turn {
         let discard = generation.discarded() || matches!(&end, End::Deleted);
         let status = end.status().unwrap_or(NodeStatus::Interrupted);
         if !discard {
-            if let Some(footer) = self.search.as_ref().and_then(SearchTurn::footer) {
-                generation.chunk(ResourceChunk::Text(footer));
+            if let Some(search) = &self.search {
+                generation.finalize_content(|content| search.finalize_content(content));
             }
         }
         if let End::Failed(error) = &end {

@@ -29,8 +29,9 @@
 .nk-graphic-node { position: relative; min-width: 0; max-width: 100%; container-type: inline-size; }
 .nk-graphic-block .nk-graphic-node > .nk-graphic-node-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
 .nk-graphic-block .nk-graphic-node-text :is(p, h2, h3) { margin: 0; white-space: pre-wrap; }
-.nk-graphic-block .nk-graphic-node-text h2 { font-size: 1.25em; }
-.nk-graphic-block .nk-graphic-node-text h3 { font-size: 1.1em; }
+.nk-graphic-block .nk-graphic-text-h2 { font-size: 1.25em; font-weight: 600; }
+.nk-graphic-block .nk-graphic-text-h3 { font-size: 1.1em; font-weight: 600; }
+.nk-graphic-block .nk-graphic-node-text .md { line-height: inherit; }
 .nk-graphic-muted, .nk-graphic-status { color: var(--nk-text-muted); }
 .nk-graphic-block .nk-graphic-status { margin: 0; font-size: 12px; }
 .nk-graphic-layout { min-width: 0; border-radius: var(--nk-radius-md, 12px); }

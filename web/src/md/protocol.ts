@@ -13,6 +13,8 @@ export interface MdRequest {
   final: boolean;
   /** Blocks the main thread holds; unchanged leading blocks are not resent. */
   base: number;
+  /** Text nodes render Markdown/code without opening nested interactive graphics. */
+  graphics?: boolean;
   drop?: boolean;
 }
 

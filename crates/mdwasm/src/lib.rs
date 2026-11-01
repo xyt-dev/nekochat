@@ -72,7 +72,7 @@ pub fn render_html(md: &str) -> String {
     out
 }
 
-/// Rewrites `\(…\)` to `$…$` and `\[…\]` to `$$…$$` outside code spans, code blocks and
+/// Rewrites `\(…\)` to `$…$` and `\[…\]` to `$$…$$` outside code, links, images and
 /// existing math. Only paired delimiters are rewritten.
 fn convert_tex_delimiters(md: &str) -> String {
     if !md.contains("\\(") && !md.contains("\\[") {
@@ -88,6 +88,7 @@ fn convert_tex_delimiters(md: &str) -> String {
                     protected.push(start..range.end);
                 }
             }
+            Event::Start(Tag::Link { .. } | Tag::Image { .. }) => protected.push(range),
             Event::Code(_) | Event::InlineMath(_) | Event::DisplayMath(_) => protected.push(range),
             _ => {}
         }
@@ -448,6 +449,82 @@ mod tests {
 
         assert_eq!(convert_tex_delimiters("\\[unpaired"), "\\[unpaired");
         assert_eq!(convert_tex_delimiters("\\\\[x\\\\]"), "\\\\[x\\\\]");
+    }
+
+    #[test]
+    fn tex_delimiters_preserve_escaped_link_labels() {
+        for (md, href, label) in [
+            (
+                r"[5] [\[情报站\]HLE对阵BLG交手记录](<https://bbs.hupu.com/643477528.html>)",
+                "https://bbs.hupu.com/643477528.html",
+                "[情报站]HLE对阵BLG交手记录",
+            ),
+            (
+                r"[7] [\[国际赛事\]BLG最近10次对LCK战绩](<https://ngabbs.com/read.php?tid=44494056>)",
+                "https://ngabbs.com/read.php?tid=44494056",
+                "[国际赛事]BLG最近10次对LCK战绩",
+            ),
+            (
+                r"[\(赛程\)与\[记录\]](https://example.com/matches)",
+                "https://example.com/matches",
+                "(赛程)与[记录]",
+            ),
+        ] {
+            let html = render_html(md);
+            assert!(html.contains(&format!("<a href=\"{href}\"")), "{html}");
+            assert!(html.contains(&format!(">{label}</a>")), "{html}");
+            assert!(!html.contains("nk-math"), "{html}");
+        }
+    }
+
+    #[test]
+    fn tex_delimiters_preserve_reference_link_labels() {
+        let html = render_html(
+            r"前缀 [\[资料\]\(赛程\)][赛事来源]
+
+[赛事来源]: https://example.com/matches",
+        );
+        assert!(html.contains("<a href=\"https://example.com/matches\""), "{html}");
+        assert!(html.contains(">[资料](赛程)</a>"), "{html}");
+        assert!(!html.contains("nk-math"), "{html}");
+    }
+
+    #[test]
+    fn tex_delimiters_preserve_image_alt_text() {
+        for md in [
+            r"![\[赛程\]\(图示\)](/api/resources/nekowhale/abc.gif)",
+            r"![\[赛程\]\(图示\)][图片]
+
+[图片]: /api/resources/nekowhale/abc.gif",
+            r"[![\[赛程\]\(图示\)](/api/resources/nekowhale/abc.gif)](https://example.com/matches)",
+        ] {
+            let html = render_html(md);
+            assert!(html.contains(
+                "<img src=\"/api/resources/nekowhale/abc.gif\" alt=\"[赛程](图示)\""
+            ), "{html}");
+            assert!(!html.contains("nk-math"), "{html}");
+        }
+    }
+
+    #[test]
+    fn tex_delimiters_convert_math_adjacent_to_links() {
+        let html = render_html(
+            r"\(before\)[\[来源\]\(记录\)](https://example.com/matches)\(after\)
+
+\[z^2\]",
+        );
+        assert!(html.contains("<a href=\"https://example.com/matches\""), "{html}");
+        assert!(html.contains(">[来源](记录)</a>"), "{html}");
+        assert!(html.contains(
+            "<span class=\"nk-math\" data-display=\"0\">before</span><a "
+        ), "{html}");
+        assert!(html.contains(
+            "</a><span class=\"nk-math\" data-display=\"0\">after</span>"
+        ), "{html}");
+        assert!(html.contains(
+            "<div class=\"nk-math\" data-display=\"1\">z^2</div>"
+        ), "{html}");
+        assert_eq!(html.matches("class=\"nk-math\"").count(), 3, "{html}");
     }
 
     #[test]
