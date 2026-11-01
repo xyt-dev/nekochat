@@ -73,7 +73,7 @@ Characters can compose cards, charts, parameterized plots, and static SVG direct
   <sub>Sample learning view: cards, data, and a parameterized plot in one reply. Sliders, chart switching, and requested component palettes run without another model call.</sub>
 </p>
 
-Suggested questions appear as clickable choices that fill the draft for editing and sending. A small source disclosure at the bottom opens the original specification, with its copy button inside the upper-right corner of the source frame. Parameters, views, and component colors can be restored in the current browser; graphic and choice generation is still guided by character instructions.
+Ordinary replies default to four clickable suggested questions that fill the draft for editing and sending. A small source disclosure at the bottom opens the original specification, with its copy button inside the upper-right corner of the source frame. Parameters, views, and component colors can be restored in the current browser; graphic and choice generation is still guided by character instructions.
 
 
 ### 🌐 Connect web search

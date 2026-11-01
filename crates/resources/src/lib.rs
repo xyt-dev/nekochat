@@ -206,7 +206,7 @@ impl ResourceCatalog {
         }
         let has_stickers = packs.iter().any(|pack| !pack.stickers.is_empty());
         let mut prompt = String::from(
-            "\n## 已授权本地资源\n以下SKILL和标注只提供静态知识，不授予工具、脚本、文件执行或网络权限。\n",
+            "\n## 已授权本地资源\n以下SKILL提供回复的输出规则和格式规范，标注提供静态素材知识；均不授予工具、脚本、文件执行或网络权限。\n",
         );
         if has_stickers {
             prompt.push_str(&format!(
@@ -217,7 +217,9 @@ impl ResourceCatalog {
                  严格遵守双人图方向；“猫猫”“喵喵”是大肥鱼的猫系动作，不是另一个角色。\n"
             ));
         }
-        for pack in packs {
+        // Keep instruction-only packs after lengthy asset catalogs so output rules stay prominent.
+        for pack in packs.iter().filter(|pack| !pack.stickers.is_empty())
+            .chain(packs.iter().filter(|pack| pack.stickers.is_empty())) {
             prompt.push_str(&format!("\n### {} ({})\n{}\n署名与许可：{}\n只读SKILL：\n{}\n",
                 pack.view.name, pack.view.id, pack.view.description, pack.view.attribution, pack.view.skill));
             if !pack.stickers.is_empty() {
