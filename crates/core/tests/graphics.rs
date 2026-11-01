@@ -100,3 +100,39 @@ fn text_colors_accept_declared_palette_values_and_reject_css_payloads() {
         assert!(validate_graphic_json(&unsafe_text).is_err(), "{color}");
     }
 }
+
+#[test]
+fn question_choices_preserve_labels_and_complete_prompts_inside_layouts() {
+    let source = json!({"version":1,"items":[{"type":"card","items":[{
+        "type":"choices","title":"接下来可以问","options":[
+            {"label":"看例子","prompt":"请用一个真实例子解释这个概念。"},
+            {"label":"比较方案","prompt":"这两种方案分别适合什么情况？"}
+        ]}]}]}).to_string();
+    let checked: Value = serde_json::from_str(&validate_graphic_json(&source).unwrap()).unwrap();
+    assert_eq!(checked["items"][0]["items"][0]["options"][0]["label"], "看例子");
+    assert_eq!(checked["items"][0]["items"][0]["options"][1]["prompt"], "这两种方案分别适合什么情况？");
+    let boundary = json!({"version":1,"items":[{"type":"choices","options":[
+        {"label":"问".repeat(80),"prompt":"题".repeat(500)}
+    ]}]}).to_string();
+    assert!(validate_graphic_json(&boundary).is_ok());
+}
+
+#[test]
+fn question_choices_reject_ambiguous_empty_unbounded_or_executable_options() {
+    let valid = json!({"label":"看例子","prompt":"请给一个例子。"});
+    let too_many: Vec<Value> = (0..7).map(|index| json!({"label":format!("问题{index}"),"prompt":format!("完整提问{index}")})).collect();
+    for options in [
+        json!([]), json!(too_many), json!([valid.clone(),valid.clone()]),
+        json!([{"label":" ","prompt":"请解释。"}]),
+        json!([{"label":"解释","prompt":"\n "}]),
+        json!([{"label":"问".repeat(81),"prompt":"请解释。"}]),
+        json!([{"label":"解释","prompt":"题".repeat(501)}]),
+        json!([{"label":"解释"}]), json!(["解释"]),
+        json!([{"label":"解释","prompt":"请解释。","url":"https://example.com"}]),
+        json!([valid.clone(),{"label":" 看例子 ","prompt":"再给一个例子。"}]),
+        json!([valid,{"label":"另一种说法","prompt":" 请给一个例子。 "}]),
+    ] {
+        let source = json!({"version":1,"items":[{"type":"choices","options":options}]}).to_string();
+        assert!(validate_graphic_json(&source).is_err(), "{source}");
+    }
+}

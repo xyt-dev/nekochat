@@ -112,6 +112,15 @@
 .nk-graphic-block .nk-graphic-isolated-svg { display: block; width: 100%; max-width: 100%; max-height: 800px; object-fit: contain; margin: 0 auto; }
 .nk-graphic-block .nk-graphic-source { max-height: 360px; overflow: auto; margin: 12px 0 0; padding: 12px; background: var(--nk-bg-deep); color: var(--nk-text); border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); white-space: pre-wrap; font-size: 12px; }
 .nk-graphic-block .nk-graphic-source code { background: transparent; padding: 0; }
+.nk-graphic-block.nk-graphic-questions-only { padding: 0; border: 0; background: transparent; }
+.nk-graphic-block .nk-graphic-questions-title { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.nk-graphic-block .nk-graphic-choices-label { margin: 0 0 8px; color: var(--nk-text-muted); font-size: 12px; }
+.nk-graphic-choices-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.nk-graphic-block button.nk-graphic-question { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; min-width: 0; max-width: 100%; padding: 9px 12px; background: var(--nk-surface); color: var(--nk-text); font-size: 13px; text-align: start; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+.nk-graphic-block button.nk-graphic-question:hover { background: var(--nk-surface-hover); border-color: var(--nk-accent); }
+.nk-graphic-block button.nk-graphic-question:disabled { opacity: 0.5; cursor: default; }
+.nk-graphic-question > svg { flex: none; color: var(--nk-text-muted); }
+.nk-graphic-block .nk-graphic-choices-hint { margin: 8px 0 0; font-size: 11px; color: var(--nk-text-faint); }
 @media (max-width: 600px) {
   .nk-graphic-block { padding: 14px; border-radius: var(--nk-radius-md, 12px); }
   .nk-graphic-layout-grid { grid-template-columns: minmax(0, 1fr); }
@@ -124,6 +133,7 @@
 }
 @media (max-width: 600px), (any-pointer: coarse) {
   .nk-graphic-block :is(button, select, input, summary) { min-height: 44px; }
+  .nk-graphic-block button.nk-graphic-question { min-height: 44px; }
   .nk-graphic-block :is(select, input) { font-size: 16px; }
   .nk-graphic-block .nk-graphic-colors > summary { width: 44px; min-height: 44px; }
   .nk-graphic-stat > .nk-graphic-muted { padding-right: 44px; }

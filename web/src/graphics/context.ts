@@ -14,6 +14,8 @@ export interface GraphicsContextValue {
   view: (key: string, fallback: number) => number;
   setView: (key: string, value: number) => void;
   followsTheme: (key: string) => boolean;
+  canQuestion: Accessor<boolean>;
+  chooseQuestion: (prompt: string) => void;
 }
 export const GraphicsContext = createContext<GraphicsContextValue>();
 export function useGraphics(): GraphicsContextValue {

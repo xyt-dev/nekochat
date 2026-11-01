@@ -14,6 +14,8 @@ export interface GraphicSpec {
 export interface NodeBase { id?: string; title?: string; span?: number }
 export interface TextNode extends NodeBase { type: "text"; content: string; size?: "body" | "h2" | "h3" | "muted"; color?: Color }
 export interface StatNode extends NodeBase { type: "stat"; label: string; value: string | number; delta?: string; color?: Color }
+export interface QuestionChoice { label: string; prompt: string }
+export interface ChoicesNode extends NodeBase { type: "choices"; options: QuestionChoice[] }
 export interface LayoutNode extends NodeBase { type: "row" | "col" | "grid" | "card"; items: GraphicNode[]; gap?: number; cols?: number; color?: Color }
 export interface ChartSeries { label: string; values: number[]; color?: Color }
 export interface ChartNode extends NodeBase { type: "chart"; kind: ChartKind; labels: string[]; series: ChartSeries[]; height?: number }
@@ -24,7 +26,7 @@ export interface DiagramItem { id: string; label: string; x: number; y: number; 
 export interface DiagramEdge { from: string; to: string; label?: string }
 export interface DiagramNode extends NodeBase { type: "diagram"; width?: number; height?: number; nodes: DiagramItem[]; edges: DiagramEdge[] }
 export interface SvgNode extends NodeBase { type: "svg"; code: string; height?: number }
-export type GraphicNode = TextNode | StatNode | LayoutNode | ChartNode | PlotNode | DiagramNode | SvgNode;
+export type GraphicNode = TextNode | StatNode | ChoicesNode | LayoutNode | ChartNode | PlotNode | DiagramNode | SvgNode;
 
 export interface PlotSample {
   xMin: number;

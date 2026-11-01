@@ -26,6 +26,7 @@ mdwasm 导出相同意义的 JS 函数 `validate_graphic`、`sanitize_graphic_sv
 节点：
 - text: `{type:"text",content:string,size?:"body"|"h2"|"h3"|"muted",color?:Color}`。
 - stat: `{type:"stat",label:string,value:string|number,delta?:string,color?:Color}`。
+- choices: `{type:"choices",options:[{label:string,prompt:string}]}`。1–6 项，label 为 1–80 字符，prompt 为 1–500 字符；均须包含非空白内容，去除两端空白后不能重复，不接受链接或执行字段。Web 点击只在当前对话输入框追加完整问题，保留草稿及附件，由用户编辑后正常发送。
 - row/col/grid/card: `{type,items:GraphicNode[],gap?:number,cols?:number,color?:Color}`；cols 仅 grid 使用，1–4；card 可使用 title。
 - chart: `{type:"chart",kind:"line"|"bar"|"area"|"donut",labels:string[],series:[{label:string,values:number[],color?:Color}],height?:number}`。每条 series 长度等于 labels；donut 仅一条非负 series 且总和大于零；其他图表支持负数。
 - plot: `{type:"plot",xMin:number,xMax:number,yMin?:number,yMax?:number,height?:number,params?:[{name:string,label?:string,value:number,min:number,max:number,step?:number}],series:[{label?:string,expr:string,color?:Color}]}`。参数名合法且不覆盖 x/pi/e/tau，值在范围内。表达式仅算术、变量、pi/e/tau 和 sin/cos/tan/asin/acos/atan/sqrt/abs/exp/log/ln/floor/ceil/round/min/max/pow，不使用 eval。采样固定 512 个区间（513 点，包含两端）；非有限函数值输出 null 以断开路径。结果 `{xMin,xMax,yMin,yMax,series:[{label,points:[[x,y|null],...]}]}`。
@@ -38,7 +39,7 @@ SVG 仅允许静态几何/文字/渐变/裁切元素与有限属性；禁止脚�
 
 ## 前端边界与性能
 
-`web/src/graphics/GraphicBlock.tsx` 默认导出组件：props `{id:string,spec:GraphicSpec,source:string}`。`web/src/graphics/types.ts` 导出共享 TS 视图类型；`state.ts` 导出 `resetGraphicsRuntime()` 给账号退出/切换路径使用。渲染器按需载入。
+`web/src/graphics/GraphicBlock.tsx` 默认导出组件：props `{id:string,spec:GraphicSpec,source:string,onQuestion?:(prompt:string)=>void,questionsDisabled?:boolean}`。`web/src/graphics/types.ts` 导出共享 TS 视图类型；`state.ts` 导出 `resetGraphicsRuntime()` 给账号退出/切换路径使用。渲染器按需载入。choices 复用 Markdown/图形校验路径，只在完整成功回复且当前对话未生成/编辑时允许选择；选择事件经消息组件追加输入草稿并聚焦，不能直接发起模型请求。只包含 choices 的根使用紧凑选项样式。
 
 Worker Markdown 响应从 html 字符串改为类型块：`{kind:"html",html}`、`{kind:"graphic",spec,source}`、`{kind:"graphic-pending"}`、`{kind:"graphic-error",error,source}`。有效的完整 JSON 可以在围栏关闭前显示；未完成 JSON 保持占位，不逐 token 展示错误或重复挂载。关闭围栏后校验错误明确显示，保留原始源码。
 

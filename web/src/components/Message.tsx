@@ -162,6 +162,8 @@ function Reasoning(props: { text: Accessor<string>; label: Accessor<string> }) {
 
 export function AssistantMessage(props: { node: NodeView }) {
   const n = () => props.node;
+  const questionConversationId = store.conv()?.id;
+  const questionSessionVersion = store.sessionVersion();
   const reasoningMs = () => n().metrics?.reasoning_ms ?? null;
   const label = () => {
     const ms = reasoningMs();
@@ -170,6 +172,31 @@ export function AssistantMessage(props: { node: NodeView }) {
   const regenerate = () => {
     if (n().parent_id) void store.runTurn({ action: "regenerate", node_id: n().parent_id! });
   };
+  const questionsDisabled = () => n().status !== "complete" || store.loadingConv() || store.editing() !== null
+    || !questionConversationId || store.conv()?.id !== questionConversationId || store.sessionVersion() !== questionSessionVersion
+    || (store.currentLive() !== undefined && store.currentLive()?.error() === null);
+  const chooseQuestion = (question: string) => {
+    if (questionsDisabled()) return;
+    const conversationId = store.conv()?.id;
+    const version = store.sessionVersion();
+    store.setComposerText(draft => {
+      if (!draft) return question;
+      if (draft === question || draft.endsWith(`\n${question}`)) return draft;
+      return `${draft}${draft.endsWith("\n") ? "" : "\n"}${question}`;
+    });
+    const editor = document.querySelector<HTMLElement>(".composer-editor");
+    if (!editor) return;
+    editor.focus();
+    requestAnimationFrame(() => {
+      if (store.sessionVersion() !== version || store.conv()?.id !== conversationId || !editor.isConnected || document.activeElement !== editor) return;
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+  };
   return (
     <MessageShell class="msg-assistant">
       <div class="message-avatar"><Avatar name={n().character_name ?? "助手"} url={n().character_avatar} /></div>
@@ -177,7 +204,7 @@ export function AssistantMessage(props: { node: NodeView }) {
       <Show when={n().reasoning || reasoningMs() !== null}>
         <Reasoning text={() => n().reasoning ?? ""} label={label} />
       </Show>
-      <Markdown id={n().id} text={() => n().content} final={() => true} />
+      <Markdown id={n().id} text={() => n().content} final={() => true} onQuestion={chooseQuestion} questionsDisabled={questionsDisabled()} />
       <Show when={store.nodeErrors()[n().id]}>
         {(msg) => <div class="msg-error" role="alert">{msg()}</div>}
       </Show>

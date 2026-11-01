@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch, type Accessor, type Setter } from "solid-js";
-import type { GraphicNode, GraphicSpec, LayoutNode, TextNode, StatNode, ChartNode, PlotNode, DiagramNode, SvgNode, Color } from "./types";
+import type { GraphicNode, GraphicSpec, LayoutNode, TextNode, StatNode, ChoicesNode, ChartNode, PlotNode, DiagramNode, SvgNode, Color } from "./types";
 import { cssColor, GraphicsContext, useGraphics, type GraphicsContextValue } from "./context";
 import { readGraphicState, writeGraphicState, runtimeEpoch, stateKey, type GraphicState } from "./state";
 import { subscribeTheme } from "./theme";
@@ -10,6 +10,7 @@ import Chart from "./Chart";
 import Plot from "./Plot";
 import Diagram from "./Diagram";
 import SvgImage from "./SvgImage";
+import Choices from "./Choices";
 import "./graphics.css";
 
 interface Entry { key: string; node: Accessor<GraphicNode>; setNode: Setter<GraphicNode> }
@@ -56,6 +57,7 @@ function NodeView(props: { node: GraphicNode; nodeKey: string; columns: number }
     <Switch>
       <Match when={props.node.type === "text"}><Text node={props.node as TextNode} nodeKey={props.nodeKey} /></Match>
       <Match when={props.node.type === "stat"}><Stat node={props.node as StatNode} nodeKey={props.nodeKey} /></Match>
+      <Match when={props.node.type === "choices"}><Choices node={props.node as ChoicesNode} /></Match>
       <Match when={["row", "col", "grid", "card"].includes(props.node.type)}><Layout node={props.node as LayoutNode} nodeKey={props.nodeKey} /></Match>
       <Match when={props.node.type === "chart"}><Chart node={props.node as ChartNode} nodeKey={props.nodeKey} /></Match>
       <Match when={props.node.type === "plot"}><Plot node={props.node as PlotNode} nodeKey={props.nodeKey} /></Match>
@@ -66,11 +68,12 @@ function NodeView(props: { node: GraphicNode; nodeKey: string; columns: number }
 }
 
 /** A validated graphic; id must be stable across streaming and virtual-scroll remounts. */
-export default function GraphicBlock(props: { id: string; spec: GraphicSpec; source: string }) {
+export default function GraphicBlock(props: { id: string; spec: GraphicSpec; source: string; onQuestion?: (prompt: string) => void; questionsDisabled?: boolean }) {
   const [state, setState] = createSignal<GraphicState>(readGraphicState(props.id));
   const [themeRevision, setThemeRevision] = createSignal(0);
   const [sourceOpen, setSourceOpen] = createSignal(false);
   const [copyStatus, setCopyStatus] = createSignal("");
+  const choicesOnly = createMemo(() => props.spec.items.length > 0 && props.spec.items.every(node => node.type === "choices"));
   const layoutColors = createMemo(() => {
     const entries: { key: string; label: string; node: LayoutNode }[] = [];
     const collect = (items: GraphicNode[], path: string) => {
@@ -107,6 +110,8 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
   }
   const context: GraphicsContextValue = {
     state, themeRevision,
+    canQuestion: () => props.onQuestion !== undefined && !props.questionsDisabled,
+    chooseQuestion(prompt) { if (context.canQuestion()) props.onQuestion?.(prompt); },
     color(key: string, declared?: Color, fallback: Color = "accent"): string {
       return state().colors[stateKey(key)] ?? cssColor(context.followsTheme(key) ? fallback : declared ?? fallback);
     },
@@ -123,7 +128,9 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
     try { await copyText(props.source); if (active && revision === copyRevision) setCopyStatus("已复制"); }
     catch { if (active && revision === copyRevision) setCopyStatus("复制失败，请在源规范中手动选择复制。"); }
   }
-  return <GraphicsContext.Provider value={context}><div class="nk-graphic-block" role="group" aria-label={props.spec.title ?? "交互图形"}>
+  return <GraphicsContext.Provider value={context}><div class="nk-graphic-block" classList={{ "nk-graphic-questions-only": choicesOnly() }} role="group" aria-label={props.spec.title ?? (choicesOnly() ? "建议问题" : "交互图形")}>
+    <Show when={choicesOnly() && props.spec.title}><h3 class="nk-graphic-questions-title">{props.spec.title}</h3></Show>
+    <Show when={!choicesOnly()}>
     <div class="nk-graphic-heading"><Show when={props.spec.title}><h2>{props.spec.title}</h2></Show><div class="nk-graphic-actions">
       <button type="button" onClick={() => {
         const next = { ...state(), colors: {}, views: { ...state().views, [stateKey("all-theme-colors")]: 1 } };
@@ -133,6 +140,7 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
       <button type="button" onClick={() => { void copySource(); }}>复制</button>
       <Show when={layoutColors().length}><div class="nk-graphic-layout-settings" role="group" aria-label="布局配色"><span>布局</span><ColorSettings><For each={layoutColors()}>{entry => <ColorControl colorKey={`${entry.key}:color`} label={entry.label} declared={entry.node.color} fallback="surface" />}</For></ColorSettings></div></Show>
     </div></div>
+    </Show>
     <Show when={copyStatus()}><p class="nk-graphic-status" role="status">{copyStatus()}</p></Show>
     <div class="nk-graphic-items" style={{ gap: `${props.spec.gap ?? 12}px` }}><NodeList items={props.spec.items} path="root" /></div>
     <Show when={sourceOpen()}><pre class="nk-graphic-source" tabindex="0" role="region" aria-label="图形源规范"><code>{props.source}</code></pre></Show>

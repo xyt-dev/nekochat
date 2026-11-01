@@ -117,6 +117,7 @@ fn validate_node(value: &mut Value, depth: usize, budget: &mut Budget) -> Checke
     let extra: &[&str] = match kind {
         "text" => &["content", "size", "color"],
         "stat" => &["label", "value", "delta", "color"],
+        "choices" => &["options"],
         "row" | "col" | "card" => &["items", "gap", "color"],
         "grid" => &["items", "gap", "cols", "color"],
         "chart" => &["kind", "labels", "series", "height"],
@@ -150,6 +151,22 @@ fn validate_node(value: &mut Value, depth: usize, budget: &mut Budget) -> Checke
             let v = required(obj, "value")?;
             if v.is_string() { text(v)?; } else { number(v)?; }
             optional_text(obj, "delta")?;
+        }
+        "choices" => {
+            let options = array(obj, "options", 6, true)?;
+            for (index, option) in options.iter().enumerate() {
+                let option = object(option)?;
+                fields(option, &["label", "prompt"])?;
+                for (key, max) in [("label", 80), ("prompt", 500)] {
+                    let value = required(option, key)?.as_str().ok_or("Choice text must be a string")?;
+                    if value.trim().is_empty() || value.chars().count() > max {
+                        return Err(format!("Choice {key} must contain 1–{max} characters"));
+                    }
+                    if options[..index].iter().any(|previous| previous[key].as_str().is_some_and(|previous| previous.trim() == value.trim())) {
+                        return Err(format!("Duplicate choice {key}"));
+                    }
+                }
+            }
         }
         "row" | "col" | "grid" | "card" => {
             range(obj, "gap", 0.0, 32.0, false)?;
