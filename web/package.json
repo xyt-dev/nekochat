@@ -1,6 +1,6 @@
 {
   "name": "nekochat-web",
-  "version": "0.14.2",
+  "version": "0.14.3",
   "private": true,
   "license": "(Apache-2.0 OR MIT)",
   "type": "module",
