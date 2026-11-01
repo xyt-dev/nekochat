@@ -1,9 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-import { createEffect, createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
-import type { Color } from "./types";
-import { useGraphics } from "./context";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
+import type { Color, SemanticColor } from "./types";
+import { cssColor, useGraphics } from "./context";
 import { colorInputValue } from "./theme";
 import { registerGraphicsReset } from "./state";
+
+const palette: { color: SemanticColor; label: string }[] = [
+  { color: "accent", label: "主题强调" }, { color: "red", label: "红色" },
+  { color: "orange", label: "橙色" }, { color: "yellow", label: "黄色" },
+  { color: "green", label: "绿色" }, { color: "teal", label: "青色" },
+  { color: "blue", label: "蓝色" }, { color: "purple", label: "紫色" },
+  { color: "pink", label: "粉色" }, { color: "text", label: "正文色" },
+  { color: "muted", label: "次要文字色" }, { color: "surface", label: "表面色" },
+  { color: "border", label: "边框色" }
+];
 
 export function frameAction<T>(apply: (value: T) => void): (value: T) => void {
   let frame = 0;
@@ -24,17 +34,28 @@ export function ColorSettings(props: { children: JSX.Element }) {
 }
 export function ColorControl(props: { colorKey: string; label: string; declared?: Color; fallback?: Color }) {
   const context = useGraphics();
-  let host!: HTMLLabelElement;
+  let host!: HTMLDivElement;
+  const current = createMemo(() => context.color(props.colorKey, props.declared, props.fallback));
   const [value, setValue] = createSignal("#000000");
+  const [draft, setDraft] = createSignal("#000000");
+  const [swatchValues, setSwatchValues] = createSignal<string[]>([]);
   createEffect(() => {
     context.themeRevision();
-    const color = context.color(props.colorKey, props.declared, props.fallback);
-    if (host) setValue(colorInputValue(host, color));
+    if (host) setSwatchValues(palette.map(swatch => colorInputValue(host, cssColor(swatch.color))));
   });
-  const update = frameAction((color: string) => context.setColor(props.colorKey, color));
-  return <div class="nk-graphic-color-control">
-    <label ref={host}><span>{props.label}</span><input type="color" value={value()} aria-label={`${props.label}颜色`} onInput={event => update(event.currentTarget.value)} /></label>
-    <button type="button" onClick={() => context.themeColor(props.colorKey)} title="忽略显式配色，使用当前主题">跟随主题</button>
+  createEffect(() => {
+    context.themeRevision();
+    const color = current();
+    if (host) { const hex = colorInputValue(host, color); setValue(hex); setDraft(hex); }
+  });
+  return <div ref={host} class="nk-graphic-color-control">
+    <div class="nk-graphic-color-label"><span>{props.label}</span><button type="button" onClick={() => context.themeColor(props.colorKey)} title="忽略显式配色，使用当前主题">跟随主题</button></div>
+    <div class="nk-graphic-color-swatches" role="group" aria-label={`${props.label}预设颜色`}><For each={palette}>{(swatch, index) => <button type="button" class="nk-graphic-color-swatch" style={{ "background-color": cssColor(swatch.color) }} aria-label={`${props.label}：${swatch.label}`} aria-pressed={value() === swatchValues()[index()]} title={`${swatch.label} ${swatchValues()[index()] ?? ""}`} onClick={() => { const color = swatchValues()[index()]; if (color) context.setColor(props.colorKey, color); }} />}</For></div>
+    <label class="nk-graphic-color-hex"><span>HEX</span><input type="text" value={draft()} aria-label={`${props.label}颜色`} placeholder="#RRGGBB" maxlength={7} pattern="#[0-9a-fA-F]{6}" spellcheck={false} autocapitalize="off" autocomplete="off" onInput={event => {
+      const next = event.currentTarget.value;
+      setDraft(next);
+      if (/^#[0-9a-f]{6}$/i.test(next)) context.setColor(props.colorKey, next.toLowerCase());
+    }} onBlur={() => setDraft(value())} /><span class="nk-graphic-color-preview" style={{ "background-color": value() }} aria-hidden="true" /></label>
   </div>;
 }
 export function useCanvasWidth() {

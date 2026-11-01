@@ -12,7 +12,7 @@ export interface GraphicSpec {
 }
 
 export interface NodeBase { id?: string; title?: string; span?: number }
-export interface TextNode extends NodeBase { type: "text"; content: string; size?: "body" | "h2" | "h3" | "muted" }
+export interface TextNode extends NodeBase { type: "text"; content: string; size?: "body" | "h2" | "h3" | "muted"; color?: Color }
 export interface StatNode extends NodeBase { type: "stat"; label: string; value: string | number; delta?: string; color?: Color }
 export interface LayoutNode extends NodeBase { type: "row" | "col" | "grid" | "card"; items: GraphicNode[]; gap?: number; cols?: number; color?: Color }
 export interface ChartSeries { label: string; values: number[]; color?: Color }

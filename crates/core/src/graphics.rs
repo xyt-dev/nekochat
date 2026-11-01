@@ -115,7 +115,7 @@ fn validate_node(value: &mut Value, depth: usize, budget: &mut Budget) -> Checke
     let obj = object(value)?;
     let kind = string(obj, "type")?;
     let extra: &[&str] = match kind {
-        "text" => &["content", "size"],
+        "text" => &["content", "size", "color"],
         "stat" => &["label", "value", "delta", "color"],
         "row" | "col" | "card" => &["items", "gap", "color"],
         "grid" => &["items", "gap", "cols", "color"],

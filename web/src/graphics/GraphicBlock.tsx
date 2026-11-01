@@ -26,11 +26,12 @@ function NodeList(props: { items: GraphicNode[]; path: string; columns?: number 
   }, []);
   return <For each={entries()}>{entry => <NodeView node={entry.node()} nodeKey={entry.key} columns={props.columns ?? 1} />}</For>;
 }
-function Text(props: { node: TextNode }) {
-  return <Switch fallback={<p classList={{ "nk-graphic-muted": props.node.size === "muted" }}>{props.node.content}</p>}>
+function Text(props: { node: TextNode; nodeKey: string }) {
+  const context = useGraphics();
+  return <div style={{ color: context.color(`${props.nodeKey}:color`, props.node.color, props.node.size === "muted" ? "muted" : "text") }}><Switch fallback={<p>{props.node.content}</p>}>
     <Match when={props.node.size === "h2"}><h2>{props.node.content}</h2></Match>
     <Match when={props.node.size === "h3"}><h3>{props.node.content}</h3></Match>
-  </Switch>;
+  </Switch></div>;
 }
 function Stat(props: { node: StatNode; nodeKey: string }) {
   const context = useGraphics();
@@ -53,7 +54,7 @@ function NodeView(props: { node: GraphicNode; nodeKey: string; columns: number }
   return <section class={`nk-graphic-node nk-graphic-node-${props.node.type}`} style={{ "--nk-graphic-span": props.node.span ?? 1, "grid-column": `span ${Math.min(props.columns, props.node.span ?? 1)}`, background: props.node.type === "card" ? context.color(`${props.nodeKey}:color`, (props.node as LayoutNode).color, "surface") : undefined }}>
     <Show when={props.node.title}><h3 class="nk-graphic-node-title">{props.node.title}</h3></Show>
     <Switch>
-      <Match when={props.node.type === "text"}><Text node={props.node as TextNode} /></Match>
+      <Match when={props.node.type === "text"}><Text node={props.node as TextNode} nodeKey={props.nodeKey} /></Match>
       <Match when={props.node.type === "stat"}><Stat node={props.node as StatNode} nodeKey={props.nodeKey} /></Match>
       <Match when={["row", "col", "grid", "card"].includes(props.node.type)}><Layout node={props.node as LayoutNode} nodeKey={props.nodeKey} /></Match>
       <Match when={props.node.type === "chart"}><Chart node={props.node as ChartNode} nodeKey={props.nodeKey} /></Match>

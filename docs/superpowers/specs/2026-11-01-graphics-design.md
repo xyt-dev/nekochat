@@ -24,7 +24,7 @@ mdwasm 导出相同意义的 JS 函数 `validate_graphic`、`sanitize_graphic_sv
 共用节点字段：`id?:string,title?:string,span?:number`；id 在一个图形内唯一。颜色可使用 `accent,text,muted,surface,border,red,orange,yellow,green,teal,blue,purple,pink` 或 `#RGB/#RRGGBB/#RRGGBBAA`。默认由当前 --nk-* 主题变量决定。
 
 节点：
-- text: `{type:"text",content:string,size?:"body"|"h2"|"h3"|"muted"}`。
+- text: `{type:"text",content:string,size?:"body"|"h2"|"h3"|"muted",color?:Color}`。
 - stat: `{type:"stat",label:string,value:string|number,delta?:string,color?:Color}`。
 - row/col/grid/card: `{type,items:GraphicNode[],gap?:number,cols?:number,color?:Color}`；cols 仅 grid 使用，1–4；card 可使用 title。
 - chart: `{type:"chart",kind:"line"|"bar"|"area"|"donut",labels:string[],series:[{label:string,values:number[],color?:Color}],height?:number}`。每条 series 长度等于 labels；donut 仅一条非负 series 且总和大于零；其他图表支持负数。
@@ -44,7 +44,7 @@ Worker Markdown 响应从 html 字符串改为类型块：`{kind:"html",html}`�
 
 原有 Index 块节点保持稳定，图形内部使用节点 id/路径保留组件；普通 Markdown 不受影响。plot 采样使用独立 Worker 调 core/WASM，同一交互只保留最新参数，合并帧更新并丢弃过期结果；虚拟滚动卸载时移除监听和待处理任务。图形交互状态仅保存参数、配色和视图选择，可用受限 sessionStorage 配合有界内存缓存保存，不能保存消息正文/凭证；退出时清理缓存和 Worker。图片 URL、观察器和事件监听均按生命周期释放。
 
-所有默认颜色使用现有 --nk-* 语义变量；显式配色可通过局部设置恢复主题默认。原生 SVG 图表直接继承 CSS 变量，裸 SVG 在配色变化时重建隔离图片。提供本地参数滑块、图表视图选择、配色调整和源规范查看/复制；不产生模型请求。
+所有默认颜色使用现有 --nk-* 语义变量；显式配色可通过局部设置恢复主题默认。原生 SVG 图表直接继承 CSS 变量，裸 SVG 在配色变化时重建隔离图片。提供本地参数滑块、图表视图选择、配色调整和源规范查看/复制；不产生模型请求。配色在文档流内展开主题色块，点击立即生效，完整 #RRGGBB 输入也立即应用；不打开系统选色框或要求确认，展开时不覆盖邻近内容。
 
 ## 资源包
 

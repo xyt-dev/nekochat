@@ -15,7 +15,7 @@
 
 所有节点可加 `id`（本图唯一字符串）、`title`、`span`（1–4）。颜色可用 `accent,text,muted,surface,border,red,orange,yellow,green,teal,blue,purple,pink` 或 #RGB/#RRGGBB/#RRGGBBAA。优先省略颜色，让页面主题决定；用户明确要求固定配色时再写十六进制。用户可以在图形中本地调色、切换图表和调整参数。
 
-- `text`：`{"type":"text","content":"内容","size":"body"}`；size 可为 body/h2/h3/muted。
+- `text`：`{"type":"text","content":"内容","size":"body"}`；size 可为 body/h2/h3/muted，可选 color 设置文字颜色（支持上述语义色或十六进制色）。
 - `stat`：`{"type":"stat","label":"完成","value":42,"delta":"+6","color":"green"}`；value 为字符串或数字。
 - `row/col/grid/card`：`{"type":"grid","cols":2,"gap":12,"items":[节点]}`。cols 仅 grid 使用，1–4；gap 0–32；card 可有 title/color，子节点可用 span。手机自动换行。
 - `chart`：kind 为 line/bar/area/donut；labels 为字符串数组；series 为 `[{"label":"名称","values":[数值],"color":"blue"}]`。每条 values 与 labels 等长。donut 只有一条非负 series，总和大于零；其他图表支持负数。height 可选，120–800。

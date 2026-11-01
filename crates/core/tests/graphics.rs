@@ -83,3 +83,20 @@ fn svg_lengths_accept_rem_and_other_units_but_reject_malformed_suffixes() {
         assert!(sanitize_graphic_svg(&source).is_err(), "{size}");
     }
 }
+
+#[test]
+fn text_colors_accept_declared_palette_values_and_reject_css_payloads() {
+    let source = json!({"version":1,"items":[
+        {"type":"text","content":"标题","size":"h2","color":"accent"},
+        {"type":"text","content":"正文","color":"#79c"},
+        {"type":"text","content":"说明","size":"muted","color":"#12345678"}
+    ]}).to_string();
+    let checked: Value = serde_json::from_str(&validate_graphic_json(&source).unwrap()).unwrap();
+    assert_eq!(checked["items"][0]["color"], "accent");
+    assert_eq!(checked["items"][1]["color"], "#79c");
+    assert_eq!(checked["items"][2]["color"], "#12345678");
+    for color in ["url(https://example.com/asset)", "red;display:none", "var(--untrusted)"] {
+        let unsafe_text = json!({"version":1,"items":[{"type":"text","content":"文字","color":color}]}).to_string();
+        assert!(validate_graphic_json(&unsafe_text).is_err(), "{color}");
+    }
+}
