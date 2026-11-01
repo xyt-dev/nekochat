@@ -43,13 +43,14 @@ function Stat(props: { node: StatNode; nodeKey: string }) {
 }
 function Layout(props: { node: LayoutNode; nodeKey: string }) {
   const context = useGraphics();
-  return <div class={`nk-graphic-layout nk-graphic-layout-${props.node.type}`} style={{ gap: `${props.node.gap ?? 12}px`, "--nk-graphic-cols": props.node.cols ?? 2, background: context.color(`${props.nodeKey}:color`, props.node.color, "surface") }}>
+  const filled = createMemo(() => props.node.type !== "card" && (props.node.color !== undefined || context.state().colors[stateKey(`${props.nodeKey}:color`)] !== undefined));
+  return <div class={`nk-graphic-layout nk-graphic-layout-${props.node.type}`} classList={{ "nk-graphic-layout-filled": filled() }} style={{ gap: `${props.node.gap ?? 12}px`, "--nk-graphic-cols": props.node.cols ?? 2, background: filled() ? context.color(`${props.nodeKey}:color`, props.node.color, "surface") : undefined }}>
     <NodeList items={props.node.items} path={props.nodeKey} columns={props.node.type === "grid" ? props.node.cols ?? 2 : 1} />
-    <div class="nk-graphic-layout-tools"><ColorSettings><ColorControl colorKey={`${props.nodeKey}:color`} label="容器背景" declared={props.node.color} fallback="surface" /></ColorSettings></div>
   </div>;
 }
 function NodeView(props: { node: GraphicNode; nodeKey: string; columns: number }) {
-  return <section class={`nk-graphic-node nk-graphic-node-${props.node.type}`} style={{ "--nk-graphic-span": props.node.span ?? 1, "grid-column": `span ${Math.min(props.columns, props.node.span ?? 1)}` }}>
+  const context = useGraphics();
+  return <section class={`nk-graphic-node nk-graphic-node-${props.node.type}`} style={{ "--nk-graphic-span": props.node.span ?? 1, "grid-column": `span ${Math.min(props.columns, props.node.span ?? 1)}`, background: props.node.type === "card" ? context.color(`${props.nodeKey}:color`, (props.node as LayoutNode).color, "surface") : undefined }}>
     <Show when={props.node.title}><h3 class="nk-graphic-node-title">{props.node.title}</h3></Show>
     <Switch>
       <Match when={props.node.type === "text"}><Text node={props.node as TextNode} /></Match>
@@ -69,6 +70,20 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
   const [themeRevision, setThemeRevision] = createSignal(0);
   const [sourceOpen, setSourceOpen] = createSignal(false);
   const [copyStatus, setCopyStatus] = createSignal("");
+  const layoutColors = createMemo(() => {
+    const entries: { key: string; label: string; node: LayoutNode }[] = [];
+    const collect = (items: GraphicNode[], path: string) => {
+      items.forEach((node, index) => {
+        if (!("items" in node)) return;
+        const key = node.id ? `node:${node.id}` : `${path}/${index}`;
+        const kind = { row: "横向布局", col: "纵向布局", grid: "网格布局", card: "卡片" }[node.type];
+        entries.push({ key, node, label: node.title ?? `${kind} ${entries.length + 1}` });
+        collect(node.items, key);
+      });
+    };
+    collect(props.spec.items, "root");
+    return entries;
+  });
   let active = true;
   let copyRevision = 0;
   let unsubscribe: (() => void) | undefined;
@@ -115,6 +130,7 @@ export default function GraphicBlock(props: { id: string; spec: GraphicSpec; sou
       }}>主题配色</button>
       <button type="button" aria-expanded={sourceOpen()} onClick={() => setSourceOpen(value => !value)}>源规范</button>
       <button type="button" onClick={() => { void copySource(); }}>复制</button>
+      <Show when={layoutColors().length}><div class="nk-graphic-layout-settings" role="group" aria-label="布局配色"><span>布局</span><ColorSettings><For each={layoutColors()}>{entry => <ColorControl colorKey={`${entry.key}:color`} label={entry.label} declared={entry.node.color} fallback="surface" />}</For></ColorSettings></div></Show>
     </div></div>
     <Show when={copyStatus()}><p class="nk-graphic-status" role="status">{copyStatus()}</p></Show>
     <div class="nk-graphic-items" style={{ gap: `${props.spec.gap ?? 12}px` }}><NodeList items={props.spec.items} path="root" /></div>

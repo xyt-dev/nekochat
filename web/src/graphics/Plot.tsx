@@ -64,7 +64,7 @@ export default function Plot(props: { node: PlotNode; nodeKey: string }) {
         const value = () => Math.max(param.min, Math.min(param.max, context.param(`${props.nodeKey}:param:${param.name}`, param.value)));
         const changeParam = frameAction((next: number) => context.setParam(`${props.nodeKey}:param:${param.name}`, next));
         return <label class="nk-graphic-param"><span>{param.label ?? param.name}<output>{formatNumber(value())}</output></span>
-          <input type="range" min={param.min} max={param.max} step={param.step ?? Math.max(Number.MIN_VALUE, param.max / 100 - param.min / 100)} value={value()} aria-label={param.label ?? param.name} aria-valuetext={String(value())} onInput={event => changeParam(event.currentTarget.valueAsNumber)} />
+          <input type="range" min={param.min} max={param.max} step={param.step ?? Math.max(Number.MIN_VALUE, param.max / 100 - param.min / 100)} value={value()} style={{ "--nk-range-progress": `${ratio(value(), param.min, param.max) * 100}%` }} aria-label={param.label ?? param.name} aria-valuetext={String(value())} onInput={event => changeParam(event.currentTarget.valueAsNumber)} />
           <span class="nk-graphic-range"><span>{formatNumber(param.min)}</span><span>{formatNumber(param.max)}</span></span>
         </label>;
       }}</For></div>
