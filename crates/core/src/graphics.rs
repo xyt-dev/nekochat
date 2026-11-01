@@ -127,15 +127,15 @@ fn validate_node(value: &mut Value, depth: usize, budget: &mut Budget) -> Checke
     let obj = object(value)?;
     let kind = string(obj, "type")?;
     let extra: &[&str] = match kind {
-        "text" => &["content", "size", "color"],
-        "stat" => &["label", "value", "delta", "color"],
+        "text" => &["content", "size", "color", "palette"],
+        "stat" => &["label", "value", "delta", "color", "palette"],
         "choices" => &["options"],
-        "row" | "col" | "card" => &["items", "gap", "color"],
-        "grid" => &["items", "gap", "cols", "color"],
-        "chart" => &["kind", "labels", "series", "height"],
-        "plot" => &["xMin", "xMax", "yMin", "yMax", "height", "params", "series"],
-        "diagram" => &["width", "height", "nodes", "edges"],
-        "svg" => &["code", "height"],
+        "row" | "col" | "card" => &["items", "gap", "color", "palette"],
+        "grid" => &["items", "gap", "cols", "color", "palette"],
+        "chart" => &["kind", "labels", "series", "height", "palette"],
+        "plot" => &["xMin", "xMax", "yMin", "yMax", "height", "params", "series", "palette"],
+        "diagram" => &["width", "height", "nodes", "edges", "palette"],
+        "svg" => &["code", "height", "palette"],
         _ => return Err(format!("Unknown graphic node: {kind}")),
     };
     for key in obj.keys() {
@@ -143,6 +143,7 @@ fn validate_node(value: &mut Value, depth: usize, budget: &mut Budget) -> Checke
             return Err(format!("Unknown {kind} field: {key}"));
         }
     }
+    if obj.get("palette").is_some_and(|value| !value.is_boolean()) { return Err("Graphic palette must be a boolean".into()); }
     optional_text(obj, "title")?;
     if let Some(id) = obj.get("id") {
         let id = text(id)?;
@@ -306,7 +307,8 @@ pub fn sample_graphic_plot(source: &str, values: &str) -> Checked<String> {
     let value = parse(source)?;
     let obj = object(&value)?;
     if string(obj, "type")? != "plot" { return Err("Expected a plot node".into()); }
-    fields(obj, &["type", "id", "title", "span", "xMin", "xMax", "yMin", "yMax", "height", "params", "series"])?;
+    fields(obj, &["type", "id", "title", "span", "xMin", "xMax", "yMin", "yMax", "height", "params", "series", "palette"])?;
+    if obj.get("palette").is_some_and(|value| !value.is_boolean()) { return Err("Graphic palette must be a boolean".into()); }
     optional_text(obj, "title")?;
     if let Some(id) = obj.get("id") {
         if text(id)?.is_empty() { return Err("Graphic ids must be nonempty".into()); }

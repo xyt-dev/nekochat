@@ -53,7 +53,7 @@ fn svg_cannot_run_scripts_or_fetch_resources() {
 
 #[test]
 fn plot_parameters_change_real_samples_and_enforce_ranges() {
-    let source = json!({"type":"plot","xMin":0,"xMax":2,"params":[{"name":"a","value":2,"min":0,"max":4}],"series":[{"expr":"a*x+1","label":"f"}]}).to_string();
+    let source = json!({"type":"plot","palette":true,"xMin":0,"xMax":2,"params":[{"name":"a","value":2,"min":0,"max":4}],"series":[{"expr":"a*x+1","label":"f"}]}).to_string();
     let sampled: Value = serde_json::from_str(&sample_graphic_plot(&source,"{\"a\":3}").unwrap()).unwrap();
     assert_eq!(sampled["series"][0]["points"][0],json!([0.0,1.0]));
     assert_eq!(sampled["series"][0]["points"][256],json!([1.0,4.0]));
@@ -161,5 +161,65 @@ fn container_completion_rejects_missing_content_invalid_syntax_and_unsafe_fields
         r#"{"version":1,"items":[{"type":"text","content":"正文","color":"url(https://example.com)"}"#,
     ] {
         assert!(validate_complete_graphic_json(source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn colorable_components_preserve_explicit_boolean_palette_permissions() {
+    let source = json!({"version":1,"items":[
+        {"type":"text","content":"说明","palette":true},
+        {"type":"stat","label":"数量","value":42,"palette":false},
+        {"type":"row","items":[],"palette":true},
+        {"type":"col","items":[],"palette":true},
+        {"type":"grid","items":[],"palette":true},
+        {"type":"card","items":[],"palette":true},
+        {"type":"chart","kind":"bar","labels":["A"],"series":[{"label":"数量","values":[2]}],"palette":true},
+        {"type":"plot","xMin":0,"xMax":1,"series":[{"expr":"x"}],"palette":true},
+        {"type":"diagram","nodes":[],"edges":[],"palette":true},
+        {"type":"svg","code":"<svg viewBox=\"0 0 10 10\"><circle cx=\"5\" cy=\"5\" r=\"2\"/></svg>","palette":true}
+    ]}).to_string();
+    let checked: Value = serde_json::from_str(&validate_graphic_json(&source).unwrap()).unwrap();
+    assert_eq!(checked["items"][0]["palette"], true);
+    assert_eq!(checked["items"][1]["palette"], false);
+    for node in &checked["items"].as_array().unwrap()[2..] { assert_eq!(node["palette"], true); }
+}
+
+#[test]
+fn palette_permissions_reject_truthy_values_and_noncolorable_choices() {
+    for flag in [json!("true"),json!(1),Value::Null,json!({})] {
+        let source = json!({"version":1,"items":[{"type":"stat","label":"数量","value":42,"palette":flag}]}).to_string();
+        assert!(validate_graphic_json(&source).is_err());
+        let source = json!({"type":"plot","xMin":0,"xMax":1,"series":[{"expr":"x"}],"palette":flag}).to_string();
+        assert!(sample_graphic_plot(&source,"{}").is_err());
+    }
+    let source = r#"{"version":1,"items":[{"type":"choices","palette":true,"options":[{"label":"例子","prompt":"请举例。"}]}]}"#;
+    assert!(validate_graphic_json(source).is_err());
+}
+
+#[test]
+fn svg_accessibility_references_allow_only_existing_local_ids() {
+    let source = r#"<svg viewBox="0 0 200 100" role="img" aria-labelledby="scene-title scene-desc" aria-describedby="scene-desc"><title id="scene-title">海与星之间</title><desc id="scene-desc">鲸鱼游向星座</desc><circle cx="50" cy="50" r="20"/></svg>"#;
+    let safe = sanitize_graphic_svg(source).unwrap();
+    let document = roxmltree::Document::parse(&safe).unwrap();
+    let root = document.root_element();
+    assert_eq!(root.attribute("aria-labelledby"), Some("scene-title scene-desc"));
+    assert_eq!(root.attribute("aria-describedby"), Some("scene-desc"));
+    for references in ["", "missing", "https://example.com", "#scene-title"] {
+        let source = format!(r#"<svg viewBox="0 0 10 10" aria-labelledby="{references}"><title id="scene-title">场景</title></svg>"#);
+        assert!(sanitize_graphic_svg(&source).is_err(), "{references}");
+    }
+}
+
+#[test]
+fn svg_theme_colors_preserve_safe_literal_fallbacks_and_reject_external_paints() {
+    let source = r##"<svg viewBox="0 0 100 100"><defs><linearGradient id="sea"><stop offset="0" stop-color="var(--nk-blue, #4a90d9)"/><stop offset="1" stop-color="var(--nk-blue, navy)"/></linearGradient></defs><circle cx="50" cy="50" r="30" fill="url(#sea)"/></svg>"##;
+    let safe = sanitize_graphic_svg(source).unwrap();
+    let document = roxmltree::Document::parse(&safe).unwrap();
+    let stops: Vec<_> = document.descendants().filter(|node| node.has_tag_name("stop")).collect();
+    assert_eq!(stops[0].attribute("stop-color"), Some("var(--nk-blue, #4a90d9)"));
+    assert_eq!(stops[1].attribute("stop-color"), Some("var(--nk-blue, navy)"));
+    for paint in ["var(--unknown, #fff)","var(--nk-blue, url(https://example.com))","var(--nk-blue, red);display:none"] {
+        let source = format!(r#"<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="2" fill="{paint}"/></svg>"#);
+        assert!(sanitize_graphic_svg(&source).is_err());
     }
 }

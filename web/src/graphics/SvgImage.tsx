@@ -43,8 +43,7 @@ export default function SvgImage(props: { node: SvgNode; nodeKey: string }) {
           const value = element.getAttribute(name);
           if (value === null || /^(?:none|transparent|url\s*\()/i.test(value.trim())) continue;
           const hasTheme = /var\(|currentColor/i.test(value);
-          const replacement = override ? resolve(override) : followTheme && !hasTheme ? accent : value
-            .replace(/var\(\s*(--nk-[a-z0-9-]+)\s*\)/gi, (_, token: string) => resolve(`var(${token})`));
+          const replacement = override ? resolve(override) : followTheme && !hasTheme ? accent : value.trim().startsWith("var(") ? resolve(value) : value;
           element.setAttribute(name, replacement);
         }
       }
@@ -67,7 +66,7 @@ export default function SvgImage(props: { node: SvgNode; nodeKey: string }) {
   });
   onCleanup(() => { if (currentUrl) URL.revokeObjectURL(currentUrl); currentUrl = previous = ""; });
   return <div ref={host} class="nk-graphic-svg">
-    <div class="nk-graphic-widget-tools"><ColorSettings><ColorControl colorKey={`${props.nodeKey}:svg-color`} label="图形主色" fallback="accent" /></ColorSettings></div>
+    <Show when={props.node.palette}><div class="nk-graphic-widget-tools"><ColorSettings><ColorControl colorKey={`${props.nodeKey}:svg-color`} label="图形主色" fallback="accent" /></ColorSettings></div></Show>
     <Show when={url()}><img class="nk-graphic-isolated-svg" src={url()} alt={props.node.title ?? "SVG 图形"} style={{ height: props.node.height ? `${props.node.height}px` : undefined }} onError={() => setError("浏览器无法显示此 SVG；可查看源规范。")} /></Show>
     <Show when={error()}><p class="nk-graphic-error" role="alert">{error()}</p></Show>
   </div>;

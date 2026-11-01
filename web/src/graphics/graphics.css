@@ -11,10 +11,8 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.nk-graphic-block .nk-graphic-heading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--nk-border); }
-.nk-graphic-block .nk-graphic-heading > h2 { flex: 1 1 0; min-width: 0; margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
-.nk-graphic-actions { display: flex; flex: none; margin-left: auto; }
-.nk-graphic-layout-settings { display: flex; align-items: flex-start; margin-left: auto; color: var(--nk-text-muted); font-size: 11px; }
+.nk-graphic-block .nk-graphic-heading { margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--nk-border); }
+.nk-graphic-block .nk-graphic-heading > h2 { min-width: 0; margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
 .nk-graphic-block button, .nk-graphic-block select {
   border: 1px solid var(--nk-border);
   border-radius: var(--nk-radius-sm, 8px);
@@ -26,8 +24,6 @@
   min-height: 32px;
 }
 .nk-graphic-block button:hover, .nk-graphic-block select:hover { background: var(--nk-surface-hover); color: var(--nk-text); border-color: var(--nk-accent); }
-.nk-graphic-actions button { border-color: transparent; font-size: 11px; padding: 5px 8px; }
-.nk-graphic-actions button[aria-expanded="true"] { background: var(--nk-surface); color: var(--nk-text); }
 .nk-graphic-block :is(button, select, input, summary, [tabindex]):focus-visible { outline: 2px solid var(--nk-accent); outline-offset: 3px; }
 .nk-graphic-items, .nk-graphic-layout-col, .nk-graphic-layout-card { display: flex; flex-direction: column; }
 .nk-graphic-node { position: relative; min-width: 0; max-width: 100%; container-type: inline-size; }
@@ -44,7 +40,8 @@
 .nk-graphic-layout-filled { padding: 16px; border: 1px solid var(--nk-border); }
 .nk-graphic-node-card { padding: 16px; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-md, 12px); }
 .nk-graphic-stat { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 112px; padding: 16px; border: 1px solid var(--nk-border); border-radius: var(--nk-radius-md, 12px); background: color-mix(in srgb, var(--nk-surface) 50%, var(--nk-bg-raised, var(--nk-bg))); }
-.nk-graphic-stat > .nk-graphic-muted { padding-right: 28px; font-size: 12px; }
+.nk-graphic-stat > .nk-graphic-muted { font-size: 12px; }
+.nk-graphic-stat-palette > .nk-graphic-muted { padding-right: 28px; }
 .nk-graphic-stat > strong { font-size: clamp(24px, 2.5vw, 30px); font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
 .nk-graphic-stat > .nk-graphic-colors { position: absolute; top: 8px; right: 8px; }
 .nk-graphic-stat-delta { font-size: 12px; color: var(--nk-text-muted); white-space: pre-wrap; }
@@ -53,7 +50,6 @@
 .nk-graphic-widget-tools > .nk-graphic-colors { margin-inline-start: auto; }
 .nk-graphic-colors { position: relative; font-size: 12px; min-width: 0; }
 .nk-graphic-block .nk-graphic-color-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 28px; min-height: 28px; padding: 0; border: 1px solid transparent; border-radius: 8px; color: var(--nk-text-muted); cursor: pointer; }
-.nk-graphic-block .nk-graphic-colors-labelled > .nk-graphic-color-trigger { width: auto; min-height: 32px; padding: 5px 8px; border-color: var(--nk-border); font-size: 11px; white-space: nowrap; }
 .nk-graphic-block .nk-graphic-color-trigger:hover, .nk-graphic-block .nk-graphic-color-trigger[aria-expanded="true"] { color: var(--nk-accent); background: var(--nk-surface-hover); border-color: var(--nk-accent); }
 .nk-graphic-color-popup { position: fixed; inset: auto; display: flex; flex-direction: column; width: min(300px, calc(100vw - 24px)); max-height: min(460px, calc(100dvh - 24px)); margin: 0; padding: 0; border: 1px solid var(--nk-border); border-radius: 16px; background: var(--nk-bg-raised, var(--nk-surface)); color: var(--nk-text); box-shadow: 0 16px 48px color-mix(in srgb, var(--nk-bg-deep) 45%, transparent), 0 2px 8px color-mix(in srgb, var(--nk-bg-deep) 20%, transparent); overflow: hidden; font: 12px/1.5 system-ui, sans-serif; }
 .nk-graphic-color-popup:not(:popover-open) { display: none; }
@@ -66,7 +62,6 @@
 .nk-graphic-color-list { display: flex; flex-direction: column; gap: 0; min-height: 0; padding: 0 14px 4px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .nk-graphic-color-control { display: flex; flex: none; min-width: 0; flex-direction: column; gap: 10px; padding: 14px 0; }
 .nk-graphic-color-control + .nk-graphic-color-control { border-top: 1px solid var(--nk-border); }
-.nk-graphic-block .nk-graphic-color-reset { flex: none; margin: 12px 0; border-color: var(--nk-border); }
 .nk-graphic-color-label, .nk-graphic-color-hex { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .nk-graphic-color-label { justify-content: space-between; }
 .nk-graphic-color-label > span { min-width: 0; }
@@ -115,8 +110,11 @@
 .nk-graphic-block .nk-graphic-isolated-svg { display: block; width: 100%; max-width: 100%; max-height: 800px; object-fit: contain; margin: 0 auto; }
 .nk-graphic-source-details { margin-top: 12px; }
 .nk-graphic-source-details > summary { width: fit-content; padding: 6px 0; color: var(--nk-text-muted); font-size: 11px; cursor: pointer; }
-.nk-graphic-source-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.nk-graphic-block .nk-graphic-source { max-height: 360px; overflow: auto; margin: 12px 0 0; padding: 12px; background: var(--nk-bg-deep); color: var(--nk-text); border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); white-space: pre-wrap; font-size: 12px; }
+.nk-graphic-source-frame { margin-top: 8px; background: var(--nk-bg-deep); border: 1px solid var(--nk-border); border-radius: var(--nk-radius-sm, 8px); overflow: hidden; }
+.nk-graphic-source-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 8px 12px 0; }
+.nk-graphic-source-actions > .nk-graphic-status { flex: 1; min-width: 0; text-align: right; font-size: 11px; }
+.nk-graphic-source-actions > button { flex: none; }
+.nk-graphic-block .nk-graphic-source { max-height: 360px; overflow: auto; margin: 0; padding: 10px 12px 12px; background: transparent; color: var(--nk-text); border: 0; white-space: pre-wrap; font-size: 12px; }
 .nk-graphic-block .nk-graphic-source code { background: transparent; padding: 0; }
 .nk-graphic-block.nk-graphic-questions-only { padding: 0; border: 0; background: transparent; }
 .nk-graphic-block .nk-graphic-questions-title { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
@@ -141,9 +139,8 @@
   .nk-graphic-block button.nk-graphic-question { min-height: 44px; }
   .nk-graphic-block :is(select, input) { font-size: 16px; }
   .nk-graphic-block .nk-graphic-color-trigger { width: 44px; min-height: 44px; }
-  .nk-graphic-block .nk-graphic-colors-labelled > .nk-graphic-color-trigger { width: auto; min-height: 44px; }
   .nk-graphic-block .nk-graphic-color-close { width: 44px; min-height: 44px; }
-  .nk-graphic-stat > .nk-graphic-muted { padding-right: 44px; }
+  .nk-graphic-stat-palette > .nk-graphic-muted { padding-right: 44px; }
   .nk-graphic-block .nk-graphic-param input[type="range"] { height: 44px; min-height: 44px; }
   .nk-graphic-block .nk-graphic-color-swatches { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 8px; }
 }

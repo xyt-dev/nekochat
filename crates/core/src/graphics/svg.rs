@@ -27,6 +27,7 @@ pub fn sanitize_graphic_svg(source: &str) -> Checked<String> {
     let mut count = 0usize;
     let mut ids = HashMap::new();
     let mut references = Vec::new();
+    let mut accessible_references = Vec::new();
     for node in doc.descendants() {
         if node.is_pi() { return Err("SVG processing instructions are forbidden".into()); }
         if node.is_text() {
@@ -55,6 +56,9 @@ pub fn sanitize_graphic_svg(source: &str) -> Checked<String> {
                 continue;
             }
             validate_attribute(tag, key, value)?;
+            if ["aria-labelledby", "aria-describedby"].contains(&key) {
+                accessible_references.extend(value.split_ascii_whitespace());
+            }
             if ["fill", "stroke"].contains(&key) {
                 if let Some(id) = fragment(value) { references.push((id, false)); }
             }
@@ -72,6 +76,9 @@ pub fn sanitize_graphic_svg(source: &str) -> Checked<String> {
             Some(&"linearGradient") | Some(&"radialGradient") if !clip => {},
             _ => return Err(format!("Invalid SVG fragment target: {id}")),
         }
+    }
+    for id in accessible_references {
+        if !ids.contains_key(id) { return Err(format!("Unknown SVG accessibility target: {id}")); }
     }
     let mut output = String::with_capacity(source.len());
     write_element(root, &mut output, true);
@@ -95,8 +102,9 @@ fn paint(value: &str, references: bool) -> bool {
     if let Some(hex) = value.strip_prefix('#') {
         return [3, 4, 6, 8].contains(&hex.len()) && hex.bytes().all(|c| c.is_ascii_hexdigit());
     }
-    if let Some(token) = value.strip_prefix("var(--nk-").and_then(|s| s.strip_suffix(')')) {
-        return THEME.contains(&token);
+    if let Some(inner) = value.strip_prefix("var(--nk-").and_then(|s| s.strip_suffix(')')) {
+        let (token, fallback) = inner.split_once(',').map_or((inner, None), |(token, fallback)| (token, Some(fallback.trim())));
+        return THEME.contains(&token.trim()) && fallback.is_none_or(|fallback| !fallback.starts_with("var(") && paint(fallback, false));
     }
     if references && fragment(value).is_some() { return true; }
     if [
@@ -189,6 +197,7 @@ fn validate_attribute(tag: &str, key: &str, value: &str) -> Checked<()> {
         "vector-effect" => ["none", "non-scaling-stroke"].contains(&value),
         "role" => ["img", "presentation"].contains(&value),
         "aria-label" | "aria-description" => value.chars().count() <= 4000,
+        "aria-labelledby" | "aria-describedby" => !value.is_empty() && value.len() <= 4000 && value.split_ascii_whitespace().all(local_id),
         "viewBox" if tag == "svg" => {
             let parts: Vec<_> = value.split(|c: char| c.is_ascii_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
             parts.len() == 4 && parts.iter().all(|s| finite(s)) && parts[2].parse::<f64>().is_ok_and(|n| n > 0.0) && parts[3].parse::<f64>().is_ok_and(|n| n > 0.0)

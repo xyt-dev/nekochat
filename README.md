@@ -16,7 +16,7 @@ THIS IS LARGE SLOP MACHINE 的无害垃圾。
 
 ## ✨ 聊天界面实拍（Claude Dark）
 
-内置「大肥鱼」「大肥鱼和 GPT 娘」两套共 **322 张本地 GIF 表情包**。角色会根据语境与情绪在流式回复中自然穿插表情，配合立绘背景与首字/速率指标展示，桌面端与移动端均保持干净紧凑的交互体验：
+内置「大肥鱼」「大肥鱼和 GPT 娘」两套共 **300 张本地 GIF 表情包**。角色会根据语境与情绪在流式回复中自然穿插表情，配合立绘背景与首字/速率指标展示，桌面端与移动端均保持干净紧凑的交互体验：
 
 <table>
   <tr>
@@ -41,8 +41,8 @@ THIS IS LARGE SLOP MACHINE 的无害垃圾。
 
 - **模型与思考深度独立绑定**：每张角色卡可自由绑定 DeepSeek、OpenCode Go 或官方 ChatGPT 订阅（SIWC）下的任意上架模型，并单独固定思考档位（`none` / `low` / `high` / `max`）与采样参数。
 - **立绘背景与实时预览**：支持上传 PNG / JPEG / WebP / GIF / AVIF 背景图（至多 5 MiB），可调节透明度并实时预览；图片等比完整显示，适配桌面与手机。
-- **本地表情包与自定义 Skill 挂载**：一键勾选内置的 `大肥鱼（286 张）`、`大肥鱼和 GPT 娘（36 张）` 或自定义 `skills/` 资源包，自由调节表情身份（`角色本人 self` / `中立引用 neutral`）与发送频率（`偶尔` / `适中` / `经常`）。
-- **可交互图形**：勾选「通用图形」指令包，让角色在回复中输出布局、指标卡、数据图表、参数函数图、节点图与静态 SVG。配色跟随主题，切图、调色和函数滑块在本地完成；协议与示例见 [使用指南](docs/guide.md#通用图形输出)。
+- **本地表情包与自定义 Skill 挂载**：一键勾选内置的 `大肥鱼（267 张）`、`大肥鱼和 GPT 娘（33 张）` 或自定义 `skills/` 资源包，自由调节表情身份（`角色本人 self` / `中立引用 neutral`）与发送频率（`偶尔` / `适中` / `经常`）。
+- **可交互图形**：勾选「通用图形」指令包，让角色在回复中输出布局、指标卡、数据图表、参数函数图、节点图与叙事 SVG。配色跟随主题，默认无调色按钮；明确要求时仅对应组件提供独立调色。切图和函数滑块在本地完成；协议与示例见 [使用指南](docs/guide.md#通用图形输出)。
 
 <table>
   <tr>
@@ -52,10 +52,29 @@ THIS IS LARGE SLOP MACHINE 的无害垃圾。
     </td>
     <td width="50%" valign="top">
       <img src="docs/screenshots/character-assets-dark.webp" alt="角色卡片制作：立绘背景实时预览与表情资源包挂载" />
-      <p align="center"><sub>🖼️ 角色卡片下半区：立绘背景与透明度预览、322 张表情包勾选与表情频率控制</sub></p>
+      <p align="center"><sub>🖼️ 角色卡片下半区：立绘背景与透明度预览、表情包勾选与表情频率控制</sub></p>
     </td>
   </tr>
 </table>
+
+### 🎨 从数据图表到叙事插画
+
+角色可以直接在回复里组织卡片、图表、可调函数图和静态 SVG。下面两张均为真实角色回复在聊天页的渲染截图：插画用渐变、星点与留白表达故事；数据图中只为明确要求的柱状图提供独立配色，函数滑块在本地改变曲线。
+
+<p align="center">
+  <img src="docs/screenshots/graphics-svg-dark.webp" width="92%" alt="真实 SVG 叙事插画：深蓝海中的鲸鱼游向右上方的龙形星座，气泡和虚线联系两个主体" />
+  <br />
+  <sub>深蓝之上：模型生成的静态 SVG，主题色、渐变与细节在本站安全渲染，默认没有调色按钮。</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/graphics-dashboard-dark.webp" width="92%" alt="学习节奏图形：两张指标卡、蓝色专注时长柱状图和振幅为 1.5 的交互正弦函数图" />
+  <br />
+  <sub>示例学习面板：指标卡、数据图与参数函数图在一个回复里组合；本地滑块、图表切换和按需独立调色无需再次请求模型。</sub>
+</p>
+
+建议问题以可点击选项呈现，点击后填入草稿，由用户编辑发送。图形底部的小字「源规范」可展开原文，复制按钮位于源码框内右上角。图形参数、视图和组件配色可在当前浏览器恢复；模型是否输出图形与选项仍由角色指令引导。
+
 
 ### 🌐 零门槛联网搜索对接
 
@@ -85,7 +104,7 @@ flowchart LR
 
   subgraph Server["⚙️ 主服务进程 · nekochat (Rust / Axum)"]
     Gen["Generation 核心状态机<br/>独立 Tokio 任务 · 快照 + Broadcast"]
-    Res["nekochat-resources<br/>322 张内置 GIF · Bytes 零拷贝"]
+    Res["nekochat-resources<br/>300 张内置 GIF · Bytes 零拷贝"]
     Store["nekochat-store<br/>SQLite WAL · spawn_blocking 隔离"]
     Gw["nekochat-gateway<br/>Chat Completions / Responses / SIWC"]
     Gen --> Res
@@ -119,7 +138,7 @@ flowchart LR
 - **F5 刷新与断线毫秒级快照恢复**：刷新网页或切换设备后，前端通过 `GET /api/conversations/{id}/turns` 订阅现有生成，服务端先返回带单调递增 `revision` 的内存快照（`snapshot`），再无缝衔接后续增量事件，不重发模型请求、不丢字。
 - **流式数据内存聚合，非逐 Token 刷盘**：流式 token 与思考片段在内存状态机内聚合，仅在生成启动与结束（完成 / 中断 / 出错）时写入 SQLite，避免高频磁盘 I/O 抖动。
 
-### 3. 🖼️ 322 张内置 GIF 零拷贝分发与流式标签状态机
+### 3. 🖼️ 300 张内置 GIF 零拷贝分发与流式标签状态机
 
 - **静态字节零拷贝（`Bytes`）**：`crates/resources` 在编译期嵌入内置表情包，运行时通过引用计数 `Bytes` 直接构造 HTTP 响应并附带 `Cache-Control: private, max-age=86400`，不进前端 JS 包、不复制整块图片缓冲，也不依赖外部 CDN。
 - **O(1) 流式 `[sticker:...]` 解析**：服务端状态机在文本流经过时实时匹配并替换已授权表情标签，无全文正则回溯，且半截未闭合标签不会泄漏到前端造成界面闪烁。
@@ -173,7 +192,7 @@ python3 scripts/deploy.py
 
 脚本优先复用完整的 `target/release/` 程序，其次复用 `runtime/bin/`；两处都没有完整的程序时，才构建前端、WASM 与两个 Rust release 程序。它会将 `nekochat` 和 `nekochat-search` 安装到 `runtime/bin/`，停止本站旧进程，在后台启动新程序；确认监听端口归属、首页和健康检查通过后，删除整个 `target/`。`web/dist` 和内置表情图片已嵌入程序，无需额外部署静态资源。
 
-内置通用图形指令、322 张表情及其清单也随主程序嵌入，无需另行下载或导入。配置、数据库、用户上传及自定义资源包仍保存在外部。GitHub 二进制发布包提供两个已编译程序、配置示例与许可说明；Linux x86_64 包要求 glibc 2.39 或更新版本，解压启动见[使用指南](docs/guide.md#二进制发布包)。
+内置通用图形指令、300 张表情及其清单也随主程序嵌入，无需另行下载或导入。配置、数据库、用户上传及自定义资源包仍保存在外部。GitHub 二进制发布包提供两个已编译程序、配置示例与许可说明；Linux x86_64 包要求 glibc 2.39 或更新版本，解压启动见[使用指南](docs/guide.md#二进制发布包)。
 
 配置和 `data/` 继续使用原仓库中的路径；保留这些文件与部署脚本。运行日志为 `runtime/service.log`。启动所需的密钥和代理环境变量会私密保存在 `runtime/environment.json`（权限 `0600`）；整个 `runtime/` 已忽略，不要提交或分享。
 
@@ -217,7 +236,7 @@ nekochat/
 │   ├── core/        # 角色、消息树、指标与生成参数核心数据结构
 │   ├── store/       # SQLite (WAL) 存储、schema 迁移、用户与对话树持久化
 │   ├── gateway/     # Chat Completions、标准 Responses 与官方 ChatGPT 订阅流式网关
-│   ├── resources/   # 内置 322 张 GIF 嵌入、自定义资源包校验与流式 [sticker:...] 状态机
+│   ├── resources/   # 内置 300 张 GIF 嵌入、自定义资源包校验与流式 [sticker:...] 状态机
 │   ├── server/      # Axum HTTP 服务、Generation 状态机、SIWC OAuth、搜索子进程托管
 │   ├── mdwasm/      # 编译为 WebAssembly 的 pulldown-cmark 分块与 HTML 渲染器
 │   └── search/      # 独立 nekochat-search 二进制：DeepSeek / GPT 搜索、反 SSRF Reader 与账本

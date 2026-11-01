@@ -41,7 +41,7 @@ export default function Plot(props: { node: PlotNode; nodeKey: string }) {
   return <div class="nk-graphic-plot" ref={canvas.ref}>
     <div class="nk-graphic-widget-tools">
       <span class="nk-graphic-status" role="status">{pending() ? "正在计算…" : error() ? "计算失败" : "本地函数图"}</span>
-      <ColorSettings><For each={props.node.series}>{(series, index) => <ColorControl colorKey={`${props.nodeKey}:series:${index()}`} label={series.label ?? `函数 ${index() + 1}`} declared={series.color} fallback={SERIES_COLORS[index() % 8]} />}</For></ColorSettings>
+      <Show when={props.node.palette}><ColorSettings><For each={props.node.series}>{(series, index) => <ColorControl colorKey={`${props.nodeKey}:series:${index()}`} label={series.label ?? `函数 ${index() + 1}`} declared={series.color} fallback={SERIES_COLORS[index() % 8]} />}</For></ColorSettings></Show>
     </div>
     <Show when={sample()} fallback={<div class="nk-graphic-compute-placeholder" style={{ height: `${height()}px` }} role="status">{error() || "正在准备函数图…"}</div>}>
       {result => <svg class="nk-graphic-canvas" classList={{ "nk-graphic-updating": pending() }} width="100%" height={height()} viewBox={`0 0 ${canvas.width()} ${height()}`} role="img" aria-label={props.node.title ?? "交互函数图；下方可调整参数"} aria-busy={pending()}>

@@ -26,7 +26,7 @@ export function frameAction<T>(apply: (value: T) => void): (value: T) => void {
     if (!frame) frame = requestAnimationFrame(() => { frame = 0; apply(latest); });
   };
 }
-export function ColorSettings(props: { children: JSX.Element; label?: string }) {
+export function ColorSettings(props: { children: JSX.Element }) {
   const [open, setOpen] = createSignal(false);
   const id = createUniqueId();
   let trigger!: HTMLButtonElement;
@@ -61,8 +61,8 @@ export function ColorSettings(props: { children: JSX.Element; label?: string }) 
     observer?.disconnect(); observer = undefined;
   };
   onCleanup(() => { detach(); if (panel?.matches(":popover-open")) panel.hidePopover(); });
-  return <div class="nk-graphic-colors" classList={{ "nk-graphic-colors-labelled": !!props.label }}>
-    <button ref={trigger} type="button" class="nk-graphic-color-trigger" aria-label={props.label ?? "配色"} title={props.label ?? "配色"} aria-haspopup="dialog" aria-expanded={open()} aria-controls={id} popovertarget={id} popovertargetaction="toggle"><Show when={props.label}><span>{props.label}</span></Show><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10 2.5a7.5 7.5 0 1 0 0 15h1a2 2 0 0 0 1.4-3.4.8.8 0 0 1 .6-1.4h1.3a3.2 3.2 0 0 0 3.2-3.2A7.1 7.1 0 0 0 10 2.5Z"/><circle cx="6" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="10" cy="5.5" r=".8" fill="currentColor" stroke="none"/><circle cx="14" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="5" cy="11" r=".8" fill="currentColor" stroke="none"/></svg></button>
+  return <div class="nk-graphic-colors">
+    <button ref={trigger} type="button" class="nk-graphic-color-trigger" aria-label="配色" title="配色" aria-haspopup="dialog" aria-expanded={open()} aria-controls={id} popovertarget={id} popovertargetaction="toggle"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10 2.5a7.5 7.5 0 1 0 0 15h1a2 2 0 0 0 1.4-3.4.8.8 0 0 1 .6-1.4h1.3a3.2 3.2 0 0 0 3.2-3.2A7.1 7.1 0 0 0 10 2.5Z"/><circle cx="6" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="10" cy="5.5" r=".8" fill="currentColor" stroke="none"/><circle cx="14" cy="7" r=".8" fill="currentColor" stroke="none"/><circle cx="5" cy="11" r=".8" fill="currentColor" stroke="none"/></svg></button>
     <div ref={panel} id={id} class="nk-graphic-color-popup" popover="auto" role="dialog" aria-labelledby={`${id}-title`} onBeforeToggle={event => { if (event.newState === "open") setOpen(true); }} onToggle={() => {
       const shown = panel.matches(":popover-open"); setOpen(shown); detach();
       if (shown) {

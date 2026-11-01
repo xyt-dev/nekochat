@@ -1,4 +1,5 @@
-Vendored upstream nekowhale packs; all 322 GIFs verified using manifest SHA-1 prefixes.
+Vendored upstream nekowhale packs; 300 GIFs retained (267 solo + 33 paired), all verified using manifest SHA-1 prefixes.
+On 2026-11-02, removed 22 GIFs with zero references in saved assistant messages; ties ranked by descending asset size. Original upstream metadata is retained below for provenance.
 Original annotations are unmodified in upstream/nekowhale.json and retained per sticker.
 Per-pack SKILL.md is adapted for static local-only use: no tools, rendering or random selection.
 Upstream SKILL.md retained for provenance only; never loaded as runtime instructions.

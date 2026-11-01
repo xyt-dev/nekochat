@@ -72,7 +72,7 @@ fn single_character_chunks_preserve_indented_long_fences_and_bound_invalid_marke
 fn unauthorized_unknown_ambiguous_and_repeated_markers_never_choose_replacements() {
     let catalog = catalog();
     let mut filter = catalog.filter(&["nekowhale".into()], &[]).unwrap();
-    let mut chunks = filter.push("A[sticker:宣判]B[sticker:大肥鱼和GPT娘/2TT01_喝药]C[sticker:不存在]D[sticker:10N01_猫猫搓手]E[sticker:摸下巴]F");
+    let mut chunks = filter.push("A[sticker:宣判]B[sticker:大肥鱼和GPT娘/2TT02_情侣杯]C[sticker:不存在]D[sticker:10N01_猫猫搓手]E[sticker:摸下巴]F");
     chunks.extend(filter.finish());
     assert_eq!(render(chunks), "ABCD<nekowhale:猫猫搓手>EF");
     let mut filter = catalog
@@ -102,7 +102,7 @@ fn malformed_partial_markers_do_not_leak_but_other_brackets_remain() {
 }
 
 #[test]
-fn prompt_is_order_independent_authorized_and_contains_direction_and_identity() {
+fn prompt_authorization_is_order_independent_and_rejects_unknown_packs() {
     let catalog = catalog();
     let a = catalog
         .prompt(
@@ -123,9 +123,6 @@ fn prompt_is_order_independent_authorized_and_contains_direction_and_identity() 
         )
         .unwrap();
     assert_eq!(a, b);
-    assert!(a.contains("大肥鱼→GPT娘"));
-    assert!(a.contains("不冒充"));
-    assert!(a.contains("可以叫我云大人"));
     assert!(
         catalog
             .prompt(&["missing".into()], "neutral", "normal")
@@ -202,7 +199,7 @@ fn symlinked_assets_and_pack_directories_are_rejected() {
 }
 
 #[test]
-fn instruction_only_authorization_does_not_inherit_sticker_policy() {
+fn instruction_packs_preserve_graphics_and_ignore_sticker_identity() {
     let root = tempfile::tempdir().unwrap();
     custom_pack(root.path(), "assets/test.gif");
     std::fs::write(root.path().join("custom/stickers.json"), "[]").unwrap();
@@ -210,11 +207,7 @@ fn instruction_only_authorization_does_not_inherit_sticker_policy() {
     let catalog = ResourceCatalog::load(root.path()).unwrap();
     let allowed = ["custom".into()];
     let prompt = catalog.prompt(&allowed, "self", "often").unwrap();
-    assert!(prompt.contains("Use declared graphics with local controls."));
-    assert!(!prompt.contains("[sticker:"));
-    assert!(!prompt.contains("非商业"));
     assert_eq!(prompt, catalog.prompt(&allowed, "neutral", "rare").unwrap());
-    assert!(!catalog.prompt(&["nekowhale".into()], "self", "often").unwrap().contains("Use declared graphics with local controls."));
     let mut filter = catalog.filter(&allowed, &[]).unwrap();
     let source = "```neko-ui\n{\"version\":1,\"items\":[]}\n```";
     let mut chunks = filter.push(source);

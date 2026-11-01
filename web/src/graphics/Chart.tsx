@@ -66,9 +66,9 @@ export default function Chart(props: { node: ChartNode; nodeKey: string }) {
       <label>图表视图 <select aria-label="图表视图" value={kind()} onChange={event => context.setView(`${props.nodeKey}:kind`, KINDS.indexOf(event.currentTarget.value as ChartKind))}>
         <For each={KINDS}>{(item, index) => <option value={item} disabled={item === "donut" && !canDonut()}>{KIND_NAMES[index()]}</option>}</For>
       </select></label>
-      <ColorSettings><For each={Array.from({ length: kind() === "donut" ? Math.min(8, props.node.labels.length) : props.node.series.length }, (_, index) => index)}>{index =>
+      <Show when={props.node.palette}><ColorSettings><For each={Array.from({ length: kind() === "donut" ? Math.min(8, props.node.labels.length) : props.node.series.length }, (_, index) => index)}>{index =>
         <ColorControl colorKey={colorKey(index)} label={kind() === "donut" ? `色组 ${index + 1}` : props.node.series[index].label} declared={kind() === "donut" ? index === 0 ? props.node.series[0]?.color : undefined : props.node.series[index].color} fallback={SERIES_COLORS[index % 8]} />
-      }</For></ColorSettings>
+      }</For></ColorSettings></Show>
     </div>
     <svg class="nk-graphic-canvas" width="100%" height={height()} viewBox={`0 0 ${canvas.width()} ${height()}`} role="img" aria-label={props.node.title ?? `${KIND_NAMES[KINDS.indexOf(kind())]}图；下方可查看数据`}>
       <title>{props.node.title ?? "图表"}</title>

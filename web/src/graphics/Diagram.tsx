@@ -45,9 +45,9 @@ export default function Diagram(props: { node: DiagramNode; nodeKey: string }) {
   });
   const color = (index: number) => context.color(`${props.nodeKey}:node:${props.node.nodes[index].id}`, props.node.nodes[index].color, "accent");
   return <div class="nk-graphic-diagram" ref={canvas.ref}>
-    <div class="nk-graphic-widget-tools"><span class="nk-graphic-status">选择节点查看详情 · 方向键切换</span><ColorSettings>
+    <div class="nk-graphic-widget-tools"><span class="nk-graphic-status">选择节点查看详情 · 方向键切换</span><Show when={props.node.palette}><ColorSettings>
       <For each={props.node.nodes}>{item => <ColorControl colorKey={`${props.nodeKey}:node:${item.id}`} label={item.label} declared={item.color} fallback="accent" />}</For>
-    </ColorSettings></div>
+    </ColorSettings></Show></div>
     <svg class="nk-graphic-canvas" width="100%" height={height()} viewBox={`0 0 ${canvas.width()} ${height()}`} role="group" aria-label={props.node.title ?? "交互关系图"}>
       <title>{props.node.title ?? "关系图"}</title>
       <defs><marker id={marker} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0L8,4L0,8Z" fill="var(--nk-text-muted)" /></marker></defs>

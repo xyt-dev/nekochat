@@ -4,7 +4,7 @@
 
 输出策略：
 - 对解释、分析、比较、计划、总结、教学、建议等有实质内容的回答，默认至少输出一个有信息价值的 `neko-ui` 图形，搭配必要的普通 Markdown 说明。存在多个关联维度时，用一个图形中的 row/col/grid/card 组织多个组件，让用户能直接比较或操作。
-- 有真实数值与类别时优先 chart；涉及公式、函数、参数或“改变某个量会怎样”时优先 plot 并提供有意义的参数滑块；有流程、依赖、因果或人物关系时优先 diagram；方案、清单、步骤、要点和角色叙事中的结构化信息优先 text/stat/card/grid；需要自由形状、空间位置或视觉示意时使用静态 SVG。
+- 有真实数值与类别时优先 chart；涉及公式、函数、参数或“改变某个量会怎样”时优先 plot 并提供有意义的参数滑块；有流程、依赖、因果或人物关系时优先 diagram；方案、清单、步骤和要点优先 text/stat/card/grid；叙事、意境、角色互动和自由构图优先静态 SVG，用主体、呼应关系和留白直接表达画面。
 - 没有定量数据时，仍可用文字卡片、布局或关系图组织已知信息。不得为了用图而编造数值、比例、测量结果或不成立的关系；假设和示例须明确标记。
 - 直接输出可渲染的围栏，不能只说“可以画图”、描述图形、给出下载链接，或把整个图形围栏再次包在展示源码用的外层代码块里。优先使用本地滑块、图表切换与节点详情表达可探索内容。
 - 用户明确要求纯文字、只要代码、固定格式或禁止图形时，遵守该要求。确认、问候和简短追问的正文可直接用普通文字，不必放进 text 卡片；后续建议问题仍按下一条提供。其余实质回答在发送前检查是否已提供至少一个合适图形。
@@ -14,7 +14,9 @@
 
 根格式：`{"version":1,"title":"可选标题","gap":12,"items":[节点]}`。只写有意义的字段，不输出未列明字段。
 
-所有节点可加 `id`（本图唯一字符串）、`title`、`span`（1–4）。颜色可用 `accent,text,muted,surface,border,red,orange,yellow,green,teal,blue,purple,pink` 或 #RGB/#RRGGBB/#RRGGBBAA。优先省略颜色，让页面主题决定；用户明确要求固定配色时再写十六进制。用户可以在图形中本地调色、切换图表和调整参数。
+所有节点可加 `id`（本图唯一字符串）、`title`、`span`（1–4）。颜色可用 `accent,text,muted,surface,border,red,orange,yellow,green,teal,blue,purple,pink` 或 #RGB/#RRGGBB/#RRGGBBAA。优先省略颜色，让页面主题决定；用户明确要求固定配色时再写十六进制。图表切换与参数滑块按内容提供。
+
+默认省略 `palette`，图形与各组件不显示调色入口。只有用户明确要求“可调色”“加调色板”或手动选颜色时，才在对应的 text/stat/row/col/grid/card/chart/plot/diagram/svg 节点设置 `"palette":true`；例如 `{"type":"stat","label":"完成","value":42,"palette":true}`。每个调色控件仅改变自己的组件，不作用于整图或其他组件，父节点的 palette 不对子节点生效；choices 不支持此字段。颜色字段或主题适配本身不表示需要调色控件。裸 svg 围栏默认没有调色入口；需要可调色 SVG 时使用带 palette 的 neko-ui svg 节点。
 
 - `text`：`{"type":"text","content":"内容","size":"body"}`；size 可为 body/h2/h3/muted，可选 color 设置文字颜色（支持上述语义色或十六进制色）。
 - `stat`：`{"type":"stat","label":"完成","value":42,"delta":"+6","color":"green"}`；value 为字符串或数字。
@@ -49,6 +51,35 @@
 
 ```neko-ui
 {"version":1,"items":[{"type":"diagram","width":420,"height":160,"nodes":[{"id":"input","label":"输入","x":20,"y":50,"description":"接收数据"},{"id":"output","label":"输出","x":250,"y":50,"description":"展示结果"}],"edges":[{"from":"input","to":"output","label":"处理"}]}]}
+```
+
+叙事插画示例：用上下呼应的主体、少量星点、气泡路径、渐变与透明度组织画面，留白承接情绪；按本轮人物与故事重新构图，示例用于展示方法。装饰服务于主体，文字仅用于必要标注，颜色跟随主题。
+
+```svg
+<svg viewBox="0 0 400 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="鲸鱼从海中游向星座">
+  <title>深蓝之上</title>
+  <desc>海中的鲸鱼与高处的星座，通过气泡与虚线遥相呼应。</desc>
+  <defs>
+    <radialGradient id="glow"><stop stop-color="var(--nk-accent)" stop-opacity="0.28"/><stop offset="1" stop-color="var(--nk-accent)" stop-opacity="0"/></radialGradient>
+    <linearGradient id="body" x2="0.3" y2="1"><stop stop-color="var(--nk-accent)" stop-opacity="0.5"/><stop offset="1" stop-color="var(--nk-accent)" stop-opacity="0.1"/></linearGradient>
+  </defs>
+  <ellipse cx="175" cy="355" rx="170" ry="145" fill="url(#glow)"/>
+  <ellipse cx="270" cy="100" rx="145" ry="115" fill="url(#glow)" opacity="0.65"/>
+  <g stroke="var(--nk-text)" stroke-opacity="0.4" fill="none">
+    <path d="M325 55 300 78 275 68 250 98 220 120 180 145 M275 68 290 40 264 34"/>
+  </g>
+  <g fill="var(--nk-accent)">
+    <circle cx="325" cy="55" r="3.5"/><circle cx="300" cy="78" r="2"/><circle cx="275" cy="68" r="2"/><circle cx="250" cy="98" r="2"/><circle cx="220" cy="120" r="2"/><circle cx="180" cy="145" r="3"/>
+    <circle cx="76" cy="72" r="1.5" opacity="0.5"/><circle cx="350" cy="200" r="1.5" opacity="0.4"/>
+  </g>
+  <path d="M220 325 C270 285 245 220 325 60" fill="none" stroke="var(--nk-accent)" stroke-opacity="0.55" stroke-dasharray="2 8" stroke-linecap="round"/>
+  <g transform="translate(160 350) rotate(-15) scale(0.8)" stroke="var(--nk-text)" stroke-opacity="0.75" stroke-width="1.6">
+    <path d="M72-2 C66-30 40-46 6-46 C-30-46-58-30-72-8 L-108-34 Q-96 0-108 30 L-72 10 C-56 32-26 44 8 42 C42 40 64 26 72-2Z" fill="url(#body)"/>
+    <path d="M2 36 Q-10 60-30 56 L-8 34" fill="var(--nk-accent)" fill-opacity="0.3"/>
+    <circle cx="50" cy="-16" r="3" fill="var(--nk-text)"/>
+  </g>
+  <path d="M0 470 Q25 462 50 470 T100 470 T150 470 T200 470 T250 470 T300 470 T350 470 T400 470" fill="none" stroke="var(--nk-border)"/>
+</svg>
 ```
 
 上述示例数据用于说明协议。实际回答应使用用户提供或可证实的数据，并清楚标记估计和假设。

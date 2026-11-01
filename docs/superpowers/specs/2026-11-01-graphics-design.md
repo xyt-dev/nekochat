@@ -22,7 +22,7 @@ mdwasm 导出 `validate_graphic(source, complete)`、`sanitize_graphic_svg`、`s
 
 根：`{version:1,title?:string,gap?:number,items:GraphicNode[]}`。
 
-共用节点字段：`id?:string,title?:string,span?:number`；id 在一个图形内唯一。颜色可使用 `accent,text,muted,surface,border,red,orange,yellow,green,teal,blue,purple,pink` 或 `#RGB/#RRGGBB/#RRGGBBAA`。默认由当前 --nk-* 主题变量决定。
+共用节点字段：`id?:string,title?:string,span?:number`；id 在一个图形内唯一。除 choices 外各节点可声明 `palette?:boolean`，只有明确 true 时显示该节点独立调色控件，省略/false 均不显示，拒绝其他类型；不继承父节点开关，不影响其他组件。颜色可使用 `accent,text,muted,surface,border,red,orange,yellow,green,teal,blue,purple,pink` 或 `#RGB/#RRGGBB/#RRGGBBAA`，默认由当前 --nk-* 主题变量决定。
 
 节点：
 - text: `{type:"text",content:string,size?:"body"|"h2"|"h3"|"muted",color?:Color}`。
@@ -38,6 +38,10 @@ mdwasm 导出 `validate_graphic(source, complete)`、`sanitize_graphic_svg`、`s
 
 SVG 仅允许静态几何/文字/渐变/裁切元素与有限属性；禁止脚本、事件、foreignObject、动画、外部资源、外部 href、DOCTYPE/ENTITY 和 style 元素。支持 fill/stroke 的 currentColor 与 var(--nk-*) 主题颜色，以及安全的片段渐变引用 url(#id)。通过隔离图片模式绘制；主题变化时替换主题值并回收旧 Blob URL，不把原始模型 SVG 写入宿主 DOM。
 
+无障碍 `aria-labelledby` / `aria-describedby` 仅接受本 SVG 内已定义的 ID 引用列表，拒绝 URL、片段前缀和不存在的目标，保留静态 title/desc 语义。
+
+主题色允许 `var(--nk-blue, #4a90d9)` 形式的安全字面回退；主题变量名仍受白名单限制，回退不接受嵌套变量、URL 或执行内容。隔离图片输出前在宿主主题中解析完整颜色值。
+
 ## 前端边界与性能
 
 `web/src/graphics/GraphicBlock.tsx` 默认导出组件：props `{id:string,spec:GraphicSpec,source:string,onQuestion?:(prompt:string)=>void,questionsDisabled?:boolean}`。`web/src/graphics/types.ts` 导出共享 TS 视图类型；`state.ts` 导出 `resetGraphicsRuntime()` 给账号退出/切换路径使用。渲染器按需载入。choices 复用 Markdown/图形校验路径，只在完整成功回复且当前对话未生成/编辑时允许选择；选择事件经消息组件追加输入草稿并聚焦，不能直接发起模型请求。只包含 choices 的根使用紧凑选项样式。
@@ -46,9 +50,9 @@ Worker Markdown 响应从 html 字符串改为类型块：`{kind:"html",html}`�
 
 原有 Index 块节点保持稳定，图形内部使用节点 id/路径保留组件；普通 Markdown 不受影响。plot 采样使用独立 Worker 调 core/WASM，同一交互只保留最新参数，合并帧更新并丢弃过期结果；虚拟滚动卸载时移除监听和待处理任务。图形交互状态仅保存参数、配色和视图选择，可用受限 sessionStorage 配合有界内存缓存保存，不能保存消息正文/凭证；退出时清理缓存和 Worker。图片 URL、观察器和事件监听均按生命周期释放。
 
-所有默认颜色使用现有 --nk-* 语义变量；显式配色可通过局部设置恢复主题默认。原生 SVG 图表直接继承 CSS 变量，裸 SVG 在配色变化时重建隔离图片。提供本地参数滑块、图表视图选择、配色调整和源规范查看/复制；不产生模型请求。配色入口显示「配色」，使用浏览器顶层 popover 小浮层，避开布局裁切并限制在可见视口；支持内部滚动、外部点击关闭、Escape 和关闭按钮。色块及完整 HEX 输入即时应用，不使用系统选色框或确认步骤；监听器仅在浮层打开时注册并在关闭/卸载时回收。
+所有默认颜色使用现有 --nk-* 语义变量；原生图表直接继承 CSS 变量，裸 SVG 在主题变化时重建隔离图片。默认移除所有调色入口；只有节点明确 `palette:true` 才显示所属组件的独立 popover，局部「跟随主题」也只恢复这一组件。容器调色仅修改自身背景，不修改后代颜色或为后代启用调色；整图入口、跨组件重置与全局主题色覆盖已移除。图表切换、函数滑块和源规范查看/复制继续本地执行。
 
-标题右侧仅保留「配色」入口；「恢复主题配色」放入此浮层，包含没有布局节点的图表或指标。图形底部以小字「源规范」折叠入口查看原文，复制按钮和操作状态仅在展开区域显示；纯 choices 保持紧凑样式。
+纯 choices 保持紧凑样式。其他图形标题仅显示标题文本；底部以小字「源规范」折叠查看原文，展开的源码框内右上角放复制按钮与反馈，代码独立滚动且不被控件遮挡。叙事 SVG 提示以鲸鱼与星座示例展示留白、上下呼应、渐变和主题颜色，实际回答根据上下文重新构图。
 
 ## 资源包
 

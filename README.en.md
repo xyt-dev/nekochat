@@ -16,7 +16,7 @@ You used an LLM to build something and now you think you're an engineer????
 
 ## ✨ Chat screenshots (Claude Dark)
 
-Two bundled packs, **Big Fat Fish** and **Big Fat Fish & GPT Girl**, provide **322 local GIF stickers**. Characters can include stickers that match the conversation. Character artwork and responsive message layouts work on both desktop and mobile; the app also supports time-to-first-token and generation-rate metrics.
+Two bundled packs, **Big Fat Fish** and **Big Fat Fish & GPT Girl**, provide **300 local GIF stickers**. Characters can include stickers that match the conversation. Character artwork and responsive message layouts work on both desktop and mobile; the app also supports time-to-first-token and generation-rate metrics.
 
 <table>
   <tr>
@@ -41,8 +41,8 @@ Create and customize characters in `/admin` using visual controls and live previ
 
 - **Choose the model and reasoning level per character.** Bind a card to a listed DeepSeek, OpenCode Go, or officially connected ChatGPT subscription model through Sign in with ChatGPT (SIWC). Configure the reasoning level, such as `none`, `low`, `high`, or `max`, and sampling settings supported by that model.
 - **Upload artwork and preview it live.** Backgrounds support PNG, JPEG, WebP, GIF, and AVIF up to 5 MiB. Adjust opacity in the editor and preview the result. Images retain their proportions and adapt to desktop and mobile layouts.
-- **Attach local sticker packs and custom skills.** Enable the bundled **Big Fat Fish (286 images)** and **Big Fat Fish & GPT Girl (36 images)** packs, or your own `skills/` resource packs. Set whether stickers represent the character (`self`) or a neutral reference (`neutral`), and choose their frequency: `rare`, `normal`, or `often`.
-- **Interactive graphics.** Enable the **通用图形** instruction pack for layouts, metric cards, data charts, parameterized plots, node diagrams, and static SVG inside replies. Colors follow the theme; chart selection, colors, and plot sliders run locally. See the [graphics guide and examples](docs/guide.md#通用图形输出).
+- **Attach local sticker packs and custom skills.** Enable the bundled **Big Fat Fish (267 images)** and **Big Fat Fish & GPT Girl (33 images)** packs, or your own `skills/` resource packs. Set whether stickers represent the character (`self`) or a neutral reference (`neutral`), and choose their frequency: `rare`, `normal`, or `often`.
+- **Interactive graphics.** Enable the **通用图形** instruction pack for layouts, metric cards, data charts, parameterized plots, node diagrams, and narrative SVG inside replies. Colors follow the theme. Color controls appear only on explicitly requested components and affect each component independently; chart selection and plot sliders run locally. See the [graphics guide and examples](docs/guide.md#通用图形输出).
 
 <table>
   <tr>
@@ -56,6 +56,25 @@ Create and customize characters in `/admin` using visual controls and live previ
     </td>
   </tr>
 </table>
+
+### 🎨 From data charts to narrative illustration
+
+Characters can compose cards, charts, parameterized plots, and static SVG directly inside a reply. Both images below were captured from real character responses in the chat UI. The illustration uses gradients, stars, and space to tell a story; the data view exposes an independent palette only for the explicitly requested bar chart, while its plot slider changes the curve locally.
+
+<p align="center">
+  <img src="docs/screenshots/graphics-svg-dark.webp" width="92%" alt="Real generated SVG illustration of a whale swimming from a deep blue sea toward a dragon constellation, connected by bubbles and a dotted path" />
+  <br />
+  <sub>Above the deep blue: generated static SVG with theme colors, gradients, and detail, safely rendered locally without default color controls.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/graphics-dashboard-dark.webp" width="92%" alt="Sample learning dashboard with two metric cards, a blue focus-hours bar chart, and an interactive sine plot with amplitude set to 1.5" />
+  <br />
+  <sub>Sample learning view: cards, data, and a parameterized plot in one reply. Sliders, chart switching, and requested component palettes run without another model call.</sub>
+</p>
+
+Suggested questions appear as clickable choices that fill the draft for editing and sending. A small source disclosure at the bottom opens the original specification, with its copy button inside the upper-right corner of the source frame. Parameters, views, and component colors can be restored in the current browser; graphic and choice generation is still guided by character instructions.
+
 
 ### 🌐 Connect web search
 
@@ -85,7 +104,7 @@ flowchart LR
 
   subgraph Server["⚙️ Main process · nekochat (Rust / Axum)"]
     Gen["Generation state machine<br/>Independent Tokio task · Snapshot + Broadcast"]
-    Res["nekochat-resources<br/>322 bundled GIFs · Shared Bytes buffers"]
+    Res["nekochat-resources<br/>300 bundled GIFs · Shared Bytes buffers"]
     Store["nekochat-store<br/>SQLite WAL · spawn_blocking"]
     Gw["nekochat-gateway<br/>Chat Completions / Responses / SIWC"]
     Gen --> Res
@@ -173,7 +192,7 @@ python3 scripts/deploy.py
 
 The script first reuses a complete binary pair in `target/release/`, then checks `runtime/bin/`. It builds the frontend, WASM, and both Rust release programs only when neither location has a complete pair. It installs `nekochat` and `nekochat-search` in `runtime/bin/`, stops the site's old processes, and starts the deployment in the background. After verifying listener ownership, the homepage, and health, it removes the entire `target/` directory. The frontend and bundled stickers are embedded in the program, so no separate static-resource deployment is needed.
 
-The built-in graphics instructions, all 322 stickers, and their catalogs are also embedded in the main executable, with no separate download or import required. Configuration, databases, uploads, and custom resource packs remain external. GitHub binary releases contain both compiled programs, configuration examples, and license notices. The Linux x86_64 package requires glibc 2.39 or newer; see the [binary package instructions](docs/guide.md#二进制发布包).
+The built-in graphics instructions, all 300 stickers, and their catalogs are also embedded in the main executable, with no separate download or import required. Configuration, databases, uploads, and custom resource packs remain external. GitHub binary releases contain both compiled programs, configuration examples, and license notices. The Linux x86_64 package requires glibc 2.39 or newer; see the [binary package instructions](docs/guide.md#二进制发布包).
 
 Configuration and `data/` keep their original repository paths; retain them and the deployment script. Logs are written to `runtime/service.log`. Required credentials and proxy environment settings are saved privately in `runtime/environment.json` with mode `0600`. The entire runtime directory is ignored by Git and should not be committed or shared.
 
@@ -217,7 +236,7 @@ nekochat/
 │   ├── core/        # Character, conversation tree, metrics, and generation parameter types
 │   ├── store/       # SQLite WAL, schema migrations, users, and conversation persistence
 │   ├── gateway/     # Streaming Chat Completions, Responses, and ChatGPT subscription adapters
-│   ├── resources/   # 322 bundled GIFs, custom resource validation, and sticker-tag parsing
+│   ├── resources/   # 300 bundled GIFs, custom resource validation, and sticker-tag parsing
 │   ├── server/      # Axum HTTP service, generation, SIWC OAuth, and search process management
 │   ├── mdwasm/      # pulldown-cmark block parsing and HTML rendering compiled to WebAssembly
 │   └── search/      # Standalone search binary, DeepSeek / GPT search, restricted reader, and usage
