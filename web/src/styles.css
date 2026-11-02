@@ -345,7 +345,7 @@ pre,
   overflow-y: auto;
   overscroll-behavior: contain;
   position: relative;
-  overflow-anchor: none;
+  overflow-anchor: auto;
 }
 
 .messages-sizer {
@@ -355,15 +355,14 @@ pre,
   margin: 0 auto;
 }
 
-.messages-window {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
+.messages-spacer {
+  pointer-events: none;
+  overflow-anchor: none;
 }
 
 .row {
   padding: 0 24px 28px;
+  contain: layout style paint;
   display: flow-root;
 }
 

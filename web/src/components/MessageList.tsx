@@ -5,17 +5,15 @@ import { copyText } from "../clipboard";
 import { toast } from "../ui";
 import { type LiveTurn, store } from "../store";
 import { AssistantMessage, LiveMessage, UserMessage } from "./Message";
+import { createMessageViewport, type MessageViewport } from "./messageViewport";
 
 type Item = { key: string; node: NodeView; turn?: undefined } | { key: string; node?: undefined; turn: LiveTurn };
-
-/** Distance from the bottom (px) still counted as "at the bottom". */
-const BOTTOM_SLACK = 32;
-/** A scroll this soon (ms) after wheel/touch/keys/scrollbar input is the user's. */
-const USER_SCROLL_WINDOW = 400;
 
 export function MessageList() {
   let scrollEl!: HTMLDivElement;
   let sizerEl!: HTMLDivElement;
+  const nativeAnchoring = CSS.supports("overflow-anchor", "auto");
+  let viewport: MessageViewport | undefined;
 
   const items = createMemo<Item[]>(() => {
     const list: Item[] = store.path().map((node) => ({ key: node.id, node }));
@@ -40,49 +38,23 @@ export function MessageList() {
     overscan: 4,
     paddingStart: 16,
     paddingEnd: 24,
+    // This virtualizer supplies ranges and measurements; the viewport owns all scroll writes.
+    scrollToFn: () => undefined,
+    onChange: () => viewport?.layoutChanged(),
   });
 
-  // Follow the bottom while content grows, until the user scrolls up.
-  let follow = true;
-  let lastUserInput = -Infinity;
-  let followFrame = 0;
-  const cancelFollow = () => { if (followFrame) cancelAnimationFrame(followFrame); followFrame = 0; };
-  const userInput = (event: WheelEvent | TouchEvent | PointerEvent | KeyboardEvent) => {
-    lastUserInput = performance.now();
-    const leavingBottom = event.type === "touchmove"
-      || (event instanceof WheelEvent && event.deltaY < 0)
-      || (event instanceof KeyboardEvent && (["ArrowUp", "PageUp", "Home"].includes(event.key) || (event.key === " " && event.shiftKey)));
-    if (leavingBottom) follow = false;
-    else if (scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= BOTTOM_SLACK) follow = true;
-    cancelFollow();
-  };
-  const toBottom = () => {
-    if (!follow || followFrame) return;
-    followFrame = requestAnimationFrame(() => {
-      followFrame = 0;
-      if (follow) scrollEl.scrollTop = scrollEl.scrollHeight;
-    });
-  };
-  const onScroll = () => {
-    const distance = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
-    if (distance <= BOTTOM_SLACK) follow = true;
-    else if (performance.now() - lastUserInput < USER_SCROLL_WINDOW) follow = false;
-  };
-
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
   onMount(() => {
-    const ro = new ResizeObserver(() => {
-      if (follow) toBottom();
-    });
-    ro.observe(sizerEl);
-    onCleanup(() => { ro.disconnect(); cancelFollow(); });
+    const active = createMessageViewport(scrollEl, sizerEl, nativeAnchoring);
+    viewport = active;
+    active.followLatest();
+    onCleanup(() => { viewport = undefined; active.dispose(); });
   });
 
-  // Only opening another conversation or explicitly starting a new turn resets reading position.
   const conversationId = createMemo(() => store.conv()?.id);
-  const startFollowing = () => { lastUserInput = -Infinity; follow = true; toBottom(); };
-  createEffect(on(conversationId, startFollowing));
+  createEffect(on(conversationId, () => viewport?.followLatest()));
   createEffect(on(store.currentLive, (turn) => {
-    if (turn && !turn.started() && !turn.assistantId()) startFollowing();
+    if (turn && !turn.started() && !turn.assistantId()) viewport?.followLatest();
   }));
 
   // Code block "复制" buttons come from worker HTML, so they are handled by delegation.
@@ -111,19 +83,14 @@ export function MessageList() {
     <div
       class="messages"
       ref={scrollEl}
-      onScroll={onScroll}
-      onWheel={userInput}
-      onTouchMove={userInput}
-      onTouchEnd={userInput}
-      onPointerDown={userInput}
-      onKeyDown={userInput}
+      style={{ "overflow-anchor": nativeAnchoring ? "auto" : "none" }}
       onClick={onClick}
     >
       <Show when={items().length === 0}>
         <div class="empty-hint" role="status">{store.loadingConv() ? "正在加载对话…" : "有什么想聊的？"}</div>
       </Show>
-      <div class="messages-sizer" ref={sizerEl} style={{ height: `${virtualizer.getTotalSize()}px` }}>
-        <div class="messages-window" style={{ transform: `translateY(${virtualizer.getVirtualItems()[0]?.start ?? 0}px)` }}>
+      <div class="messages-sizer" ref={sizerEl}>
+        <div class="messages-spacer" aria-hidden="true" style={{ height: `${virtualizer.getVirtualItems()[0]?.start ?? 0}px` }} />
         <For each={keys()}>
           {(key) => {
             const vi = createMemo(() => virtualizer.getVirtualItems().find((v) => v.key === key));
@@ -150,7 +117,7 @@ export function MessageList() {
             );
           }}
         </For>
-        </div>
+        <div class="messages-spacer" aria-hidden="true" style={{ height: `${Math.max(0, virtualizer.getTotalSize() - (virtualizer.getVirtualItems().at(-1)?.end ?? 0))}px` }} />
       </div>
     </div>
   );
