@@ -315,6 +315,24 @@ async fn send_streams_and_persists() {
 }
 
 #[tokio::test]
+async fn no_search_choices_are_last_in_terminal_and_persisted_reply() {
+    let choices = "```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"choices\",\"options\":[{\"label\":\"Continue\",\"prompt\":\"Continue please\"}]}]}\n```";
+    let original = format!("Intro.\n\n{choices}\n\nFinal prose.");
+    let f = fixture(deepseek_reply("", &original)).await;
+    let conv = f.create_conv().await;
+    let events = f.send(&conv, "Hello").await;
+    let terminal = &events.iter().find(|(name, _)| name == "done").unwrap().1["node"];
+    let content = terminal["content"].as_str().unwrap();
+    assert!(content.trim_end().ends_with(choices), "{content}");
+    assert!(content.find("Final prose.").unwrap() < content.find(choices).unwrap());
+    assert!(!content.contains("参考来源"));
+    let nodes = f.app.store.nodes(&conv).unwrap();
+    let stored = nodes.iter().find(|node| node.role == nekochat_store::NodeRole::Assistant).unwrap();
+    assert_eq!(stored.content, content);
+    assert_eq!(stored.id, terminal["id"].as_str().unwrap());
+}
+
+#[tokio::test]
 async fn upstream_request_carries_system_prompt_and_history_without_reasoning() {
     let f = fixture_with(
         deepseek_reply("REASONING-SECRET", "第一轮回复"),

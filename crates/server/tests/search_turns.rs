@@ -1,6 +1,6 @@
 mod common;
 
-use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 use std::time::Duration;
 use axum::{Json, Router, body::Body, extract::State, http::{HeaderMap, StatusCode}, response::{IntoResponse, Response}, routing::{get, post}};
 use common::{TestApp, TestCfg, PROVIDER_KEY, spawn_app};
@@ -30,6 +30,7 @@ struct Research {
     native: bool,
     invalid_read: bool,
     wait: bool,
+    empty: AtomicBool,
     model_calls: AtomicUsize,
     search_calls: AtomicUsize,
     cancel_calls: AtomicUsize,
@@ -78,17 +79,18 @@ async fn model(State(state): State<Arc<Research>>, Json(body): Json<Value>) -> R
             body["messages"].as_array().and_then(|messages| messages.iter().find(|item| item["role"] == "tool" && item["tool_call_id"] == "lookup-1")).and_then(|item| item["content"].as_str())
         };
         let Some(evidence) = evidence.and_then(|text| serde_json::from_str::<Value>(text).ok()) else { return StatusCode::BAD_REQUEST.into_response(); };
-        if evidence["sources"][0]["url"] != "https://sqlite.org/wal.html" || evidence["sources"][0]["source_id"] != "1" {
+        if !state.empty.load(Ordering::SeqCst) && (evidence["sources"][0]["url"] != "https://sqlite.org/wal.html" || evidence["sources"][0]["source_id"] != "1") {
             return StatusCode::BAD_REQUEST.into_response();
         }
+        let answer = if state.empty.load(Ordering::SeqCst) { format!("{CHOICES}\n\nFinal prose without evidence.") } else { model_answer() };
         if state.native {
             sse(vec![
-                json!({"type":"response.output_text.delta","delta":model_answer()}),
+                json!({"type":"response.output_text.delta","delta":answer}),
                 json!({"type":"response.completed","response":{"usage":{"input_tokens":20,"input_tokens_details":{"cached_tokens":5},"output_tokens":6}}}),
             ], false)
         } else {
             sse(vec![
-                json!({"choices":[{"delta":{"content":model_answer()}}]}),
+                json!({"choices":[{"delta":{"content":answer}}]}),
                 json!({"choices":[],"usage":{"prompt_tokens":20,"prompt_tokens_details":{"cached_tokens":5},"completion_tokens":6}}),
             ], true)
         }
@@ -114,6 +116,7 @@ async fn search(State(state): State<Arc<Research>>, headers: HeaderMap, Json(bod
         }
     }
     let sources: Vec<_> = (1..=10).map(|index| json!({"id":format!("provider-source-{index}"),"title":format!("Source {index}"),"url":if index == 1 { "https://sqlite.org/wal.html".to_owned() } else { format!("https://sqlite.org/source-{index}.html") },"snippet":"Only one writer at a time.","summary":null,"content":"Readers and a writer may proceed concurrently.","published_at":null})).collect();
+    let sources = if state.empty.load(Ordering::SeqCst) { Vec::new() } else { sources };
     Ok(Json(json!({"query":"SQLite WAL","sources":sources,"summary":null,"retrieved_at_ms":1,"usage":{"requests":1,"cached_in":0,"uncached_in":0,"output":0,"reasoning":0,"cost":{"currency":"CNY","amount":0.005}}})))
 }
 
@@ -127,7 +130,7 @@ async fn cancel(State(state): State<Arc<Research>>, headers: HeaderMap, Json(bod
 }
 
 async fn rig(native: bool, invalid_read: bool, wait: bool) -> (TestApp, String, String, Arc<Research>, tokio::task::JoinHandle<()>) {
-    let state = Arc::new(Research { native, invalid_read, wait, model_calls: AtomicUsize::new(0), search_calls: AtomicUsize::new(0), cancel_calls: AtomicUsize::new(0), started: Notify::new(), release: Notify::new(), cancellation: CancellationToken::new() });
+    let state = Arc::new(Research { native, invalid_read, wait, empty: AtomicBool::new(false), model_calls: AtomicUsize::new(0), search_calls: AtomicUsize::new(0), cancel_calls: AtomicUsize::new(0), started: Notify::new(), release: Notify::new(), cancellation: CancellationToken::new() });
     let router = Router::new().route("/chat/completions", post(model)).route("/responses", post(model))
         .route("/v1/services", get(services)).route("/v1/search", post(search)).route("/v1/cancel", post(cancel)).with_state(state.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -141,6 +144,29 @@ async fn rig(native: bool, invalid_read: bool, wait: bool) -> (TestApp, String, 
     let role = app.store.create_character(&serde_json::from_value(json!({"name":"research","display_name":"Research","model_id":model.id,"system_prompt":"PRIVATE ROLE INSTRUCTIONS","search_service_id":SERVICE})).unwrap()).unwrap();
     let conv = app.store.create_owned_conversation(&app.user_id, Some(&role.id)).unwrap();
     (app, conv.id, role.id, state, task)
+}
+
+#[tokio::test]
+async fn authorized_search_without_results_still_finalizes_choices_without_a_footer() {
+    for native in [false, true] {
+        let (app, conv, role, state, task) = rig(native, false, false).await;
+        state.empty.store(true, Ordering::SeqCst);
+        let response = app.client.post(app.url(&format!("/api/conversations/{conv}/turns")))
+            .json(&json!({"action":"send","content":"public question","character_id":role})).send().await.unwrap();
+        let stream = response.text().await.unwrap();
+        let terminal: Value = stream.split("\n\n").find_map(|event| {
+            if !event.lines().any(|line| line == "event: done") { return None; }
+            event.lines().find_map(|line| line.strip_prefix("data: ")).map(|data| serde_json::from_str(data).unwrap())
+        }).expect("terminal node");
+        let nodes = app.store.nodes(&conv).unwrap();
+        let stored = nodes.iter().find(|node| node.role == nekochat_store::NodeRole::Assistant).unwrap();
+        assert_eq!(terminal["node"]["content"], stored.content);
+        assert!(stored.content.trim_end().ends_with(CHOICES), "{}", stored.content);
+        assert!(stored.content.find("Final prose without evidence.").unwrap() < stored.content.find(CHOICES).unwrap());
+        assert!(!stored.content.contains("参考来源"));
+        assert_eq!(state.search_calls.load(Ordering::SeqCst), 1);
+        task.abort();
+    }
 }
 
 #[tokio::test]

@@ -743,9 +743,7 @@ impl Turn {
         let discard = generation.discarded() || matches!(&end, End::Deleted);
         let status = end.status().unwrap_or(NodeStatus::Interrupted);
         if !discard {
-            if let Some(search) = &self.search {
-                generation.finalize_content(|content| search.finalize_content(content));
-            }
+            generation.finalize_content(|content| crate::chat_search::finalize_reply(content, self.search.as_ref()));
         }
         if let End::Failed(error) = &end {
             let (kind, http_status) = match error {

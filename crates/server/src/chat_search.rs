@@ -254,9 +254,6 @@ impl SearchTurn {
             .map_err(|_| protocol("无法整理搜索资料"))
     }
 
-    pub fn finalize_content(&self, content: &mut String) {
-        finalize_sources(content, &self.sources);
-    }
 }
 
 #[derive(PartialEq)]
@@ -268,12 +265,17 @@ struct ReplyBlock {
 }
 
 /// Runs once after resource filtering, before the node becomes immutable for persistence.
-fn finalize_sources(content: &mut String, sources: &[SourceRef]) {
-    if sources.is_empty() { return; }
+pub(crate) fn finalize_reply(content: &mut String, search: Option<&SearchTurn>) {
+    finalize_reply_sources(content, search.map_or(&[], |search| search.sources.as_slice()));
+}
+
+fn finalize_reply_sources(content: &mut String, sources: &[SourceRef]) {
+    if sources.is_empty() && !content.contains("neko-ui") { return; }
     let mut blocks = Vec::new();
     let mut parser = Parser::new(content).into_offset_iter();
     let mut events = Vec::new();
     let mut trailing_fence = None;
+    let mut trailing_html = None;
     while let Some((event, mut range)) = parser.next() {
         events.clear();
         let mut depth = usize::from(matches!(&event, Event::Start(_)));
@@ -295,6 +297,29 @@ fn finalize_sources(content: &mut String, sources: &[SourceRef]) {
                 }
             }
         }
+        if matches!(events.first(), Some(Event::Start(Tag::HtmlBlock))) {
+            let html = content[range.clone()].trim_start();
+            // Mirror pulldown-cmark's HTML block types 1–5. Types 6–7 end at
+            // the blank line already inserted before appended Markdown.
+            trailing_html = [("<!--", "-->"), ("<?", "?>"), ("<![CDATA[", "]]>")]
+                .into_iter().find_map(|(opening, closing)| (html.starts_with(opening) && !html.contains(closing)).then_some(closing));
+            if html.as_bytes().get(2).is_some_and(u8::is_ascii_alphabetic)
+                && html.starts_with("<!") && !html.contains('>') {
+                trailing_html = Some(">");
+            }
+            // Pinned pulldown-cmark recognizes openings case-insensitively but
+            // searches original HTML for these literal lowercase closing tags.
+            let lowercase = html.to_ascii_lowercase();
+            for (tag, closing) in [("script", "</script>"), ("pre", "</pre>"), ("style", "</style>"), ("textarea", "</textarea>")] {
+                if lowercase.strip_prefix('<').and_then(|html| html.strip_prefix(tag))
+                    .is_some_and(|rest| rest.is_empty() || rest.as_bytes().first().is_some_and(|byte| byte.is_ascii_whitespace() || *byte == b'>'))
+                    && !html.contains(closing) {
+                    trailing_html = Some(closing);
+                }
+            }
+        } else {
+            trailing_html = None;
+        }
         let kind = if bibliography_heading(&events) { ReplyBlockKind::Heading }
             else if bibliography_entry(&events, sources) { ReplyBlockKind::Entry }
             else if matches!(events.first(), Some(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info)))) if info.as_ref() == "neko-ui")
@@ -304,6 +329,14 @@ fn finalize_sources(content: &mut String, sources: &[SourceRef]) {
     }
     drop(parser);
     drop(events);
+    // With no evidence, leave already-final replies (including unfinished code) untouched.
+    if sources.is_empty() {
+        let needs_move = blocks.iter().enumerate().any(|(index, block)| {
+            block.kind == ReplyBlockKind::Choices
+                && blocks[index + 1..].iter().any(|later| later.kind != ReplyBlockKind::Choices)
+        });
+        if !needs_move { return; }
+    }
     let mut remove = vec![false; blocks.len()];
     for (index, block) in blocks.iter().enumerate() {
         if block.kind != ReplyBlockKind::Heading { continue; }
@@ -328,18 +361,24 @@ fn finalize_sources(content: &mut String, sources: &[SourceRef]) {
         if !result.ends_with('\n') { result.push('\n'); }
         for _ in 0..width { result.push(char::from(marker)); }
     }
-    result.push_str("\n\n---\n\n**参考来源**\n\n");
-    for source in sources {
-        result.push('['); result.push_str(&source.id); result.push_str("] [");
-        let title = if source.title.trim().is_empty() { &source.url } else { &source.title };
-        for character in title.chars() {
-            match character {
-                '\\' | '[' | ']' | '*' | '_' | '`' => { result.push('\\'); result.push(character); },
-                '\r' | '\n' => result.push(' '),
-                _ => result.push(character),
+    if let Some(closing) = trailing_html {
+        if !result.ends_with('\n') { result.push('\n'); }
+        result.push_str(closing);
+    }
+    if !sources.is_empty() {
+        result.push_str("\n\n---\n\n**参考来源**\n\n");
+        for source in sources {
+            result.push('['); result.push_str(&source.id); result.push_str("] [");
+            let title = if source.title.trim().is_empty() { &source.url } else { &source.title };
+            for character in title.chars() {
+                match character {
+                    '\\' | '[' | ']' | '*' | '_' | '`' => { result.push('\\'); result.push(character); },
+                    '\r' | '\n' => result.push(' '),
+                    _ => result.push(character),
+                }
             }
+            result.push_str("](<"); result.push_str(&source.url); result.push_str(">)\n");
         }
-        result.push_str("](<"); result.push_str(&source.url); result.push_str(">)\n");
     }
     for block in &blocks {
         if block.kind == ReplyBlockKind::Choices {
@@ -443,7 +482,7 @@ mod tests {
 
     fn finish_reply(text: &str) -> String {
         let mut content = text.to_owned();
-        finalize_sources(&mut content, &[SourceRef { id: "1".into(), title: "Canonical source".into(), url: "https://example.com/source".into() }]);
+        finalize_reply_sources(&mut content, &[SourceRef { id: "1".into(), title: "Canonical source".into(), url: "https://example.com/source".into() }]);
         content
     }
 
@@ -559,7 +598,7 @@ mod tests {
         let url = "https://example.com/actual-source";
         for title in ["", " \n\t"] {
             let mut content = "Answer.[1]".to_owned();
-            finalize_sources(&mut content, &[SourceRef { id: "1".into(), title: title.into(), url: url.into() }]);
+            finalize_reply_sources(&mut content, &[SourceRef { id: "1".into(), title: title.into(), url: url.into() }]);
             let mut html = String::new();
             pulldown_cmark::html::push_html(&mut html, Parser::new(&content));
             assert!(html.contains(&format!("<a href=\"{url}\">{url}</a>")), "{html}");
@@ -571,8 +610,105 @@ mod tests {
     fn replies_without_actual_search_sources_remain_unchanged() {
         let original = "**参考来源**\n\n[1] [Author](https://example.com/source)\n\n```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"choices\",\"options\":[{\"label\":\"A\",\"prompt\":\"B\"}]}]}\n```";
         let mut content = original.to_owned();
-        finalize_sources(&mut content, &[]);
+        finalize_reply_sources(&mut content, &[]);
         assert_eq!(content, original);
+    }
+
+    #[test]
+    fn mixed_graphics_keep_exact_content_and_position_with_or_without_sources() {
+        let choices = "```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"choices\",\"options\":[{\"label\":\"A\",\"prompt\":\"B\"}]}]}\n```";
+        let mixed = "```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"card\",\"items\":[{\"type\":\"text\",\"content\":\"Before\"},{\"type\":\"choices\",\"options\":[{\"label\":\"Mixed\",\"prompt\":\"Keep\"}]},{\"type\":\"chart\",\"kind\":\"bar\",\"labels\":[\"A\"],\"series\":[{\"label\":\"Count\",\"values\":[1]}]}]}]}\n```";
+        assert!(nekochat_core::graphics::validate_complete_graphic_json(mixed.split_once('\n').unwrap().1.rsplit_once('\n').unwrap().0).is_ok());
+        let fixed = format!("Before mixed.\n\n{mixed}\n\nAfter mixed.");
+        let original = format!("{choices}\n\n{fixed}\n\nFinal prose.");
+        for with_sources in [false, true] {
+            let mut output = original.clone();
+            if with_sources { output = finish_reply(&output); } else { finalize_reply(&mut output, None); }
+            assert!(output.contains(&fixed), "{output}");
+            assert_eq!(output.matches(mixed).count(), 1);
+            assert!(output.find("After mixed.").unwrap() < output.find("Final prose.").unwrap());
+            assert!(output.trim_end().ends_with(choices));
+            assert_eq!(output.contains("**参考来源**"), with_sources);
+        }
+    }
+
+    #[test]
+    fn safe_html_blocks_keep_their_original_bytes_without_extra_terminators() {
+        let choices = "```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"choices\",\"options\":[{\"label\":\"A\",\"prompt\":\"B\"}]}]}\n```";
+        for (safe, terminator) in [
+            ("<!-- safe -->", "-->"), ("<?safe?>", "?>"), ("<![CDATA[safe]]>", "]]>"),
+            ("<!DOCTYPE html>", ">"), ("<SCRIPT>safe</script>", "</script>"),
+            ("<pre>safe</pre>", "</pre>"), ("<style>safe</style>", "</style>"),
+            ("<textarea>safe</textarea>", "</textarea>"), ("<scripture>safe</scripture>", "</scripture>"),
+        ] {
+            for with_sources in [false, true] {
+                let mut content = format!("{choices}\n\n{safe}");
+                if with_sources { content = finish_reply(&content); } else { finalize_reply(&mut content, None); }
+                assert!(content.contains(safe), "{content}");
+                // Footer link destinations introduce '>', so count declarations only without sources.
+                if terminator != ">" || !with_sources {
+                    assert_eq!(content.matches(terminator).count(), 1, "{content}");
+                }
+                let mut html = String::new();
+                pulldown_cmark::html::push_html(&mut html, Parser::new(&content));
+                assert_eq!(html.matches("class=\"language-neko-ui\"").count(), 1, "{html}");
+            }
+        }
+    }
+
+    #[test]
+    fn moved_choices_render_outside_all_unfinished_html_block_classes() {
+        let choices = "```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"choices\",\"options\":[{\"label\":\"A\",\"prompt\":\"B\"}]}]}\n```";
+        for ending in [
+            "Final prose.", "~~~python\nprint(1)", "<!-- raw comment", "<?processing",
+            "<![CDATA[raw", "<!DOCTYPE html", "<!declaration", "<script>raw script",
+            "<script", "<pre", "<style", "<textarea", "<SCRIPT", "<PrE\t",
+            "<SCRIPT>safe</SCRIPT>", "<PRE>safe</PRE>", "<STYLE>safe</STYLE>", "<TEXTAREA>safe</TEXTAREA>",
+            "<div>raw HTML", "<custom-tag>raw HTML",
+        ] {
+            for with_sources in [false, true] {
+                let original = format!("{choices}\n\n{ending}");
+                let mut content = original.clone();
+                if with_sources { content = finish_reply(&content); } else { finalize_reply(&mut content, None); }
+                assert!(content.contains(ending), "{content}");
+                assert_eq!(content.contains("参考来源"), with_sources);
+                assert!(content.trim_end().ends_with(choices));
+                let mut html = String::new();
+                pulldown_cmark::html::push_html(&mut html, Parser::new(&content));
+                assert_eq!(html.matches("class=\"language-neko-ui\"").count(), 1, "{ending}: {html}");
+                if with_sources {
+                    assert!(html.contains("<strong>参考来源</strong>"), "{ending}: {html}");
+                }
+            }
+        }
+        for original in ["Plain reply.", "```python\nunfinished", "<!-- raw", "<script>raw", choices] {
+            let mut content = original.to_owned();
+            finalize_reply(&mut content, None);
+            assert_eq!(content, original);
+        }
+    }
+
+    #[test]
+    fn no_source_relocation_preserves_order_and_protected_examples() {
+        let first = "```neko-ui\n{\"version\":1,\"items\":[{\"type\":\"choices\",\"options\":[{\"label\":\"First\",\"prompt\":\"First please\"}]}]}\n```";
+        let second = first.replace("First", "Second");
+        let mut content = format!("{first}\n\nMiddle.\n\n{second}\n\nLast prose.");
+        finalize_reply(&mut content, None);
+        assert!(content.find("Last prose.").unwrap() < content.find(first).unwrap());
+        assert!(content.find(first).unwrap() < content.find(&second).unwrap());
+        assert!(content.trim_end().ends_with(&second));
+        for protected in [
+            format!("````markdown\n{first}\n````"),
+            first.lines().map(|line| format!("> {line}\n")).collect::<String>(),
+            format!("<pre>\n{first}\n</pre>"),
+            format!("<!--\n{first}\n-->"),
+            first.strip_suffix("\n```").unwrap().to_owned(),
+        ] {
+            let original = format!("{protected}\n\nFinal prose.");
+            let mut output = original.clone();
+            finalize_reply(&mut output, None);
+            assert_eq!(output, original);
+        }
     }
 
     #[test]

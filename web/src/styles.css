@@ -708,6 +708,13 @@ pre,
   color: var(--nk-text);
 }
 
+/* Keep leading outside KaTeX's struts so tall inline formulas and fallback
+   glyphs expand the line box with room between neighboring lines. */
+.nk-math[data-display="0"] > .katex > .katex-html > .katex-base {
+  line-height: 1;
+  margin-block: 0.25em;
+}
+
 div.nk-math {
   overflow-x: auto;
   overflow-y: hidden;
