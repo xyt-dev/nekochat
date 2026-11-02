@@ -12,8 +12,17 @@ export function App(props: { offline?: boolean }) {
   onMount(() => {
     if (props.offline) return;
     const expired = () => store.resetSession();
+    const resume = () => { if (document.visibilityState === "visible") void store.resumeActiveTurn(); };
     window.addEventListener("account-expired", expired);
-    onCleanup(() => window.removeEventListener("account-expired", expired));
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
+    onCleanup(() => {
+      window.removeEventListener("account-expired", expired);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
+    });
     void store.bootstrapSession();
   });
   createEffect(on(() => store.user()?.id, (id) => {

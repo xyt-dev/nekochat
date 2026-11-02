@@ -136,6 +136,7 @@ In `crates/server/src/generation.rs`, an independent server-side Tokio task owns
 
 - **Slow observers do not backpressure the upstream stream.** Bounded observation buffers let slow or disconnected clients resynchronize without holding up upstream model reads or other observers.
 - **Reconnect to a snapshot instead of restarting inference.** After a refresh or a device switch, `GET /api/conversations/{id}/turns` subscribes to the existing generation. The server sends its current `snapshot`, followed by incremental updates, without issuing another model request.
+- **Resume mobile replies automatically.** Returning to the page, restoring it from the page cache, or regaining connectivity reattaches observation of the current reply. Completed replies are fetched in full; running replies resume from a current snapshot. Drafts and message state stay intact, so graphics and source do not need a manual refresh.
 - **Aggregate streamed text in memory.** Text and reasoning fragments accumulate in the generation state. Generation startup and terminal states—completion, interruption, or failure—are persisted to SQLite, rather than writing every token separately.
 
 ### 3. 🖼️ Shared image buffers and streaming sticker parsing

@@ -609,8 +609,8 @@ function createAppStore() {
     });
   }
 
-  function attached(turn: LiveTurn, epoch: number): boolean {
-    return epoch === sessionEpoch && !turn.observer.signal.aborted && live()[turn.convId] === turn;
+  function attached(turn: LiveTurn, epoch: number, observer: AbortController): boolean {
+    return epoch === sessionEpoch && !observer.signal.aborted && turn.observer === observer && live()[turn.convId] === turn;
   }
 
   function attachTurn(view: ConversationView) {
@@ -621,28 +621,39 @@ function createAppStore() {
     void watchTurn(turn, sessionEpoch);
   }
 
+  /** Resume HTTP observation only; core generation and the mounted message keep their identities. */
+  async function resumeActiveTurn(): Promise<void> {
+    const turn = currentLive();
+    if (!user() || loadingConv() || !turn?.started() || turn.error() !== null) return;
+    turn.observer.abort();
+    turn.observer = new AbortController();
+    turn.set.connectionState("reconnecting");
+    await watchTurn(turn, sessionEpoch);
+  }
+
   /** Observation retries are GET-only. They can never start a second model call. */
   async function watchTurn(turn: LiveTurn, epoch: number): Promise<void> {
-    while (attached(turn, epoch)) {
+    const observer = turn.observer;
+    while (attached(turn, epoch, observer)) {
       let settled = false;
       try {
-        await observeTurn(turn.convId, turn.observer.signal, (event) => {
-          if (!attached(turn, epoch)) return;
+        await observeTurn(turn.convId, observer.signal, (event) => {
+          if (!attached(turn, epoch, observer)) return;
           if (event.type === "done" || event.type === "error") settled = true;
           handleTurnEvent(turn, event);
         });
-        if (!attached(turn, epoch) || settled) break;
+        if (!attached(turn, epoch, observer) || settled) break;
         turn.set.connectionState("reconnecting");
         // The core may have finished between the history snapshot and the observation request.
         const view = await api.conversation(turn.convId);
-        if (!attached(turn, epoch)) break;
+        if (!attached(turn, epoch, observer)) break;
         setConv(view);
         if (!view.active_turn_id) {
           dropLive(turn);
           break;
         }
       } catch (error) {
-        if (!attached(turn, epoch)) break;
+        if (!attached(turn, epoch, observer)) break;
         turn.set.connectionState("reconnecting");
         if (error instanceof ApiError && error.status > 0) {
           dropLive(turn);
@@ -653,13 +664,13 @@ function createAppStore() {
           break;
         }
       }
-      if (attached(turn, epoch)) {
+      if (attached(turn, epoch, observer)) {
         const { promise, resolve } = Promise.withResolvers<void>();
         setTimeout(resolve, 1000);
         await promise;
       }
     }
-    if (epoch === sessionEpoch && !turn.observer.signal.aborted) void loadConversations();
+    if (epoch === sessionEpoch && !observer.signal.aborted) void loadConversations();
   }
 
   async function requestStop(turn: LiveTurn): Promise<void> {
@@ -705,17 +716,18 @@ function createAppStore() {
       return false;
     }
     const turn = createLiveTurn(c.id, action.action === "regenerate" ? action.node_id : null);
+    const observer = turn.observer;
     setLive((list) => ({ ...list, [turn.convId]: turn }));
     setEditing(null);
     let settled = false;
     try {
-      await postTurn(turn.convId, { ...action, character_id: selected.id }, turn.observer.signal, (event) => {
-        if (!attached(turn, epoch)) return;
+      await postTurn(turn.convId, { ...action, character_id: selected.id }, observer.signal, (event) => {
+        if (!attached(turn, epoch, observer)) return;
         if (event.type === "done" || event.type === "error") settled = true;
         handleTurnEvent(turn, event);
       });
     } catch (error) {
-      if (!attached(turn, epoch)) return true;
+      if (!attached(turn, epoch, observer)) return true;
       if (!turn.started() && error instanceof ApiError && error.status > 0) {
         dropLive(turn);
         toast(error.message);
@@ -725,7 +737,7 @@ function createAppStore() {
       if (!turn.started()) {
         try {
           const view = await api.conversation(turn.convId);
-          if (!attached(turn, epoch)) return true;
+          if (!attached(turn, epoch, observer)) return true;
           setConv(view);
           if (!view.active_turn_id) {
             dropLive(turn);
@@ -734,7 +746,7 @@ function createAppStore() {
           }
           turn.set.assistantId(view.active_turn_id);
         } catch {
-          if (attached(turn, epoch)) {
+          if (attached(turn, epoch, observer)) {
             dropLive(turn);
             toast("连接不可用，输入已保留");
           }
@@ -742,10 +754,10 @@ function createAppStore() {
         }
       }
     }
-    if (attached(turn, epoch) && !settled) {
+    if (attached(turn, epoch, observer) && !settled) {
       turn.set.connectionState("reconnecting");
       await watchTurn(turn, epoch);
-    } else if (epoch === sessionEpoch && !turn.observer.signal.aborted) {
+    } else if (epoch === sessionEpoch && !observer.signal.aborted) {
       void loadConversations();
     }
     return true;
@@ -795,6 +807,7 @@ function createAppStore() {
     moveLeaf,
     runTurn,
     stopTurn,
+    resumeActiveTurn,
     createLiveTurn,
     handleTurnEvent,
   };
