@@ -37,7 +37,7 @@ const server = Bun.serve({
     if (path.endsWith("/fixture")) {
       historyRequested.resolve();
       await historyGate;
-      return Response.json({ id: "fixture", title: "test", character_id: null, leaf_id: complete.id, nodes: [parent, complete], active_turn_id: null });
+      return Response.json({ id: "fixture", title: "test", character_id: null, leaf_id: active ? parent.id : complete.id, nodes: active ? [parent] : [parent, complete], active_turn_id: active ? complete.id : null });
     }
     return Response.json([]);
   },

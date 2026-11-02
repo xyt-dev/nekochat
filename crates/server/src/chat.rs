@@ -335,13 +335,15 @@ pub async fn start_turn(
         )
         .map_err(|_| ApiError::bad_request("角色资源包不可用"))?;
     let store = state.store.clone();
-    let (prepared, character) = blocking(move || {
+    let (prepared, character, actor_user_id) = blocking(move || {
         store.set_user_preferences(&actor_user_id, Some(&character.id), Some(&conv.id))?;
         let prepared = prepare(&store, conv, anchor, &character, &prompt, user_node_id)?;
-        Ok((prepared, character))
+        Ok((prepared, character, actor_user_id))
     })
     .await?;
     let turn = Turn {
+        account_events: state.account_events,
+        owner_user_id: actor_user_id,
         label: model_label(&model.spec.display_name, &provider.label),
         store: state.store,
         http: state.http,
@@ -694,6 +696,8 @@ impl End {
 }
 
 struct Turn {
+    account_events: crate::account_events::AccountEvents,
+    owner_user_id: String,
     store: Arc<Store>,
     http: reqwest::Client,
     provider: Provider,
@@ -739,6 +743,7 @@ impl Turn {
             },
             start,
         );
+        self.account_events.publish(&self.owner_user_id, &self.prepared.conv_id);
         let end = self.stream(generation).await;
         let discard = generation.discarded() || matches!(&end, End::Deleted);
         let status = end.status().unwrap_or(NodeStatus::Interrupted);
@@ -809,7 +814,10 @@ impl Turn {
             End::Deleted => return,
         };
         generation.finish(terminal);
-        // The guard stays claimed through persistence and publication of the terminal event.
+        // Turn observers see their terminal while claimed; account reconciliation sees the
+        // persisted reply only once the active generation has been removed.
+        drop(guard);
+        self.account_events.publish(&self.owner_user_id, &self.prepared.conv_id);
     }
 
     async fn stream(&mut self, generation: &Generation) -> End {

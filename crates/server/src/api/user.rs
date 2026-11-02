@@ -126,7 +126,11 @@ pub async fn create_conversation(
         .filter(|id| available.characters.iter().any(|c| &c.id == id))
         .ok_or_else(|| ApiError::bad_request("没有可用角色，请管理员配置并绑定已上架模型"))?;
     let store = state.store.clone();
-    let conv = blocking(move || store.create_owned_conversation(&user.id, Some(&id))).await?;
+    let (conv, owner) = blocking(move || {
+        let conv = store.create_owned_conversation(&user.id, Some(&id))?;
+        Ok((conv, user.id))
+    }).await?;
+    state.account_events.publish(&owner, &conv.id);
     Ok((StatusCode::CREATED, Json(conv.into())))
 }
 /// Token counts as the client sees them; cost fields stay admin-only.
@@ -264,9 +268,14 @@ pub async fn delete_conversation(
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     require_conversation(&state, &user, &id).await?;
-    let _deletion = state.begin_deletion(&id);
+    let deletion = state.begin_deletion(&id);
     let store = state.store.clone();
-    blocking(move || store.delete_conversation(&id)).await?;
+    let id = blocking(move || {
+        store.delete_conversation(&id)?;
+        Ok(id)
+    }).await?;
+    drop(deletion);
+    state.account_events.publish(&user.id, &id);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -277,11 +286,16 @@ pub async fn clear_conversation(
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     require_conversation(&state, &user, &id).await?;
-    let (_guard, _) = state
+    let (guard, _) = state
         .begin_turn(&id)
         .ok_or_else(|| ApiError::new(StatusCode::CONFLICT, "请先停止生成，再清空对话"))?;
     let store = state.store.clone();
-    blocking(move || store.clear_conversation(&id)).await?;
+    let id = blocking(move || {
+        store.clear_conversation(&id)?;
+        Ok(id)
+    }).await?;
+    drop(guard);
+    state.account_events.publish(&user.id, &id);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -309,15 +323,16 @@ pub async fn set_leaf(
         return Err(ApiError::new(StatusCode::CONFLICT, "该对话正在生成回复"));
     }
     let store = state.store.clone();
-    let leaf_id = blocking(move || {
+    let (id, leaf_id) = blocking(move || {
         let leaf = if req.descend {
             store.newest_leaf_under(&id, &req.node_id)?
         } else {
             req.node_id
         };
         store.set_leaf(&id, Some(&leaf))?;
-        Ok(leaf)
+        Ok((id, leaf))
     })
     .await?;
+    state.account_events.publish(&user.id, &id);
     Ok(Json(LeafView { leaf_id }))
 }

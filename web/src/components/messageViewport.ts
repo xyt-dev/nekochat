@@ -6,8 +6,21 @@ export interface MessageViewport {
   dispose(): void;
 }
 
-/** Owns scroll writes; the virtualizer supplies ranges, never estimated-height corrections. */
-export function createMessageViewport(scroll: HTMLElement, content: HTMLElement, nativeAnchoring = true): MessageViewport {
+/** Layout coordinates never mix WebKit compositor scroll with stale rectangles. */
+export function messageAboveViewport(scroll: HTMLElement, element: Element): boolean {
+  let top = 0;
+  let node: HTMLElement | null = element as HTMLElement;
+  const height = node.offsetHeight;
+  while (node && node !== scroll) {
+    top += node.offsetTop;
+    node = node.offsetParent as HTMLElement | null;
+    if (node && node !== scroll) top += node.clientTop;
+  }
+  return node === scroll && top + height <= scroll.scrollTop;
+}
+
+/** User intent only. TanStack owns measurement corrections, gesture holds and writes. */
+export function createMessageViewport(scroll: HTMLElement, content: HTMLElement, scrollToLatest: () => void, cancelScroll: () => void): MessageViewport {
   const view = scroll.ownerDocument.defaultView!;
   let following = true;
   let frame = 0;
@@ -15,74 +28,73 @@ export function createMessageViewport(scroll: HTMLElement, content: HTMLElement,
   let dragging = false;
   let pointerTop = 0;
   let pointerFollowing = false;
+  let touching = false;
   let touchY: number | undefined;
+  let scrolling = false;
+  let inGesture = false;
+  let settleTimer = 0;
   let lastTop = scroll.scrollTop;
-  let ownTop: number | undefined;
-  let anchor: { element: Element; contentTop: number } | undefined;
 
-  function captureAnchor(): void {
-    if (nativeAnchoring) return;
-    const box = scroll.getBoundingClientRect();
-    const hit = scroll.ownerDocument.elementFromPoint(box.left + scroll.clientWidth / 2, box.top + scroll.clientTop + Math.min(16, scroll.clientHeight / 2));
-    const element = hit?.closest(".md-block, .bubble, .reasoning, .row");
-    anchor = element && content.contains(element)
-      ? { element, contentTop: element.getBoundingClientRect().top - box.top - scroll.clientTop + scroll.scrollTop }
-      : undefined;
-  }
-
+  function maxTop(): number { return Math.max(0, scroll.scrollHeight - scroll.clientHeight); }
+  function outsideEdges(): boolean { return scroll.scrollTop < -0.5 || scroll.scrollTop > maxTop() + 0.5; }
+  function atBottom(): boolean { return !outsideEdges() && maxTop() - scroll.scrollTop <= BOTTOM_SLACK; }
   function cancelFrame(): void {
     if (frame) view.cancelAnimationFrame(frame);
     frame = 0;
   }
-  function beginReading(): void {
-    following = false;
-    cancelFrame();
-    captureAnchor();
-  }
-  function writeTop(top: number): void {
-    if (Math.abs(top - scroll.scrollTop) <= 0.5) return;
-    scroll.scrollTop = top;
-    lastTop = ownTop = scroll.scrollTop;
-  }
+  function beginReading(): void { following = false; cancelFrame(); cancelScroll(); }
   function layoutChanged(): void {
-    if (!following && !nativeAnchoring) {
-      if (anchor?.element.isConnected && content.contains(anchor.element)) {
-        const top = anchor.element.getBoundingClientRect().top - scroll.getBoundingClientRect().top - scroll.clientTop + scroll.scrollTop;
-        const delta = top - anchor.contentTop;
-        anchor.contentTop = top;
-        if (Math.abs(delta) > 0.5) writeTop(scroll.scrollTop + delta);
-      } else captureAnchor();
-      return;
-    }
-    if (!following || frame) return;
+    if (!following || inGesture || outsideEdges() || frame) return;
     frame = view.requestAnimationFrame(() => {
       frame = 0;
-      if (following) writeTop(Math.max(0, scroll.scrollHeight - scroll.clientHeight));
+      if (following && !inGesture && !outsideEdges() && maxTop() - scroll.scrollTop > 0.5) scrollToLatest();
     });
   }
   function followLatest(): void {
     intent = 0;
     following = true;
-    anchor = undefined;
     layoutChanged();
   }
+  function clearSettleTimer(): void {
+    if (settleTimer) view.clearTimeout(settleTimer);
+    settleTimer = 0;
+  }
+  function settle(): void {
+    if (touching || outsideEdges()) return;
+    clearSettleTimer();
+    inGesture = false;
+    scrolling = false;
+    if (!following && intent > 0 && atBottom()) following = true;
+    layoutChanged();
+  }
+  function awaitSettle(): void {
+    clearSettleTimer();
+    if (touching || Reflect.has(scroll, "onscrollend")) return;
+    // Old WebKit lacks scrollend. Match TanStack's quiet-window convention,
+    // then confirm the physical offset stopped; this never decides intent.
+    const top = scroll.scrollTop;
+    settleTimer = view.setTimeout(() => {
+      settleTimer = 0;
+      if (Math.abs(scroll.scrollTop - top) > 0.5 || outsideEdges()) awaitSettle();
+      else settle();
+    }, 150);
+  }
+  function onScrollEnd(): void { scrolling = false; settle(); }
   function onScroll(): void {
     const top = scroll.scrollTop;
     const delta = top - lastTop;
     lastTop = top;
-    if (ownTop !== undefined && Math.abs(top - ownTop) <= 0.5) { ownTop = undefined; return; }
-    ownTop = undefined;
+    if (inGesture && Math.abs(delta) > 0.5) scrolling = true;
+    if (outsideEdges()) { cancelFrame(); return; }
     if (dragging && Math.abs(delta) > 0.5) intent = Math.sign(delta);
-    const atBottom = scroll.scrollHeight - top - scroll.clientHeight <= BOTTOM_SLACK;
-    if (intent < 0 && delta < -0.5 && !atBottom) following = false;
-    if (intent > 0 && atBottom) followLatest();
-    else if (!following) captureAnchor();
+    if (intent < 0 && delta < -0.5) beginReading();
+    if (inGesture) awaitSettle();
+    else if (!following && intent > 0 && atBottom()) { following = true; layoutChanged(); }
   }
   function onWheel(event: WheelEvent): void {
     if (!event.deltaY) return;
     intent = Math.sign(event.deltaY);
     if (intent < 0) beginReading();
-    else if (scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= BOTTOM_SLACK) followLatest();
   }
   function onKey(event: KeyboardEvent): void {
     switch (event.key) {
@@ -94,7 +106,12 @@ export function createMessageViewport(scroll: HTMLElement, content: HTMLElement,
     if (intent < 0) beginReading();
   }
   function onTouchStart(event: TouchEvent): void {
+    clearSettleTimer();
+    touching = inGesture = true;
+    scrolling = false;
     touchY = event.touches[0]?.clientY;
+    cancelFrame();
+    cancelScroll();
   }
   function onTouchMove(event: TouchEvent): void {
     const y = event.touches[0]?.clientY;
@@ -107,14 +124,16 @@ export function createMessageViewport(scroll: HTMLElement, content: HTMLElement,
   }
   function onTouchEnd(): void {
     touchY = undefined;
-    if (intent > 0 && scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= BOTTOM_SLACK) followLatest();
+    touching = false;
+    awaitSettle();
+    if (!scrolling) settle();
   }
   function onPointerDown(event: PointerEvent): void {
+    if (event.pointerType === "touch") return;
     dragging = true;
     lastTop = scroll.scrollTop;
     pointerTop = scroll.scrollTop;
     pointerFollowing = following;
-    // Cancel pending following before a scrollbar drag can generate its first scroll event.
     const box = scroll.getBoundingClientRect();
     const gutter = scroll.offsetWidth - scroll.clientWidth;
     if (event.target === scroll && (event.clientX >= box.right - gutter || event.clientX <= box.left + scroll.clientLeft)) beginReading();
@@ -123,16 +142,19 @@ export function createMessageViewport(scroll: HTMLElement, content: HTMLElement,
     if (dragging && pointerFollowing && Math.abs(scroll.scrollTop - pointerTop) <= 0.5) followLatest();
     dragging = false;
   }
+  function onPointerCancel(): void { dragging = false; }
 
-  // User intent is processed before the passive virtualizer handles the same scroll event.
   scroll.addEventListener("scroll", onScroll, { capture: true, passive: true });
+  scroll.addEventListener("scrollend", onScrollEnd, { passive: true });
   scroll.addEventListener("wheel", onWheel, { passive: true });
   scroll.addEventListener("keydown", onKey);
-  scroll.addEventListener("touchstart", onTouchStart, { passive: true });
-  scroll.addEventListener("touchmove", onTouchMove, { passive: true });
-  scroll.addEventListener("touchend", onTouchEnd, { passive: true });
+  scroll.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+  scroll.addEventListener("touchmove", onTouchMove, { capture: true, passive: true });
+  scroll.addEventListener("touchend", onTouchEnd, { capture: true, passive: true });
+  scroll.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: true });
   scroll.addEventListener("pointerdown", onPointerDown);
   view.addEventListener("pointerup", onPointerUp);
+  view.addEventListener("pointercancel", onPointerCancel);
   const observer = new ResizeObserver(layoutChanged);
   observer.observe(content);
   observer.observe(scroll);
@@ -142,16 +164,19 @@ export function createMessageViewport(scroll: HTMLElement, content: HTMLElement,
     layoutChanged,
     dispose() {
       cancelFrame();
+      clearSettleTimer();
       observer.disconnect();
       scroll.removeEventListener("scroll", onScroll, true);
+      scroll.removeEventListener("scrollend", onScrollEnd);
       scroll.removeEventListener("wheel", onWheel);
       scroll.removeEventListener("keydown", onKey);
-      scroll.removeEventListener("touchstart", onTouchStart);
-      scroll.removeEventListener("touchmove", onTouchMove);
-      scroll.removeEventListener("touchend", onTouchEnd);
+      scroll.removeEventListener("touchstart", onTouchStart, true);
+      scroll.removeEventListener("touchmove", onTouchMove, true);
+      scroll.removeEventListener("touchend", onTouchEnd, true);
+      scroll.removeEventListener("touchcancel", onTouchEnd, true);
       scroll.removeEventListener("pointerdown", onPointerDown);
       view.removeEventListener("pointerup", onPointerUp);
-      anchor = undefined;
+      view.removeEventListener("pointercancel", onPointerCancel);
     },
   };
 }

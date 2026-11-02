@@ -1,3 +1,4 @@
+mod account_events;
 pub mod accounts;
 pub mod api;
 pub mod assets;
@@ -43,6 +44,7 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
         )
         .route("/api/account/register", post(accounts::register))
         .route("/api/account/login", post(accounts::login))
+        .route("/api/account/events", get(account_events::events))
         .route(
             "/api/account",
             axum::routing::patch(accounts::update_profile),

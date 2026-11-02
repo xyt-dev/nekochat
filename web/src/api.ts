@@ -186,8 +186,8 @@ async function request<T>(path: string, init: RequestInit, consume: (response: R
   }
 }
 
-async function json<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const init: RequestInit = { method };
+async function json<T>(path: string, method = "GET", body?: unknown, signal?: AbortSignal): Promise<T> {
+  const init: RequestInit = { method, signal };
   if (body !== undefined) {
     init.headers = { "content-type": "application/json" };
     init.body = JSON.stringify(body);
@@ -218,10 +218,10 @@ export const api = {
     }, (response) => response.json());
   },
   characters: () => json<CharactersView>("/api/characters"),
-  conversations: () => json<ConversationSummary[]>("/api/conversations"),
+  conversations: (signal?: AbortSignal) => json<ConversationSummary[]>("/api/conversations", "GET", undefined, signal),
   createConversation: (character_id?: string) =>
     json<ConversationSummary>("/api/conversations", "POST", character_id ? { character_id } : {}),
-  conversation: (id: string) => json<ConversationView>(conv(id)),
+  conversation: (id: string, signal?: AbortSignal) => json<ConversationView>(conv(id), "GET", undefined, signal),
   uploadAttachment: async (id: string, file: File): Promise<Attachment> => {
     return request(`${conv(id)}/attachments`, {
       method: "POST", headers: { "content-type": file.type || "application/octet-stream", "x-file-name": encodeURIComponent(file.name) }, body: file,
@@ -309,5 +309,27 @@ export async function observeTurn(
     if (response.status === 204) return false;
     await consumeTurn(response, onEvent);
     return true;
+  });
+}
+
+/** Account notifications invalidate snapshots; generation deltas remain on the turn stream. */
+export async function observeAccountEvents(
+  signal: AbortSignal,
+  onSync: (conversationId: string | null) => void,
+  onConnected: () => void,
+): Promise<void> {
+  await request("/api/account/events", { signal }, async (response) => {
+    if (!response.body) throw new ApiError(0, "服务器没有返回内容");
+    // The subscription exists before the authoritative GET, closing the bootstrap race.
+    onConnected();
+    for await (const record of sseRecords(response.body)) {
+      if (signal.aborted) break;
+      if (record.event !== "sync") continue;
+      const data: unknown = JSON.parse(record.data);
+      if (data && typeof data === "object" && "conversation_id" in data &&
+          (data.conversation_id === null || typeof data.conversation_id === "string")) {
+        onSync(data.conversation_id);
+      }
+    }
   });
 }

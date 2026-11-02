@@ -1766,3 +1766,78 @@ async fn revoked_observer_session_closes_but_core_can_be_observed_after_login() 
         204
     );
 }
+
+#[tokio::test]
+async fn account_sync_announces_usable_start_and_persisted_terminal_after_claim_release() {
+    // Keep the upstream running until stop, so start cannot be mistaken for completion.
+    let f = fixture(slow_script()).await;
+    let conv = f.create_conv().await;
+    let mut account = SseReader::new(
+        f.app.client.get(f.app.url("/api/account/events")).send().await.unwrap(),
+    );
+    assert_eq!(account.next().await.unwrap(), ("sync".into(), json!({"conversation_id": null})));
+    let mut original = SseReader::new(f.post(&conv, f.send_body("remote turn")).await);
+    assert_eq!(tokio::time::timeout(Duration::from_secs(3), account.next()).await.unwrap().unwrap(),
+        ("sync".into(), json!({"conversation_id": conv})));
+    let snapshot: Value = f.app.client.get(f.app.url(&format!("/api/conversations/{conv}")))
+        .send().await.unwrap().json().await.unwrap();
+    let turn_id = snapshot["active_turn_id"].as_str().unwrap().to_owned();
+    assert_eq!(snapshot["nodes"].as_array().unwrap().len(), 1);
+    let mut remote = SseReader::new(f.app.client
+        .get(f.app.url(&format!("/api/conversations/{conv}/turns"))).send().await.unwrap());
+    let live = tokio::time::timeout(Duration::from_secs(3), remote.next()).await.unwrap().unwrap();
+    assert_eq!(live.0, "snapshot");
+    assert_eq!(live.1["node"]["id"], turn_id);
+    assert_eq!(original.next().await.unwrap().0, "start");
+    assert_eq!(original.next().await.unwrap().1["t"], "x");
+    // No account event is produced by the text delta above.
+    assert!(tokio::time::timeout(Duration::from_millis(100), account.next()).await.is_err());
+    assert_eq!(f.app.client.post(f.app.url(&format!("/api/conversations/{conv}/turns/{turn_id}/stop")))
+        .send().await.unwrap().status(), 204);
+    assert_eq!(tokio::time::timeout(Duration::from_secs(3), account.next()).await.unwrap().unwrap(),
+        ("sync".into(), json!({"conversation_id": conv})));
+    // The account terminal signal is already authoritative before any turns SSE is drained.
+    assert!(!f.app.state.turn_running(&conv));
+    let snapshot: Value = f.app.client.get(f.app.url(&format!("/api/conversations/{conv}")))
+        .send().await.unwrap().json().await.unwrap();
+    assert_eq!(snapshot["active_turn_id"], Value::Null);
+    let saved = snapshot["nodes"].as_array().unwrap().iter()
+        .find(|node| node["id"] == turn_id).unwrap();
+    assert_eq!(saved["content"], "x");
+    assert_eq!(saved["status"], "interrupted");
+    assert_eq!(f.requests().len(), 1);
+}
+
+#[tokio::test]
+async fn account_sync_terminal_reconciles_completed_and_failed_turns() {
+    for (script, expected_assistant) in [
+        (deepseek_reply("", "saved reply"), Some(("complete", "saved reply"))),
+        (MockScript { status: 503, chunks: Vec::new(), models: Vec::new() }, None),
+    ] {
+        let f = fixture(script).await;
+        let conv = f.create_conv().await;
+        let mut account = SseReader::new(f.app.client
+            .get(f.app.url("/api/account/events")).send().await.unwrap());
+        assert_eq!(account.next().await.unwrap().1, json!({"conversation_id": null}));
+        let _turn_observer = f.post(&conv, f.send_body("persist before notification")).await;
+        for _ in 0..2 {
+            assert_eq!(tokio::time::timeout(Duration::from_secs(3), account.next()).await.unwrap().unwrap(),
+                ("sync".into(), json!({"conversation_id": conv})));
+        }
+        assert!(!f.app.state.turn_running(&conv));
+        let snapshot: Value = f.app.client.get(f.app.url(&format!("/api/conversations/{conv}")))
+            .send().await.unwrap().json().await.unwrap();
+        assert_eq!(snapshot["active_turn_id"], Value::Null);
+        let nodes = snapshot["nodes"].as_array().unwrap();
+        let assistant = nodes.iter().find(|node| node["role"] == "assistant");
+        // An upstream failure before any content preserves only the unanswered user message.
+        assert_eq!(assistant.map(|node| (node["status"].as_str().unwrap(), node["content"].as_str().unwrap())),
+            expected_assistant);
+        assert_eq!(nodes.len(), if expected_assistant.is_some() { 2 } else { 1 });
+        let user = nodes.iter().find(|node| node["role"] == "user").unwrap();
+        assert_eq!(user["content"], "persist before notification");
+        assert_eq!(snapshot["leaf_id"], assistant.unwrap_or(user)["id"]);
+        assert_eq!(f.requests().len(), 1);
+        assert!(tokio::time::timeout(Duration::from_millis(100), account.next()).await.is_err());
+    }
+}

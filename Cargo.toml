@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/core", "crates/store", "crates/gateway", "crates/server", "crates/mdwasm", "crates/resources", "crates/search"]
 
 [workspace.package]
-version = "0.16.1"
+version = "0.16.2"
 edition = "2024"
 license = "Apache-2.0 OR MIT"
 

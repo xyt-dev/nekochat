@@ -345,11 +345,12 @@ pre,
   overflow-y: auto;
   overscroll-behavior: contain;
   position: relative;
-  overflow-anchor: auto;
+  overflow-anchor: none;
 }
 
 .messages-sizer {
   position: relative;
+  display: flow-root;
   width: 100%;
   max-width: var(--nk-content-width);
   margin: 0 auto;

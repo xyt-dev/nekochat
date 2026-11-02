@@ -14,6 +14,7 @@ import {
   resetAccountRequests,
   postTurn,
   observeTurn,
+  observeAccountEvents,
   type TurnAction,
   type TurnEvent,
 } from "./api";
@@ -45,6 +46,10 @@ export interface LiveTurn {
   error: Accessor<string | null>;
   observer: AbortController;
   stopRequested: boolean;
+  /** The local start request owns this observer until its first response is confirmed. */
+  posting: boolean;
+  /** One invalidation waits here while an unconfirmed local POST owns the turn. */
+  reconcilePending: boolean;
   stopping: Accessor<boolean>;
   // Write side, used by the event handler only.
   buf: { content: string; reasoning: string; dirty: boolean };
@@ -99,6 +104,8 @@ function createLiveTurn(convId: string, parentId: string | null): LiveTurn {
     error,
     observer: new AbortController(),
     stopRequested: false,
+    posting: false,
+    reconcilePending: false,
     stopping,
     buf: { content: "", reasoning: "", dirty: false },
     set: {
@@ -140,6 +147,169 @@ function createAppStore() {
   const [treeOpen, setTreeOpen] = createSignal(false);
   const [sidebarOpen, setSidebarOpen] = createSignal(false);
   let uploadDraftVersion = 0;
+  let accountObserver: AbortController | null = null;
+  let navigationObserver: AbortController | null = null;
+  let reconciliationObserver: AbortController | null = null;
+  let snapshotQueue = Promise.resolve();
+  let accountRotation: Promise<void> | null = null;
+  let reconciliation: Promise<void> | null = null;
+  let pendingList = false;
+  let pendingCurrent = false;
+  let accountRevision = 0;
+  let conversationRevision = 0;
+  let listRevision = 0;
+
+  /** Navigation, recovery and account invalidations share one sequence of authoritative GETs. */
+  function readSnapshot<T>(read: () => Promise<T>): Promise<T> {
+    const epoch = sessionEpoch;
+    const result = snapshotQueue.then(async () => {
+      if (accountRotation) await accountRotation;
+      if (epoch !== sessionEpoch) throw new DOMException("Account changed", "AbortError");
+      return read();
+    });
+    snapshotQueue = result.then(() => {}, () => {});
+    return result;
+  }
+
+  function closeDeletedConversation(id: string) {
+    const turn = live()[id];
+    if (turn) { turn.observer.abort(); dropLive(turn); }
+    if (conv()?.id !== id) return;
+    conversationRevision++;
+    setConv(null);
+    // Keep the unsent composer, including uploaded attachments, when another browser deletes a chat.
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+
+  function applyConversation(view: ConversationView, endedObserver?: LiveTurn) {
+    // Persistence can win the race with removal from the running-generation registry.
+    if (view.active_turn_id && view.nodes.some(node => node.id === view.active_turn_id)) {
+      view = { ...view, active_turn_id: null };
+    }
+    const turn = live()[view.id];
+    if (turn?.posting) { turn.reconcilePending = true; return; }
+    if (turn && turn.assistantId() !== view.active_turn_id) {
+      // An inactive history has no stored replacement for an empty failure. Keep its
+      // error, or let the still-connected observer drain the terminal that owns it.
+      const keepTerminal = view.active_turn_id === null && view.leaf_id === turn.parentId() &&
+        !view.nodes.some(node => node.id === turn.assistantId()) &&
+        (turn.error() !== null || (!!turn.assistantId() && turn !== endedObserver && !turn.observer.signal.aborted));
+      if (!keepTerminal) { turn.observer.abort(); dropLive(turn); }
+    }
+    conversationRevision++;
+    setConv(view);
+    if (view.active_turn_id) attachTurn(view);
+  }
+
+  function requestReconciliation(id?: string | null): Promise<void> {
+    if (!user()) return Promise.resolve();
+    pendingList = true;
+    if (id === null || (id !== undefined && id === conv()?.id)) pendingCurrent = true;
+    if (reconciliation) return reconciliation;
+    const epoch = sessionEpoch;
+    const run = async () => {
+      while (epoch === sessionEpoch && user() && pendingList) {
+        const all = pendingCurrent;
+        pendingList = pendingCurrent = false;
+        const revision = accountRevision;
+        const listVersion = listRevision;
+        try {
+          const list = await readSnapshot(() => api.conversations(accountObserver?.signal));
+          if (epoch !== sessionEpoch) return;
+          if (revision === accountRevision && listVersion === listRevision) {
+            setConversations(list);
+            const current = conv();
+            const title = current && list.find(item => item.id === current.id)?.title;
+            if (current && title && title !== current.title) updateConv(current.id, view => { view.title = title; });
+          } else {
+            pendingList = true;
+          }
+        } catch (error) {
+          if (epoch !== sessionEpoch) return;
+          if (error instanceof ApiError && error.status === 401) { resetSession(); return; }
+          if (accountObserver && error instanceof ApiError && (error.status === 0 || error.status >= 500)) {
+            pendingList = true;
+            pendingCurrent ||= all;
+            await waitToReconnect(accountObserver.signal);
+          }
+        }
+        const current = conv();
+        if (!current || loadingConv() || !all) continue;
+        const posting = live()[current.id];
+        if (posting?.posting) { posting.reconcilePending = true; continue; }
+        const seq = loadSeq;
+        const version = conversationRevision;
+        const controller = new AbortController();
+        reconciliationObserver = controller;
+        const valid = () => epoch === sessionEpoch && seq === loadSeq && !controller.signal.aborted && conv()?.id === current.id;
+        try {
+          const view = await readSnapshot(() => api.conversation(current.id, controller.signal));
+          if (!valid()) continue;
+          if (revision !== accountRevision || version !== conversationRevision) {
+            pendingList = true;
+            pendingCurrent = true;
+            continue;
+          }
+          applyConversation(view);
+        } catch (error) {
+          if (!valid()) continue;
+          if (error instanceof ApiError && error.status === 401) { resetSession(); return; }
+          if (error instanceof ApiError && error.status === 404) {
+            const posting = live()[current.id];
+            if (posting?.posting) posting.reconcilePending = true;
+            else if (revision === accountRevision && version === conversationRevision) closeDeletedConversation(current.id);
+            else { pendingList = pendingCurrent = true; }
+          } else if (accountObserver && error instanceof ApiError && (error.status === 0 || error.status >= 500)) {
+            pendingList = true;
+            pendingCurrent = true;
+            await waitToReconnect(accountObserver.signal);
+          }
+        } finally {
+          if (reconciliationObserver === controller) reconciliationObserver = null;
+        }
+      }
+    };
+    const task: Promise<void> = run().finally(() => {
+      if (reconciliation !== task) return;
+      reconciliation = null;
+      if (epoch === sessionEpoch && pendingList) return requestReconciliation();
+    });
+    reconciliation = task;
+    return task;
+  }
+
+  function waitToReconnect(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return Promise.resolve();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
+    const timer = setTimeout(done, 1000);
+    signal.addEventListener("abort", done, { once: true });
+    return promise;
+  }
+
+  function startAccountSync() {
+    accountObserver?.abort();
+    const observer = new AbortController();
+    accountObserver = observer;
+    const epoch = sessionEpoch;
+    const active = () => epoch === sessionEpoch && accountObserver === observer && !observer.signal.aborted && !!user();
+    const changed = (id: string | null) => {
+      if (!active()) return;
+      accountRevision++;
+      void requestReconciliation(id);
+    };
+    void (async () => {
+      while (active()) {
+        try {
+          await observeAccountEvents(observer.signal, changed, () => changed(null));
+        } catch (error) {
+          if (!active()) return;
+          if (error instanceof ApiError && error.status === 401) { resetSession(); return; }
+        }
+        if (active()) await waitToReconnect(observer.signal);
+      }
+    })();
+  }
 
   const index = createMemo<TreeIndex>(() => indexTree(conv()?.nodes ?? []));
   const path = createMemo(() => pathTo(index(), conv()?.leaf_id ?? null));
@@ -161,6 +331,19 @@ function createAppStore() {
       try { sessionStorage.removeItem("nk.graphics.account"); } catch { /* Storage may be unavailable. */ }
     }
     sessionEpoch++;
+    accountObserver?.abort();
+    accountObserver = null;
+    navigationObserver?.abort();
+    navigationObserver = null;
+    reconciliationObserver?.abort();
+    reconciliationObserver = null;
+    reconciliation = null;
+    pendingList = pendingCurrent = false;
+    snapshotQueue = Promise.resolve();
+    accountRotation = null;
+    accountRevision++;
+    conversationRevision++;
+    listRevision++;
     setSessionVersion(sessionEpoch);
     resetAccountRequests();
     for (const turn of Object.values(live())) turn.observer.abort();
@@ -213,8 +396,10 @@ function createAppStore() {
     try { sessionStorage.setItem("nk.graphics.account", account.id); } catch { /* Storage may be unavailable. */ }
     setUser(account);
     const epoch = sessionEpoch;
+    const seq = loadSeq;
+    startAccountSync();
     await Promise.all([loadCharacters(), loadConversations()]);
-    if (epoch !== sessionEpoch) return;
+    if (epoch !== sessionEpoch || seq !== loadSeq) return;
     const available = characters().characters;
     setCharacterId(available.some((item) => item.id === account.last_character_id) ? account.last_character_id : characters().default_character_id);
     const id = requestedConversation && conversations().some((item) => item.id === requestedConversation)
@@ -263,6 +448,11 @@ function createAppStore() {
       // Retire queued old-cookie writes; newly queued preferences wait for PATCH's cookie.
       preferenceEpoch++;
       preferenceQueue = passwordRotation.promise;
+      accountRotation = passwordRotation.promise;
+      accountObserver?.abort();
+      accountObserver = null;
+      reconciliationObserver?.abort();
+      accountRevision++;
       resetAccountRequests();
     }
     if (paused) {
@@ -274,17 +464,11 @@ function createAppStore() {
       if (epoch === sessionEpoch) setUser(saved);
     } finally {
       passwordRotation?.resolve();
-      if (passwordRotation && epoch === sessionEpoch) persistPreferences();
-      if (paused && current && epoch === sessionEpoch && conv()?.id === current.id) {
-        try {
-          const view = await api.conversation(current.id);
-          if (epoch === sessionEpoch && conv()?.id === current.id) {
-            setConv(view);
-            if (view.active_turn_id) attachTurn(view);
-          }
-        } catch (error) {
-          if (epoch === sessionEpoch) toast(error instanceof ApiError ? error.message : "重新连接回复失败");
-        }
+      if (passwordRotation && accountRotation === passwordRotation.promise) accountRotation = null;
+      if (passwordRotation && epoch === sessionEpoch) {
+        startAccountSync();
+        persistPreferences();
+        await requestReconciliation(null);
       }
     }
   }
@@ -304,24 +488,20 @@ function createAppStore() {
     }
   }
 
-  async function loadConversations() {
-    const epoch = sessionEpoch;
-    try {
-      const list = await api.conversations();
-      if (epoch !== sessionEpoch) return;
-      setConversations(list);
-      const c = conv();
-      const title = c && list.find((s) => s.id === c.id)?.title;
-      if (c && title && title !== c.title) updateConv(c.id, (cv) => (cv.title = title));
-    } catch (e) {
-      if (epoch === sessionEpoch) toast(e instanceof ApiError ? e.message : "加载对话列表失败");
-    }
+  function loadConversations(): Promise<void> {
+    return requestReconciliation();
   }
 
   let loadSeq = 0;
   async function openConversation(id: string | null, persist = true, preserveDraft = false) {
     if (!user()) return;
     const seq = ++loadSeq;
+    const epoch = sessionEpoch;
+    navigationObserver?.abort();
+    reconciliationObserver?.abort();
+    const observer = new AbortController();
+    navigationObserver = observer;
+    conversationRevision++;
     // Navigating detaches observers, never the core-owned jobs.
     for (const turn of Object.values(live())) turn.observer.abort();
     setLive({});
@@ -336,17 +516,21 @@ function createAppStore() {
     if (id === null) {
       setConv(null);
       history.replaceState(null, "", location.pathname + location.search);
+      setLoadingConv(false);
       if (persist) persistPreferences();
       return;
     }
     history.replaceState(null, "", `${location.pathname}${location.search}#/c/${encodeURIComponent(id)}`);
     setLoadingConv(true);
     try {
-      const view = await api.conversation(id);
-      if (seq === loadSeq) {
-        setConv(view);
+      for (;;) {
+        const revision = accountRevision;
+        const view = await readSnapshot(() => api.conversation(id, observer.signal));
+        if (epoch !== sessionEpoch || seq !== loadSeq) return;
+        if (revision !== accountRevision) continue;
+        applyConversation(view);
         if (persist) persistPreferences();
-        if (view.active_turn_id) attachTurn(view);
+        break;
       }
     } catch (e) {
       if (seq !== loadSeq) return;
@@ -360,21 +544,12 @@ function createAppStore() {
     }
   }
 
-  async function reloadConversation(id: string) {
-    if (conv()?.id !== id) return;
-    const epoch = sessionEpoch;
-    try {
-      const view = await api.conversation(id);
-      if (epoch === sessionEpoch && conv()?.id === id) setConv(view);
-    } catch {
-      // The next explicit action reports problems.
-    }
-  }
 
   /** Applies a change to the open conversation if it is `id`. */
   function updateConv(id: string, f: (c: ConversationView) => void) {
     const c = conv();
     if (!c || c.id !== id) return;
+    conversationRevision++;
     f(c);
     setConv(c);
   }
@@ -392,11 +567,14 @@ function createAppStore() {
     if (creatingConversation) return creatingConversation;
     // Detach from the old chat before the request; immediate sends await this same creation.
     if (!preserveDraft) void openConversation(null);
+    const seq = loadSeq;
     creatingConversation = (async () => {
       try {
         const summary = await api.createConversation(character()?.id);
         if (epoch !== sessionEpoch) return null;
+        listRevision++;
         setConversations((list) => [summary, ...list.filter((c) => c.id !== summary.id)]);
+        if (seq !== loadSeq) return null;
         await openConversation(summary.id, true, true);
         return summary.id;
       } catch (e) {
@@ -411,8 +589,9 @@ function createAppStore() {
     const epoch = sessionEpoch;
     try {
       await api.deleteConversation(id);
-      live()[id]?.observer.abort();
       if (epoch !== sessionEpoch) return;
+      live()[id]?.observer.abort();
+      listRevision++;
       setLive((l) => {
         const { [id]: _, ...rest } = l;
         return rest;
@@ -432,8 +611,10 @@ function createAppStore() {
         return;
       }
       await api.clearConversation(id);
-      live()[id]?.observer.abort();
       if (epoch !== sessionEpoch) return;
+      live()[id]?.observer.abort();
+      conversationRevision++;
+      listRevision++;
       setLive((l) => {
         const { [id]: _, ...rest } = l;
         return rest;
@@ -441,8 +622,7 @@ function createAppStore() {
       setEditing(null);
       if (conv()?.id === id) setComposerAttachments([]);
       uploadDraftVersion++;
-      await reloadConversation(id);
-      await loadConversations();
+      await requestReconciliation(conv()?.id === id ? id : undefined);
     } catch (e) {
       if (epoch === sessionEpoch) toast(e instanceof ApiError ? e.message : "清空失败");
     }
@@ -472,6 +652,13 @@ function createAppStore() {
     }
   }
 
+  function releasePosting(turn: LiveTurn) {
+    turn.posting = false;
+    if (!turn.reconcilePending) return;
+    turn.reconcilePending = false;
+    if (live()[turn.convId] === turn && !turn.observer.signal.aborted) void requestReconciliation(turn.convId);
+  }
+
   function flushLive(turn: LiveTurn) {
     if (!turn.buf.dirty) return;
     turn.buf.dirty = false;
@@ -480,8 +667,12 @@ function createAppStore() {
   }
 
   /** Feeds one SSE event into a live turn and the open conversation. */
-  function handleTurnEvent(turn: LiveTurn, ev: TurnEvent) {
+  function handleTurnEvent(turn: LiveTurn, ev: TurnEvent): boolean {
+    if ((ev.type === "done" || ev.type === "error") && ev.data.node && turn.assistantId() && ev.data.node.id !== turn.assistantId()) return false;
     if (turn.connectionState() !== "streaming") turn.set.connectionState("streaming");
+    if (ev.type !== "text" && ev.type !== "reasoning") {
+      listRevision++;
+    }
     switch (ev.type) {
       case "start": {
         const { user_node, assistant_node_id, character_id, character_name, character_avatar } = ev.data;
@@ -552,6 +743,8 @@ function createAppStore() {
         finishTurn(turn, ev.data.node, ev.data.message);
         break;
     }
+    if (ev.type !== "text" && ev.type !== "reasoning") releasePosting(turn);
+    return true;
   }
 
   function finishTurn(turn: LiveTurn, node: NodeView | null, error: string | null) {
@@ -567,8 +760,10 @@ function createAppStore() {
         dropLive(turn);
       } else {
         turn.set.error(error ?? "回复中断");
+        updateConv(turn.convId, view => { view.active_turn_id = null; });
       }
     });
+    void requestReconciliation(turn.convId);
   }
 
   async function uploadAttachments(files: File[]) {
@@ -615,6 +810,9 @@ function createAppStore() {
 
   function attachTurn(view: ConversationView) {
     if (!view.active_turn_id) return;
+    const existing = live()[view.id];
+    if (existing?.posting || (existing?.assistantId() === view.active_turn_id && !existing.observer.signal.aborted)) return;
+    if (existing) { existing.observer.abort(); dropLive(existing); }
     const turn = createLiveTurn(view.id, view.leaf_id);
     turn.set.assistantId(view.active_turn_id);
     setLive((list) => ({ ...list, [view.id]: turn }));
@@ -623,12 +821,18 @@ function createAppStore() {
 
   /** Resume HTTP observation only; core generation and the mounted message keep their identities. */
   async function resumeActiveTurn(): Promise<void> {
+    if (!user()) return;
+    if (accountObserver) startAccountSync();
+    const reconciliation = requestReconciliation(null);
     const turn = currentLive();
-    if (!user() || loadingConv() || !turn?.started() || turn.error() !== null) return;
+    if (loadingConv() || !turn?.started() || turn.error() !== null || turn.posting) {
+      await reconciliation;
+      return;
+    }
     turn.observer.abort();
     turn.observer = new AbortController();
     turn.set.connectionState("reconnecting");
-    await watchTurn(turn, sessionEpoch);
+    await Promise.all([watchTurn(turn, sessionEpoch), reconciliation]);
   }
 
   /** Observation retries are GET-only. They can never start a second model call. */
@@ -639,35 +843,30 @@ function createAppStore() {
       try {
         await observeTurn(turn.convId, observer.signal, (event) => {
           if (!attached(turn, epoch, observer)) return;
-          if (event.type === "done" || event.type === "error") settled = true;
-          handleTurnEvent(turn, event);
+          if (handleTurnEvent(turn, event) && (event.type === "done" || event.type === "error")) settled = true;
         });
         if (!attached(turn, epoch, observer) || settled) break;
         turn.set.connectionState("reconnecting");
         // The core may have finished between the history snapshot and the observation request.
-        const view = await api.conversation(turn.convId);
+        const version = conversationRevision;
+        const revision = accountRevision;
+        const view = await readSnapshot(() => api.conversation(turn.convId, observer.signal));
         if (!attached(turn, epoch, observer)) break;
-        setConv(view);
-        if (!view.active_turn_id) {
-          dropLive(turn);
-          break;
-        }
+        if (version !== conversationRevision || revision !== accountRevision) continue;
+        applyConversation(view, turn);
+        if (!view.active_turn_id) break;
       } catch (error) {
         if (!attached(turn, epoch, observer)) break;
         turn.set.connectionState("reconnecting");
         if (error instanceof ApiError && error.status > 0) {
-          dropLive(turn);
-          toast(error.message);
-          if (error.status === 404) {
-            setConv(null);
-          }
+          if (error.status === 401) { resetSession(); break; }
+          if (error.status === 404) closeDeletedConversation(turn.convId);
+          else { dropLive(turn); toast(error.message); }
           break;
         }
       }
       if (attached(turn, epoch, observer)) {
-        const { promise, resolve } = Promise.withResolvers<void>();
-        setTimeout(resolve, 1000);
-        await promise;
+        await waitToReconnect(observer.signal);
       }
     }
     if (epoch === sessionEpoch && !observer.signal.aborted) void loadConversations();
@@ -708,7 +907,7 @@ function createAppStore() {
       const id = await newConversation();
       if (epoch !== sessionEpoch) return false;
       c = conv();
-      if (!id || !c) return false;
+      if (!id || !c || c.id !== id) return false;
     }
     const existing = live()[c.id];
     if (existing && !existing.error()) {
@@ -716,6 +915,8 @@ function createAppStore() {
       return false;
     }
     const turn = createLiveTurn(c.id, action.action === "regenerate" ? action.node_id : null);
+    turn.posting = true;
+    conversationRevision++;
     const observer = turn.observer;
     setLive((list) => ({ ...list, [turn.convId]: turn }));
     setEditing(null);
@@ -723,11 +924,11 @@ function createAppStore() {
     try {
       await postTurn(turn.convId, { ...action, character_id: selected.id }, observer.signal, (event) => {
         if (!attached(turn, epoch, observer)) return;
-        if (event.type === "done" || event.type === "error") settled = true;
-        handleTurnEvent(turn, event);
+        if (handleTurnEvent(turn, event) && (event.type === "done" || event.type === "error")) settled = true;
       });
     } catch (error) {
       if (!attached(turn, epoch, observer)) return true;
+      releasePosting(turn);
       if (!turn.started() && error instanceof ApiError && error.status > 0) {
         dropLive(turn);
         toast(error.message);
@@ -736,15 +937,17 @@ function createAppStore() {
       turn.set.connectionState("reconnecting");
       if (!turn.started()) {
         try {
-          const view = await api.conversation(turn.convId);
+          const version = conversationRevision;
+          const view = await readSnapshot(() => api.conversation(turn.convId, observer.signal));
           if (!attached(turn, epoch, observer)) return true;
-          setConv(view);
           if (!view.active_turn_id) {
             dropLive(turn);
+            if (version === conversationRevision) applyConversation(view);
             toast("未确认发送成功，输入已保留；请检查对话后重试");
             return false;
           }
           turn.set.assistantId(view.active_turn_id);
+          if (version === conversationRevision) applyConversation(view);
         } catch {
           if (attached(turn, epoch, observer)) {
             dropLive(turn);
@@ -754,6 +957,7 @@ function createAppStore() {
         }
       }
     }
+    releasePosting(turn);
     if (attached(turn, epoch, observer) && !settled) {
       turn.set.connectionState("reconnecting");
       await watchTurn(turn, epoch);

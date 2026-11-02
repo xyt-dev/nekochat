@@ -5,14 +5,13 @@ import { copyText } from "../clipboard";
 import { toast } from "../ui";
 import { type LiveTurn, store } from "../store";
 import { AssistantMessage, LiveMessage, UserMessage } from "./Message";
-import { createMessageViewport, type MessageViewport } from "./messageViewport";
+import { createMessageViewport, messageAboveViewport, type MessageViewport } from "./messageViewport";
 
 type Item = { key: string; node: NodeView; turn?: undefined } | { key: string; node?: undefined; turn: LiveTurn };
 
 export function MessageList() {
   let scrollEl!: HTMLDivElement;
   let sizerEl!: HTMLDivElement;
-  const nativeAnchoring = CSS.supports("overflow-anchor", "auto");
   let viewport: MessageViewport | undefined;
 
   const items = createMemo<Item[]>(() => {
@@ -38,14 +37,20 @@ export function MessageList() {
     overscan: 4,
     paddingStart: 16,
     paddingEnd: 24,
-    // This virtualizer supplies ranges and measurements; the viewport owns all scroll writes.
-    scrollToFn: () => undefined,
-    onChange: () => viewport?.layoutChanged(),
+    // TanStack owns physical writes, iOS gesture holds and range coordinates.
+    // The page controller supplies follow commands, never its own corrections.
   });
 
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+    // A cold tall reply can span the fold even if its estimate ends above it.
+    if (!instance.itemSizeCache.has(item.key)) {
+      const element = instance.elementsCache.get(item.key);
+      return element ? messageAboveViewport(scrollEl, element) : false;
+    }
+    return item.end <= (instance.scrollOffset ?? 0);
+  };
   onMount(() => {
-    const active = createMessageViewport(scrollEl, sizerEl, nativeAnchoring);
+    const active = createMessageViewport(scrollEl, sizerEl, () => virtualizer.scrollToEnd(), () => virtualizer.cancelScroll());
     viewport = active;
     active.followLatest();
     onCleanup(() => { viewport = undefined; active.dispose(); });
@@ -78,19 +83,19 @@ export function MessageList() {
   };
 
   const keys = () => virtualizer.getVirtualItems().map((v) => v.key as string);
+  const firstStart = () => virtualizer.getVirtualItems()[0]?.start ?? 0;
 
   return (
     <div
       class="messages"
       ref={scrollEl}
-      style={{ "overflow-anchor": nativeAnchoring ? "auto" : "none" }}
       onClick={onClick}
     >
       <Show when={items().length === 0}>
         <div class="empty-hint" role="status">{store.loadingConv() ? "正在加载对话…" : "有什么想聊的？"}</div>
       </Show>
       <div class="messages-sizer" ref={sizerEl}>
-        <div class="messages-spacer" aria-hidden="true" style={{ height: `${virtualizer.getVirtualItems()[0]?.start ?? 0}px` }} />
+        <div class="messages-spacer" aria-hidden="true" style={{ height: `${Math.max(0, firstStart())}px`, "margin-top": `${Math.min(0, firstStart())}px` }} />
         <For each={keys()}>
           {(key) => {
             const vi = createMemo(() => virtualizer.getVirtualItems().find((v) => v.key === key));
