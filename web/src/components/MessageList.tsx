@@ -44,10 +44,24 @@ export function MessageList() {
 
   // Follow the bottom while content grows, until the user scrolls up.
   let follow = true;
-  let lastUserInput = 0;
-  const userInput = () => (lastUserInput = performance.now());
+  let lastUserInput = -Infinity;
+  let followFrame = 0;
+  const cancelFollow = () => { if (followFrame) cancelAnimationFrame(followFrame); followFrame = 0; };
+  const userInput = (event: WheelEvent | TouchEvent | PointerEvent | KeyboardEvent) => {
+    lastUserInput = performance.now();
+    const leavingBottom = event.type === "touchmove"
+      || (event instanceof WheelEvent && event.deltaY < 0)
+      || (event instanceof KeyboardEvent && (["ArrowUp", "PageUp", "Home"].includes(event.key) || (event.key === " " && event.shiftKey)));
+    if (leavingBottom) follow = false;
+    else if (scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= BOTTOM_SLACK) follow = true;
+    cancelFollow();
+  };
   const toBottom = () => {
-    scrollEl.scrollTop = scrollEl.scrollHeight;
+    if (!follow || followFrame) return;
+    followFrame = requestAnimationFrame(() => {
+      followFrame = 0;
+      if (follow) scrollEl.scrollTop = scrollEl.scrollHeight;
+    });
   };
   const onScroll = () => {
     const distance = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
@@ -60,19 +74,16 @@ export function MessageList() {
       if (follow) toBottom();
     });
     ro.observe(sizerEl);
-    onCleanup(() => ro.disconnect());
+    onCleanup(() => { ro.disconnect(); cancelFollow(); });
   });
 
-  // A newly opened conversation and a newly sent message start at the bottom.
-  createEffect(
-    on(
-      () => [store.conv()?.id, store.currentLive()] as const,
-      () => {
-        follow = true;
-        requestAnimationFrame(toBottom);
-      },
-    ),
-  );
+  // Only opening another conversation or explicitly starting a new turn resets reading position.
+  const conversationId = createMemo(() => store.conv()?.id);
+  const startFollowing = () => { lastUserInput = -Infinity; follow = true; toBottom(); };
+  createEffect(on(conversationId, startFollowing));
+  createEffect(on(store.currentLive, (turn) => {
+    if (turn && !turn.started() && !turn.assistantId()) startFollowing();
+  }));
 
   // Code block "复制" buttons come from worker HTML, so they are handled by delegation.
   const onClick = async (e: MouseEvent) => {
@@ -103,6 +114,7 @@ export function MessageList() {
       onScroll={onScroll}
       onWheel={userInput}
       onTouchMove={userInput}
+      onTouchEnd={userInput}
       onPointerDown={userInput}
       onKeyDown={userInput}
       onClick={onClick}
@@ -111,6 +123,7 @@ export function MessageList() {
         <div class="empty-hint" role="status">{store.loadingConv() ? "正在加载对话…" : "有什么想聊的？"}</div>
       </Show>
       <div class="messages-sizer" ref={sizerEl} style={{ height: `${virtualizer.getTotalSize()}px` }}>
+        <div class="messages-window" style={{ transform: `translateY(${virtualizer.getVirtualItems()[0]?.start ?? 0}px)` }}>
         <For each={keys()}>
           {(key) => {
             const vi = createMemo(() => virtualizer.getVirtualItems().find((v) => v.key === key));
@@ -122,7 +135,6 @@ export function MessageList() {
                 class="row"
                 ref={rowEl}
                 data-index={vi()?.index}
-                style={{ transform: `translateY(${vi()?.start ?? 0}px)` }}
               >
                 <Switch>
                   <Match when={item()?.node}>
@@ -138,6 +150,7 @@ export function MessageList() {
             );
           }}
         </For>
+        </div>
       </div>
     </div>
   );

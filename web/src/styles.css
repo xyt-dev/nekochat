@@ -355,12 +355,16 @@ pre,
   margin: 0 auto;
 }
 
-.row {
+.messages-window {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
+}
+
+.row {
   padding: 0 24px 28px;
+  display: flow-root;
 }
 
 .empty-hint {
