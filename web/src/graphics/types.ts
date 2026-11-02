@@ -24,7 +24,7 @@ export interface PlotSeries { label?: string; expr: string; color?: Color }
 export interface PlotNode extends NodeBase { type: "plot"; xMin: number; xMax: number; yMin?: number; yMax?: number; height?: number; params?: PlotParam[]; series: PlotSeries[]; palette?: boolean }
 export interface DiagramItem { id: string; label: string; x: number; y: number; w?: number; h?: number; description?: string; color?: Color }
 export interface DiagramEdge { from: string; to: string; label?: string }
-export interface DiagramNode extends NodeBase { type: "diagram"; width?: number; height?: number; nodes: DiagramItem[]; edges: DiagramEdge[]; palette?: boolean }
+export interface DiagramNode extends NodeBase { type: "diagram"; width?: number; height?: number; nodes: DiagramItem[]; edges: DiagramEdge[]; color?: Color; palette?: boolean }
 export interface SvgNode extends NodeBase { type: "svg"; code: string; height?: number; palette?: boolean }
 export type GraphicNode = TextNode | StatNode | ChoicesNode | LayoutNode | ChartNode | PlotNode | DiagramNode | SvgNode;
 

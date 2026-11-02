@@ -134,7 +134,7 @@ fn validate_node(value: &mut Value, depth: usize, budget: &mut Budget) -> Checke
         "grid" => &["items", "gap", "cols", "color", "palette"],
         "chart" => &["kind", "labels", "series", "height", "palette"],
         "plot" => &["xMin", "xMax", "yMin", "yMax", "height", "params", "series", "palette"],
-        "diagram" => &["width", "height", "nodes", "edges", "palette"],
+        "diagram" => &["width", "height", "nodes", "edges", "color", "palette"],
         "svg" => &["code", "height", "palette"],
         _ => return Err(format!("Unknown graphic node: {kind}")),
     };

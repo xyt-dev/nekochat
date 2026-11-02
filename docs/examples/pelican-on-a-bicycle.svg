@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 900" role="img" aria-labelledby="pelican-title" aria-describedby="pelican-description">
+  <title id="pelican-title">鹈鹕骑自行车：顺着海风，慢慢骑</title>
+  <desc id="pelican-description">一只白色鹈鹕戴着砖红围巾，长长的橙色鸟喙下垂着金黄喉囊。它握住车把，两只蹼足踩在脚踏上，骑着薄荷绿自行车经过海边。双三角车架、链条、辐条与前叉连接完整，阳光、海浪和路边野花构成温暖的海岸风景。</desc>
+  <defs>
+    <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#f7f1df"/><stop offset="1" stop-color="#eee5ce"/></linearGradient>
+    <linearGradient id="sea" x2="0" y2="1"><stop stop-color="#9bc7c0"/><stop offset="1" stop-color="#c0d7c7"/></linearGradient>
+    <linearGradient id="feathers" x1=".2" y1="0" x2=".7" y2="1"><stop stop-color="#fffdf1"/><stop offset=".6" stop-color="#f5f0df"/><stop offset="1" stop-color="#d2d9cb"/></linearGradient>
+    <linearGradient id="bill" x2=".8" y2="1"><stop stop-color="#f6ba68"/><stop offset="1" stop-color="#df7a49"/></linearGradient>
+    <linearGradient id="pouch" x2=".3" y2="1"><stop stop-color="#efc56b"/><stop offset="1" stop-color="#e6a05b"/></linearGradient>
+    <linearGradient id="enamel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#83bdb0"/><stop offset=".5" stop-color="#4e9c91"/><stop offset="1" stop-color="#367e79"/></linearGradient>
+    <linearGradient id="rubber" x2="0" y2="1"><stop stop-color="#3c5351"/><stop offset="1" stop-color="#253d3d"/></linearGradient>
+    <radialGradient id="sunlight"><stop stop-color="#f4c79e" stop-opacity=".48"/><stop offset="1" stop-color="#f4c79e" stop-opacity="0"/></radialGradient>
+    <filter id="ground-soft" x="-20%" y="-100%" width="140%" height="300%"><feGaussianBlur stdDeviation="6"/></filter>
+    <pattern id="paper-grain" width="43" height="37" patternUnits="userSpaceOnUse"><circle cx="6" cy="10" r=".65" fill="#7d7055" opacity=".11"/><circle cx="32" cy="28" r=".45" fill="#7d7055" opacity=".12"/><path d="m20 4 1 .5m-8 23 1 .3" stroke="#7d7055" stroke-width=".6" opacity=".1"/></pattern>
+    <g id="spoke-set" fill="none" stroke="#627d77" stroke-width="1.5" opacity=".7">
+      <path d="M-114 0H114M0-114V114M-80.61-80.61 80.61 80.61M-80.61 80.61 80.61-80.61M-105.32-43.63 105.32 43.63M-105.32 43.63 105.32-43.63M-43.63-105.32 43.63 105.32M-43.63 105.32 43.63-105.32"/>
+    </g>
+    <g id="wheel">
+      <circle r="126" fill="#e4dfcb" stroke="url(#rubber)" stroke-width="14"/>
+      <circle r="119" fill="#f1ead7" stroke="#d5ba83" stroke-width="4"/>
+      <circle r="114" fill="none" stroke="#8caaa0" stroke-width="2"/>
+      <g class="wheel-spokes"><use href="#spoke-set"/></g>
+      <circle r="9" fill="#e2c993" stroke="#3c625e" stroke-width="3"/>
+    </g>
+    <g id="little-gull" fill="none" stroke="#65867d" stroke-width="2" stroke-linecap="round"><path d="M0 5Q8-4 16 4Q24-4 32 5"/></g>
+    <g id="webbed-foot"><path d="M-24-32q12-1 15 12l27 10q12 5 5 11l-18-1-14-3-12 1q-14-4-12-16Z" fill="currentColor" stroke="#ac7949" stroke-width="1.8" stroke-linejoin="round"/><path d="m-15-21 13 13m-6-11 16 13m-32-10 12 10" fill="none" stroke="#b67f4b" stroke-width="1.4" stroke-linecap="round"/></g>
+  </defs>
+  <style>
+    .wheel-spokes { animation: wheel-turn 2.4s linear infinite; transform-origin: 0px 0px; }
+    .breeze { animation: breeze 4.8s ease-in-out infinite; transform-origin: 525px 317px; }
+    .cycling-still { display: none; }
+    @keyframes wheel-turn { to { transform: rotate(360deg); } }
+    @keyframes breeze { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+    @media (prefers-reduced-motion: reduce) { .wheel-spokes,.breeze { animation: none; } .cycling-moving { display: none; } .cycling-still { display: inline; } }
+  </style>
+
+  <rect width="1000" height="900" rx="22" fill="url(#paper)"/>
+  <circle cx="792" cy="245" r="185" fill="url(#sunlight)"/>
+  <circle cx="792" cy="245" r="77" fill="#e9ae87" opacity=".69"/>
+  <path d="M67 341c20-20 42-21 59-9 14-34 49-36 70-13 23-7 43 1 55 17H67Z" fill="#fffaf0" opacity=".84"/>
+  <path d="M672 180c15-15 32-16 46-7 10-23 33-25 48-10 18-6 32 1 42 13H672Z" fill="#fffbef" opacity=".9"/>
+  <path d="M0 487Q132 457 278 491T547 481T803 481T1000 470V670H0Z" fill="#b5c4ac" opacity=".55"/>
+  <path d="M0 518Q141 489 271 514T537 512T791 508T1000 499V679H0Z" fill="url(#sea)"/>
+  <g fill="none" stroke="#f4f1d9" stroke-linecap="round" opacity=".6"><path d="M41 552h119m35 7h53m427-20h139m39 14h87M85 586h157m345-11h101m54 24h144M13 621h95m77-6h81m509 5h156" stroke-width="2"/></g>
+  <path d="M0 658Q191 620 371 648T708 648T1000 626V900H0Z" fill="#ddd4b6"/>
+  <path d="M0 754Q239 742 437 753T1000 737V830H0Z" fill="#e9dfc5"/>
+  <path d="M0 806Q265 796 502 807T1000 795" fill="none" stroke="#b8b9a0" stroke-width="2"/>
+  <g fill="none" stroke="#d5c7a8" stroke-width="3" stroke-linecap="round"><path d="M86 777h72m44 21h62m473-17h60m53 21h71"/></g>
+  <use href="#little-gull" x="230" y="225" opacity=".65"/><use href="#little-gull" x="281" y="247" transform="rotate(-8 297 251)" opacity=".5"/>
+
+  <g font-family="ui-sans-serif,system-ui,sans-serif" fill="#2e5350">
+    <path d="M77 73h35" stroke="#689386" stroke-width="2"/>
+    <text x="124" y="77" font-size="10" letter-spacing="3.3" font-weight="600">THE PELICAN CYCLING CLUB</text>
+    <text x="76" y="137" font-size="43" font-weight="650" letter-spacing="4">顺着海风，慢慢骑。</text>
+    <text x="79" y="168" font-size="12" letter-spacing="2" fill="#789084">A SMALL RIDE. A VERY GOOD DAY.</text>
+  </g>
+
+  <ellipse cx="532" cy="790" rx="318" ry="15" fill="#849586" opacity=".17" filter="url(#ground-soft)"/>
+  <!-- The two wheels share the same ground line and complete rim/spoke geometry. -->
+  <g transform="translate(315 655)"><use href="#wheel"/></g>
+  <g transform="translate(745 655)"><use href="#wheel"/></g>
+
+  <!-- Far leg and pedal, behind the bicycle and the near leg. -->
+<g class="cycling-moving">
+<path d="M448.0 439.0L393.4 540.2L510.4 601.3" fill="none" stroke="#aa7550" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="d" values="M448.0 439.0L393.4 540.2L510.4 601.3;M448.0 439.0L400.3 543.6L515.4 608.4;M448.0 439.0L406.9 546.4L518.9 616.2;M448.0 439.0L413.0 548.5L520.8 624.6;M448.0 439.0L418.5 550.2L521.0 633.3;M448.0 439.0L423.4 551.3L519.6 641.8;M448.0 439.0L427.7 552.2L516.5 649.8;M448.0 439.0L431.1 552.8L511.9 657.1;M448.0 439.0L433.5 553.1L506.0 663.4;M448.0 439.0L434.5 553.2L499.0 668.4;M448.0 439.0L433.6 553.1L491.1 671.9;M448.0 439.0L430.4 552.6L482.7 673.8;M448.0 439.0L424.8 551.6L474.1 674.1;M448.0 439.0L417.3 549.8L465.6 672.7;M448.0 439.0L408.5 547.0L457.5 669.6;M448.0 439.0L399.3 543.2L450.2 665.0;M448.0 439.0L390.3 538.5L443.9 659.1;M448.0 439.0L381.8 533.0L438.9 652.0;M448.0 439.0L374.2 527.2L435.4 644.2;M448.0 439.0L367.7 521.3L433.5 635.8;M448.0 439.0L362.4 515.8L433.3 627.1;M448.0 439.0L358.3 511.0L434.7 618.6;M448.0 439.0L355.5 507.3L437.8 610.6;M448.0 439.0L354.0 505.2L442.4 603.3;M448.0 439.0L353.7 504.9L448.3 597.0;M448.0 439.0L354.8 506.4L455.3 592.0;M448.0 439.0L357.3 509.7L463.2 588.5;M448.0 439.0L361.1 514.3L471.6 586.6;M448.0 439.0L366.2 519.8L480.2 586.3;M448.0 439.0L372.3 525.6L488.7 587.7;M448.0 439.0L379.1 531.1L496.8 590.8;M448.0 439.0L386.2 536.0L504.1 595.4;M448.0 439.0L393.4 540.2L510.4 601.3" dur="2.4s" repeatCount="indefinite"/></path>
+<path d="M448.0 439.0L393.4 540.2L510.4 601.3" fill="none" stroke="#db9d60" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="d" values="M448.0 439.0L393.4 540.2L510.4 601.3;M448.0 439.0L400.3 543.6L515.4 608.4;M448.0 439.0L406.9 546.4L518.9 616.2;M448.0 439.0L413.0 548.5L520.8 624.6;M448.0 439.0L418.5 550.2L521.0 633.3;M448.0 439.0L423.4 551.3L519.6 641.8;M448.0 439.0L427.7 552.2L516.5 649.8;M448.0 439.0L431.1 552.8L511.9 657.1;M448.0 439.0L433.5 553.1L506.0 663.4;M448.0 439.0L434.5 553.2L499.0 668.4;M448.0 439.0L433.6 553.1L491.1 671.9;M448.0 439.0L430.4 552.6L482.7 673.8;M448.0 439.0L424.8 551.6L474.1 674.1;M448.0 439.0L417.3 549.8L465.6 672.7;M448.0 439.0L408.5 547.0L457.5 669.6;M448.0 439.0L399.3 543.2L450.2 665.0;M448.0 439.0L390.3 538.5L443.9 659.1;M448.0 439.0L381.8 533.0L438.9 652.0;M448.0 439.0L374.2 527.2L435.4 644.2;M448.0 439.0L367.7 521.3L433.5 635.8;M448.0 439.0L362.4 515.8L433.3 627.1;M448.0 439.0L358.3 511.0L434.7 618.6;M448.0 439.0L355.5 507.3L437.8 610.6;M448.0 439.0L354.0 505.2L442.4 603.3;M448.0 439.0L353.7 504.9L448.3 597.0;M448.0 439.0L354.8 506.4L455.3 592.0;M448.0 439.0L357.3 509.7L463.2 588.5;M448.0 439.0L361.1 514.3L471.6 586.6;M448.0 439.0L366.2 519.8L480.2 586.3;M448.0 439.0L372.3 525.6L488.7 587.7;M448.0 439.0L379.1 531.1L496.8 590.8;M448.0 439.0L386.2 536.0L504.1 595.4;M448.0 439.0L393.4 540.2L510.4 601.3" dur="2.4s" repeatCount="indefinite"/></path>
+<circle cx="393.4" cy="540.2" r="8" fill="#aa7550"><animate attributeName="cx" values="393.4;400.3;406.9;413.0;418.5;423.4;427.7;431.1;433.5;434.5;433.6;430.4;424.8;417.3;408.5;399.3;390.3;381.8;374.2;367.7;362.4;358.3;355.5;354.0;353.7;354.8;357.3;361.1;366.2;372.3;379.1;386.2;393.4" dur="2.4s" repeatCount="indefinite"/><animate attributeName="cy" values="540.2;543.6;546.4;548.5;550.2;551.3;552.2;552.8;553.1;553.2;553.1;552.6;551.6;549.8;547.0;543.2;538.5;533.0;527.2;521.3;515.8;511.0;507.3;505.2;504.9;506.4;509.7;514.3;519.8;525.6;531.1;536.0;540.2" dur="2.4s" repeatCount="indefinite"/></circle>
+<path d="M495 654L528.2 625.1" fill="none" stroke="#55776e" stroke-width="8" stroke-linecap="round"><animate attributeName="d" values="M495 654L528.2 625.1;M495 654L533.2 632.2;M495 654L536.7 640.0;M495 654L538.6 648.4;M495 654L538.9 657.1;M495 654L537.5 665.6;M495 654L534.4 673.6;M495 654L529.8 680.9;M495 654L523.9 687.2;M495 654L516.8 692.2;M495 654L509.0 695.7;M495 654L500.6 697.6;M495 654L491.9 697.9;M495 654L483.4 696.5;M495 654L475.4 693.4;M495 654L468.1 688.8;M495 654L461.8 682.9;M495 654L456.8 675.8;M495 654L453.3 668.0;M495 654L451.4 659.6;M495 654L451.1 650.9;M495 654L452.5 642.4;M495 654L455.6 634.4;M495 654L460.2 627.1;M495 654L466.1 620.8;M495 654L473.2 615.8;M495 654L481.0 612.3;M495 654L489.4 610.4;M495 654L498.1 610.1;M495 654L506.6 611.5;M495 654L514.6 614.6;M495 654L521.9 619.2;M495 654L528.2 625.1" dur="2.4s" repeatCount="indefinite"/></path>
+<g transform="translate(528.2 625.1)"><animateTransform attributeName="transform" type="translate" values="528.2 625.1;533.2 632.2;536.7 640.0;538.6 648.4;538.9 657.1;537.5 665.6;534.4 673.6;529.8 680.9;523.9 687.2;516.8 692.2;509.0 695.7;500.6 697.6;491.9 697.9;483.4 696.5;475.4 693.4;468.1 688.8;461.8 682.9;456.8 675.8;453.3 668.0;451.4 659.6;451.1 650.9;452.5 642.4;455.6 634.4;460.2 627.1;466.1 620.8;473.2 615.8;481.0 612.3;489.4 610.4;498.1 610.1;506.6 611.5;514.6 614.6;521.9 619.2;528.2 625.1" dur="2.4s" repeatCount="indefinite"/><path d="M-21 3H21" stroke="#304d47" stroke-width="7" stroke-linecap="round"/><g transform="scale(0.85)" color="#cd8551"><use href="#webbed-foot"/></g></g>
+</g>
+<g class="cycling-still">
+<path d="M448.0 439.0L393.4 540.2L510.4 601.3" fill="none" stroke="#aa7550" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M448.0 439.0L393.4 540.2L510.4 601.3" fill="none" stroke="#db9d60" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle cx="393.4" cy="540.2" r="8" fill="#aa7550"></circle>
+<path d="M495 654L528.2 625.1" fill="none" stroke="#55776e" stroke-width="8" stroke-linecap="round"></path>
+<g transform="translate(528.2 625.1)"><path d="M-21 3H21" stroke="#304d47" stroke-width="7" stroke-linecap="round"/><g transform="scale(0.85)" color="#cd8551"><use href="#webbed-foot"/></g></g>
+</g>
+
+  <!-- Fenders, two frame triangles, steering tube and fork. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M186 626a132 132 0 0 1 224-64M665 549a132 132 0 0 1 205 69" stroke="#587f74" stroke-width="6"/>
+    <path d="M188 625a130 130 0 0 1 222-62M668 551a130 130 0 0 1 200 66" stroke="#93baaa" stroke-width="2"/>
+    <path d="M315 655 445 488 495 654 315 655M445 488 670 490 495 654M670 490 745 655" stroke="#365b55" stroke-width="14"/>
+    <path d="M315 655 445 488 495 654 315 655M445 488 670 490 495 654M670 490 745 655" stroke="url(#enamel)" stroke-width="9"/>
+    <path d="m450 491 212 2M452 503l37 126M685 525l50 109" stroke="#b7d5bd" stroke-width="2.1" opacity=".8"/>
+    <path d="m445 488-15-36" stroke="#6d8379" stroke-width="9"/>
+    <path d="m446 486-14-34" stroke="#c1cbbc" stroke-width="3"/>
+    <path d="m670 490-15-46q-3-13 12-15l43 2q19 1 22 13" stroke="#5d766d" stroke-width="9"/>
+    <path d="m669 486-13-42q-1-11 12-12l37 2" stroke="#c8d2bd" stroke-width="3"/>
+    <path d="M709 432q18 1 22 12" stroke="#314e49" stroke-width="12"/>
+    <path d="M698 449q48 13 7 106" stroke="#46675e" stroke-width="1.8"/>
+    <path d="M682 520q27 43 56 122" stroke="#c1d4bd" stroke-width="2"/>
+  </g>
+  <path d="M401 445q29-7 66 1l9 10q-23 9-63 2l-17-3q-9-5 5-10Z" fill="#805a44" stroke="#594939" stroke-width="2"/>
+  <path d="M404 447q25-5 57 1" fill="none" stroke="#c3996b" stroke-width="2"/>
+  <path d="M312 632 496 618a36 36 0 0 1 0 72L313 676a22 22 0 0 1-1-44Z" fill="#b3c5ac" stroke="#54766b" stroke-width="2"/>
+  <path d="M317 641 494 630a24 24 0 0 1 0 48l-177-11" fill="none" stroke="#66877a" stroke-width="2"/>
+  <circle cx="495" cy="654" r="27" fill="#d2d7ba" stroke="#53766a" stroke-width="3"/>
+  <circle cx="495" cy="654" r="8" fill="#4e7068"/>
+  <circle cx="745" cy="655" r="7" fill="#c1c6a8" stroke="#365a53" stroke-width="2"/>
+  <circle cx="315" cy="655" r="7" fill="#c1c6a8" stroke="#365a53" stroke-width="2"/>
+  <path d="M570 508h37" stroke="#edf0d5" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+
+  <!-- The far wing reaches the second grip; the main wing crosses in front. -->
+  <path d="M464 337Q531 353 580 383L693 425l-8 14-127-34-98-42Z" fill="#becbc0" stroke="#78958c" stroke-width="1.5"/>
+  <path d="M682 424q19-8 26 9l-4 9-20-6Z" fill="#49645c"/>
+
+  <!-- Tail, body, long neck and head form one continuous white silhouette. -->
+  <path d="m333 370-94 12 29 15-24 12 85 6Z" fill="#344e4b" stroke="#2f4d48" stroke-width="2"/>
+  <path d="m324 375-62 10 53 5m-1 8-48 7" fill="none" stroke="#81988b" stroke-width="1.5"/>
+  <path d="M314 366C302 322 340 289 383 293 427 297 445 335 470 350 491 361 506 343 507 316 508 291 501 270 520 243 538 217 571 205 600 218 622 227 631 248 620 269 612 287 590 287 572 293 546 303 550 341 543 373 536 412 505 443 463 451 419 460 373 442 343 412 325 393 319 383 314 366Z" fill="url(#feathers)" stroke="#708a7c" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M333 378C355 412 401 437 447 435 489 434 517 413 531 385 528 423 502 445 463 451 419 460 373 442 343 412Z" fill="#c5d1c1" opacity=".65"/>
+  <path d="M520 329q-5-43 9-69 16-29 45-32" fill="none" stroke="#fffef4" stroke-width="12" stroke-linecap="round" opacity=".9"/>
+  <path d="M535 237q5-21 25-29l-4 13q13-16 30-17l-8 14" fill="#fffbed" stroke="#7f9787" stroke-width="1.2" stroke-linejoin="round"/>
+  <g fill="none" stroke="#acbaaa" stroke-width="1.5" stroke-linecap="round">
+    <path d="M337 345q30 1 55 24M332 359q32 5 55 28M344 384q27 10 47 24M362 320q23 1 37 14M390 335q25 8 37 24M402 405q24 12 43 11M446 373q19 10 36 6"/>
+  </g>
+
+  <!-- A pelican's long bill, elastic throat pouch and hooked tip. -->
+  <path d="M604 256 806 275q8 3 3 9l-22 13-64 26q-46 19-91-10l-50-37Z" fill="url(#pouch)" stroke="#b17e4e" stroke-width="2"/>
+  <path d="M601 269q42 52 94 51l90-27" fill="none" stroke="#d59656" stroke-width="1.8"/>
+  <path d="M616 241 818 267q10 2 5 12l-11 14-2-16-206-12Z" fill="url(#bill)" stroke="#b27847" stroke-width="2" stroke-linejoin="round"/>
+  <path d="m623 249 183 21" stroke="#ffda8b" stroke-width="3" stroke-linecap="round"/>
+  <path d="m613 265 198 12" stroke="#a86d42" stroke-width="1.5"/>
+  <path d="M620 253h15" stroke="#9d6e41" stroke-width="2" stroke-linecap="round"/>
+  <ellipse cx="590" cy="244" rx="11" ry="12" fill="#e6cf8a"/>
+  <circle cx="592" cy="245" r="6.5" fill="#263f3d"/>
+  <circle cx="594" cy="242" r="2.1" fill="#fffdf3"/>
+  <path d="M579 226q11-5 21 0" fill="none" stroke="#80998b" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Scarf and the near wing articulate toward the handlebar. -->
+  <g class="breeze"><path d="M529 315q-35 7-64-9l-25 11 24 11q34 5 68-1Z" fill="#b5684c"/><path d="M528 320q-26 10-49 12l-9 20 25-9q23-8 41-17Z" fill="#cf8060"/><path d="m454 316 50 6m-21 14 38-12" fill="none" stroke="#e4a37a" stroke-width="1.5"/></g>
+  <path d="M515 310q13-4 22 6l-5 17q-14 2-25-5Z" fill="#b9694d" stroke="#a35e45" stroke-width="1.5"/>
+  <path d="M404 329C434 320 465 335 489 351L555 383 697 424q9 3 10 12l-11 8-153-32-83-31q-35-7-54-28Z" fill="url(#feathers)" stroke="#789183" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M424 344q34 3 61 22l67 30 117 31" fill="none" stroke="#fffdf0" stroke-width="5" stroke-linecap="round"/>
+  <path d="M460 381q-30-12-45-35 21 10 44 16l92 36 147 33 5 11-160-30Z" fill="#5c766b"/>
+  <path d="m681 427 18 4q12 0 15 11-9 11-17-1l-5 8-8-8Z" fill="#3c5951" stroke="#345047" stroke-width="1.5"/>
+  <path d="m690 434 10 6m-4-9 10 6" stroke="#8da493" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Near leg bends at the knee and the webbed foot rests on the near pedal. -->
+<g class="cycling-moving">
+<path d="M414.0 442.0L363.3 541.9L440.8 654.9" fill="none" stroke="#b88050" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="d" values="M414.0 442.0L363.3 541.9L440.8 654.9;M414.0 442.0L355.0 537.2L435.8 647.8;M414.0 442.0L347.6 532.2L432.3 640.0;M414.0 442.0L341.4 527.3L430.4 631.6;M414.0 442.0L336.5 522.9L430.1 622.9;M414.0 442.0L333.0 519.3L431.5 614.4;M414.0 442.0L330.8 517.0L434.6 606.4;M414.0 442.0L330.1 516.2L439.2 599.1;M414.0 442.0L330.9 517.1L445.1 592.8;M414.0 442.0L333.3 519.7L452.2 587.8;M414.0 442.0L337.2 523.6L460.0 584.3;M414.0 442.0L342.6 528.3L468.4 582.4;M414.0 442.0L349.1 533.3L477.1 582.1;M414.0 442.0L356.4 538.0L485.6 583.5;M414.0 442.0L364.0 542.2L493.6 586.6;M414.0 442.0L371.7 545.7L500.9 591.2;M414.0 442.0L379.2 548.4L507.2 597.1;M414.0 442.0L386.2 550.5L512.2 604.2;M414.0 442.0L392.6 551.9L515.7 612.0;M414.0 442.0L398.4 552.9L517.6 620.4;M414.0 442.0L403.6 553.5L517.9 629.1;M414.0 442.0L408.0 553.8L516.5 637.6;M414.0 442.0L411.6 554.0L513.4 645.6;M414.0 442.0L414.0 554.0L508.8 652.9;M414.0 442.0L415.1 554.0L502.9 659.2;M414.0 442.0L414.4 554.0L495.8 664.2;M414.0 442.0L411.6 554.0L488.0 667.7;M414.0 442.0L406.5 553.7L479.6 669.6;M414.0 442.0L399.4 553.0L470.9 669.9;M414.0 442.0L390.9 551.6L462.4 668.5;M414.0 442.0L381.7 549.2L454.4 665.4;M414.0 442.0L372.3 546.0L447.1 660.8;M414.0 442.0L363.3 541.9L440.8 654.9" dur="2.4s" repeatCount="indefinite"/></path>
+<path d="M414.0 442.0L363.3 541.9L440.8 654.9" fill="none" stroke="#e7af70" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="d" values="M414.0 442.0L363.3 541.9L440.8 654.9;M414.0 442.0L355.0 537.2L435.8 647.8;M414.0 442.0L347.6 532.2L432.3 640.0;M414.0 442.0L341.4 527.3L430.4 631.6;M414.0 442.0L336.5 522.9L430.1 622.9;M414.0 442.0L333.0 519.3L431.5 614.4;M414.0 442.0L330.8 517.0L434.6 606.4;M414.0 442.0L330.1 516.2L439.2 599.1;M414.0 442.0L330.9 517.1L445.1 592.8;M414.0 442.0L333.3 519.7L452.2 587.8;M414.0 442.0L337.2 523.6L460.0 584.3;M414.0 442.0L342.6 528.3L468.4 582.4;M414.0 442.0L349.1 533.3L477.1 582.1;M414.0 442.0L356.4 538.0L485.6 583.5;M414.0 442.0L364.0 542.2L493.6 586.6;M414.0 442.0L371.7 545.7L500.9 591.2;M414.0 442.0L379.2 548.4L507.2 597.1;M414.0 442.0L386.2 550.5L512.2 604.2;M414.0 442.0L392.6 551.9L515.7 612.0;M414.0 442.0L398.4 552.9L517.6 620.4;M414.0 442.0L403.6 553.5L517.9 629.1;M414.0 442.0L408.0 553.8L516.5 637.6;M414.0 442.0L411.6 554.0L513.4 645.6;M414.0 442.0L414.0 554.0L508.8 652.9;M414.0 442.0L415.1 554.0L502.9 659.2;M414.0 442.0L414.4 554.0L495.8 664.2;M414.0 442.0L411.6 554.0L488.0 667.7;M414.0 442.0L406.5 553.7L479.6 669.6;M414.0 442.0L399.4 553.0L470.9 669.9;M414.0 442.0L390.9 551.6L462.4 668.5;M414.0 442.0L381.7 549.2L454.4 665.4;M414.0 442.0L372.3 546.0L447.1 660.8;M414.0 442.0L363.3 541.9L440.8 654.9" dur="2.4s" repeatCount="indefinite"/></path>
+<circle cx="363.3" cy="541.9" r="8" fill="#b88050"><animate attributeName="cx" values="363.3;355.0;347.6;341.4;336.5;333.0;330.8;330.1;330.9;333.3;337.2;342.6;349.1;356.4;364.0;371.7;379.2;386.2;392.6;398.4;403.6;408.0;411.6;414.0;415.1;414.4;411.6;406.5;399.4;390.9;381.7;372.3;363.3" dur="2.4s" repeatCount="indefinite"/><animate attributeName="cy" values="541.9;537.2;532.2;527.3;522.9;519.3;517.0;516.2;517.1;519.7;523.6;528.3;533.3;538.0;542.2;545.7;548.4;550.5;551.9;552.9;553.5;553.8;554.0;554.0;554.0;554.0;554.0;553.7;553.0;551.6;549.2;546.0;541.9" dur="2.4s" repeatCount="indefinite"/></circle>
+<path d="M495 654L461.8 682.9" fill="none" stroke="#55776e" stroke-width="8" stroke-linecap="round"><animate attributeName="d" values="M495 654L461.8 682.9;M495 654L456.8 675.8;M495 654L453.3 668.0;M495 654L451.4 659.6;M495 654L451.1 650.9;M495 654L452.5 642.4;M495 654L455.6 634.4;M495 654L460.2 627.1;M495 654L466.1 620.8;M495 654L473.2 615.8;M495 654L481.0 612.3;M495 654L489.4 610.4;M495 654L498.1 610.1;M495 654L506.6 611.5;M495 654L514.6 614.6;M495 654L521.9 619.2;M495 654L528.2 625.1;M495 654L533.2 632.2;M495 654L536.7 640.0;M495 654L538.6 648.4;M495 654L538.9 657.1;M495 654L537.5 665.6;M495 654L534.4 673.6;M495 654L529.8 680.9;M495 654L523.9 687.2;M495 654L516.8 692.2;M495 654L509.0 695.7;M495 654L500.6 697.6;M495 654L491.9 697.9;M495 654L483.4 696.5;M495 654L475.4 693.4;M495 654L468.1 688.8;M495 654L461.8 682.9" dur="2.4s" repeatCount="indefinite"/></path>
+<g transform="translate(461.8 682.9)"><animateTransform attributeName="transform" type="translate" values="461.8 682.9;456.8 675.8;453.3 668.0;451.4 659.6;451.1 650.9;452.5 642.4;455.6 634.4;460.2 627.1;466.1 620.8;473.2 615.8;481.0 612.3;489.4 610.4;498.1 610.1;506.6 611.5;514.6 614.6;521.9 619.2;528.2 625.1;533.2 632.2;536.7 640.0;538.6 648.4;538.9 657.1;537.5 665.6;534.4 673.6;529.8 680.9;523.9 687.2;516.8 692.2;509.0 695.7;500.6 697.6;491.9 697.9;483.4 696.5;475.4 693.4;468.1 688.8;461.8 682.9" dur="2.4s" repeatCount="indefinite"/><path d="M-21 3H21" stroke="#304d47" stroke-width="7" stroke-linecap="round"/><g transform="scale(1)" color="#e2a461"><use href="#webbed-foot"/></g></g>
+</g>
+<g class="cycling-still">
+<path d="M414.0 442.0L363.3 541.9L440.8 654.9" fill="none" stroke="#b88050" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M414.0 442.0L363.3 541.9L440.8 654.9" fill="none" stroke="#e7af70" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle cx="363.3" cy="541.9" r="8" fill="#b88050"></circle>
+<path d="M495 654L461.8 682.9" fill="none" stroke="#55776e" stroke-width="8" stroke-linecap="round"></path>
+<g transform="translate(461.8 682.9)"><path d="M-21 3H21" stroke="#304d47" stroke-width="7" stroke-linecap="round"/><g transform="scale(1)" color="#e2a461"><use href="#webbed-foot"/></g></g>
+</g>
+
+  <g fill="none" stroke="#859a76" stroke-width="2" stroke-linecap="round"><path d="M103 795q13-30 8-62m-5 36-15-13m18-2 14-16M893 790q-8-32 1-56m-2 35 14-13m-14-5-11-12"/></g>
+  <g fill="#d7a268"><circle cx="109" cy="729" r="5"/><circle cx="124" cy="736" r="4"/><circle cx="891" cy="730" r="5"/></g>
+  <g fill="#90a48b"><path d="M103 777q-24 0-24-17 17 1 24 17m7-12q4-22 19-23-2 18-19 23M893 779q15-22 28-17-7 19-28 17"/></g>
+  <rect width="1000" height="900" rx="22" fill="url(#paper-grain)" pointer-events="none"/>
+  <path d="M77 843H923" stroke="#9aaa8c" stroke-width="1" opacity=".5"/>
+  <g fill="#61796b" font-family="ui-sans-serif,system-ui,sans-serif"><text x="79" y="869" font-size="12" letter-spacing="2">不赶时间，刚好遇见海风。</text><text x="920" y="869" font-size="9" letter-spacing="2.4" text-anchor="end">COASTAL EDITION · 01</text></g>
+</svg>

@@ -43,10 +43,10 @@ export default function Diagram(props: { node: DiagramNode; nodeKey: string }) {
       return [{ edge, path: `M${ax + dx * start},${ay + dy * start}L${bx - dx * end},${by - dy * end}`, x: (ax + bx) / 2, y: (ay + by) / 2 - 6 }];
     });
   });
-  const color = (index: number) => context.color(`${props.nodeKey}:node:${props.node.nodes[index].id}`, props.node.nodes[index].color, "accent");
+  const color = (index: number) => context.color(`${props.nodeKey}:node:${props.node.nodes[index].id}`, props.node.nodes[index].color ?? props.node.color, "accent");
   return <div class="nk-graphic-diagram" ref={canvas.ref}>
     <div class="nk-graphic-widget-tools"><span class="nk-graphic-status">选择节点查看详情 · 方向键切换</span><Show when={props.node.palette}><ColorSettings>
-      <For each={props.node.nodes}>{item => <ColorControl colorKey={`${props.nodeKey}:node:${item.id}`} label={item.label} declared={item.color} fallback="accent" />}</For>
+      <For each={props.node.nodes}>{item => <ColorControl colorKey={`${props.nodeKey}:node:${item.id}`} label={item.label} declared={item.color ?? props.node.color} fallback="accent" />}</For>
     </ColorSettings></Show></div>
     <svg class="nk-graphic-canvas" width="100%" height={height()} viewBox={`0 0 ${canvas.width()} ${height()}`} role="group" aria-label={props.node.title ?? "交互关系图"}>
       <title>{props.node.title ?? "关系图"}</title>

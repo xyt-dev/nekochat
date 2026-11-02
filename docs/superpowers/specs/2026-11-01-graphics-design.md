@@ -31,16 +31,18 @@ mdwasm 导出 `validate_graphic(source, complete)`、`sanitize_graphic_svg`、`s
 - row/col/grid/card: `{type,items:GraphicNode[],gap?:number,cols?:number,color?:Color}`；cols 仅 grid 使用，1–4；card 可使用 title。
 - chart: `{type:"chart",kind:"line"|"bar"|"area"|"donut",labels:string[],series:[{label:string,values:number[],color?:Color}],height?:number}`。每条 series 长度等于 labels；donut 仅一条非负 series 且总和大于零；其他图表支持负数。
 - plot: `{type:"plot",xMin:number,xMax:number,yMin?:number,yMax?:number,height?:number,params?:[{name:string,label?:string,value:number,min:number,max:number,step?:number}],series:[{label?:string,expr:string,color?:Color}]}`。参数名合法且不覆盖 x/pi/e/tau，值在范围内。表达式仅算术、变量、pi/e/tau 和 sin/cos/tan/asin/acos/atan/sqrt/abs/exp/log/ln/floor/ceil/round/min/max/pow，不使用 eval。采样固定 512 个区间（513 点，包含两端）；非有限函数值输出 null 以断开路径。结果 `{xMin,xMax,yMin,yMax,series:[{label,points:[[x,y|null],...]}]}`。
-- diagram: `{type:"diagram",width?:number,height?:number,nodes:[{id:string,label:string,x:number,y:number,w?:number,h?:number,description?:string,color?:Color}],edges:[{from:string,to:string,label?:string}]}`。坐标及尺寸有限，边只能引用存在节点，节点 id 唯一。
+- diagram: `{type:"diagram",width?:number,height?:number,color?:Color,nodes:[{id:string,label:string,x:number,y:number,w?:number,h?:number,description?:string,color?:Color}],edges:[{from:string,to:string,label?:string}]}`。diagram.color 是未单独配色节点的默认色；节点 color 优先，均省略时使用主题强调色。坐标及尺寸有限，边只能引用存在节点，节点 id 唯一。
 - svg: `{type:"svg",code:string,height?:number}`，code 通过相同 SVG 校验。
 
 限制：JSON 128 KiB、最多 128 节点、嵌套最多 8 层、普通文本单项 4000 字符、chart 最多 8 系列/每系列 2048 点、plot 最多 8 系列/8 参数/表达式 256 字符、diagram 最多 32 节点/64 边、SVG 64 KiB/1024 元素。高度 120–800，gap 0–32，span 1–4。拒绝未知字段、未知节点、非有限数值、无效范围及危险颜色表达式。
 
-SVG 仅允许静态几何/文字/渐变/裁切元素与有限属性；禁止脚本、事件、foreignObject、动画、外部资源、外部 href、DOCTYPE/ENTITY 和 style 元素。支持 fill/stroke 的 currentColor 与 var(--nk-*) 主题颜色，以及安全的片段渐变引用 url(#id)。通过隔离图片模式绘制；主题变化时替换主题值并回收旧 Blob URL，不把原始模型 SVG 写入宿主 DOM。
+SVG 使用浏览器原生图片模式绘制，支持基本形状、完整路径/变换、文字/tspan/textPath、线性/径向渐变、clipPath/mask/pattern/marker、filter 及滤镜原语、defs/symbol/use、本地 href/xlink、内嵌位图与 SVG 图片、内嵌字体、安全样式属性/样式表/CSS 关键帧、SMIL 声明式动画，以及图片模式可绘制的 foreignObject/XHTML 排版。Rust/WASM 统一校验 XML、CSS 令牌和资源引用并重建命名空间，不用有限的颜色/绘图属性子集代替原生 SVG 语法。嵌套 data SVG 递归通过同一校验与主题准备，并共享体积/元素预算；保留深度和引用循环/展开量限制。拒绝脚本、事件处理、外部网络引用、可执行 URL、DTD/ENTITY 与用户提供的处理指令。最终绘图始终作为隔离 Blob 图片呈现；脚本、链接导航及其他文档交互不属于图片上下文能力。各浏览器对 SVG 绘图特性的具体实现仍以原生引擎为准。
 
 无障碍 `aria-labelledby` / `aria-describedby` 仅接受本 SVG 内已定义的 ID 引用列表，拒绝 URL、片段前缀和不存在的目标，保留静态 title/desc 语义。
 
-主题色允许 `var(--nk-blue, #4a90d9)` 形式的安全字面回退；主题变量名仍受白名单限制，回退不接受嵌套变量、URL 或执行内容。隔离图片输出前在宿主主题中解析完整颜色值。
+主题变量通过生成的可信 data CSS 处理指令提供低优先级默认值，不往根元素添加样式子节点，保留源 SVG 的结构选择器、CSS 层叠、局部变量、currentColor 继承与渐变关系；兼容 `--nk-muted` 到 `--nk-text-muted` 的回退，宿主显式提供别名时尊重其值。只有 SMIL 参数实际含变量时，才把已校验文档加载到临时 `sandbox="allow-same-origin"`、禁用脚本的隔离 iframe，用原生动画 targetElement 和 getComputedStyle 读取目标元素的变量，再立即移除文档并回收 URL；不把 SVG 插入宿主元素树。替换与卸载通过 AbortSignal 取消过期准备。主题变化时重建并回收旧 Blob，图形无障碍名称继承源 SVG 的 aria-label/title。
+
+实现依据：[SVG 2 secure animated mode](https://www.w3.org/TR/SVG2/conform.html#secure-animated-mode) 定义图片模式的声明式动画、无脚本/外部资源边界；XML 由 roxmltree 解析，CSS 令牌复用 Servo [cssparser](https://docs.rs/cssparser/)。对照了 [DOMPurify 的 SVG 配置及输出上下文警告](https://github.com/cure53/DOMPurify#can-i-configure-dompurify)：它面向可插入 DOM 的清理，不能单独提供本项目跨 Rust/WASM 的资源预算与无外链规则；本项目不引入第二套 DOM 清理/绘图规则，保留原生图片隔离，主题处理仅在已校验内容内进行。
 
 ## 前端边界与性能
 

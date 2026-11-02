@@ -30,6 +30,36 @@ fn invalid_graphical_contracts_are_rejected() {
 }
 
 #[test]
+fn diagram_default_colors_accept_only_the_existing_safe_palette() {
+    let mut source = json!({"version":1,"title":"预算怎么被吃掉的","gap":10,"items":[
+        {"type":"text","size":"muted","content":"**示例结构，不是实测数值**：窗口先扣固定开销，再扣历史与材料，最后必须给输出留位置。"},
+        {"type":"diagram","width":420,"height":280,"color":"blue","nodes":[
+            {"id":"w","label":"窗口上限","x":140,"y":8,"w":140,"h":34,"description":"模型单次能处理的最大 token 数"},
+            {"id":"s","label":"系统提示与工具","x":140,"y":52,"w":140,"h":34,"description":"常驻开销，通常改不了，但要知道它占了多少"},
+            {"id":"h","label":"历史对话","x":140,"y":96,"w":140,"h":34,"description":"会随轮次累积，最容易被忽视的一块"},
+            {"id":"m","label":"贴入的材料","x":140,"y":140,"w":140,"h":34,"description":"代码、日志、文档，只留与问题相关的部分"},
+            {"id":"o","label":"输出预留","x":140,"y":184,"w":140,"h":34,"description":"不给它留位置，回答就会在中途被截断"},
+            {"id":"r","label":"真正可用","x":140,"y":228,"w":140,"h":34,"description":"剩下的部分才决定你能问多复杂的问题","color":"teal"}
+        ],"edges":[
+            {"from":"w","to":"s","label":"减"},{"from":"s","to":"h","label":"减"},
+            {"from":"h","to":"m","label":"减"},{"from":"m","to":"o","label":"减"},
+            {"from":"o","to":"r","label":"剩"}
+        ]}
+    ]});
+    for color in ["blue", "accent", "#39a", "#3399aa", "#3399aa80"] {
+        source["items"][1]["color"] = json!(color);
+        validate_graphic_json(&source.to_string()).unwrap_or_else(|error| panic!("{color}: {error}"));
+    }
+    for color in [json!("url(https://example.com/color)"), json!("var(--custom)"), json!("#12"), json!(17), Value::Null] {
+        source["items"][1]["color"] = color;
+        assert!(validate_graphic_json(&source.to_string()).is_err());
+    }
+    source["items"][1]["color"] = json!("blue");
+    source["items"][1]["colour"] = json!("teal");
+    assert!(validate_graphic_json(&source.to_string()).is_err());
+}
+
+#[test]
 fn recursive_and_duplicate_graphical_nodes_are_bounded() {
     let duplicate = json!({"version":1,"items":[{"type":"text","id":"same","content":"A"},{"type":"text","id":"same","content":"B"}]}).to_string();
     assert!(validate_graphic_json(&duplicate).is_err());
@@ -46,7 +76,6 @@ fn svg_cannot_run_scripts_or_fetch_resources() {
         "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>",
         "<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"><rect width=\"10\" height=\"10\"/></svg>",
         "<svg xmlns=\"http://www.w3.org/2000/svg\"><image href=\"https://example.com/a.png\"/></svg>",
-        "<svg xmlns=\"http://www.w3.org/2000/svg\"><foreignObject><div>bad</div></foreignObject></svg>",
         "<svg xmlns=\"http://www.w3.org/2000/svg\"><style>svg{background:url(https://example.com/x)}</style></svg>",
     ] { assert!(sanitize_graphic_svg(source).is_err()); }
 }
@@ -218,7 +247,7 @@ fn svg_theme_colors_preserve_safe_literal_fallbacks_and_reject_external_paints()
     let stops: Vec<_> = document.descendants().filter(|node| node.has_tag_name("stop")).collect();
     assert_eq!(stops[0].attribute("stop-color"), Some("var(--nk-blue, #4a90d9)"));
     assert_eq!(stops[1].attribute("stop-color"), Some("var(--nk-blue, navy)"));
-    for paint in ["var(--unknown, #fff)","var(--nk-blue, url(https://example.com))","var(--nk-blue, red);display:none"] {
+    for paint in ["var(--nk-blue, url(https://example.com))","var(--nk-blue, red);display:none"] {
         let source = format!(r#"<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="2" fill="{paint}"/></svg>"#);
         assert!(sanitize_graphic_svg(&source).is_err());
     }

@@ -8,4 +8,5 @@ license.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 roxmltree = "0.21"
+cssparser = "0.35"
 

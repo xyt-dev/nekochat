@@ -41,10 +41,24 @@ export function subscribeTheme(subscriber: () => void): () => void {
     }
   };
 }
-/** Browser color resolution handles nested variables; only computed colors enter SVG. */
+/** Snapshot custom properties without coercing lengths, opacity, or CSS expressions to colors. */
+export function svgThemeProperties(host: HTMLElement): Record<string, string> {
+  const computed = getComputedStyle(host);
+  const properties: Record<string, string> = Object.create(null);
+  for (let index = 0; index < computed.length; index++) {
+    const name = computed.item(index);
+    if (name.startsWith("--nk-")) properties[name] = computed.getPropertyValue(name).trim();
+  }
+  properties["--nk-muted"] = computed.getPropertyValue("--nk-muted").trim() || computed.getPropertyValue("--nk-text-muted").trim();
+  return properties;
+}
+
+/** Browser color resolution is reserved for palette controls and explicit paint overrides. */
 export function resolvedColor(host: HTMLElement, color: string): string {
   const probe = document.createElement("span");
   probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none";
+  const computed = getComputedStyle(host);
+  if (!computed.getPropertyValue("--nk-muted").trim()) probe.style.setProperty("--nk-muted", computed.getPropertyValue("--nk-text-muted"));
   probe.style.color = color;
   host.appendChild(probe);
   const resolved = getComputedStyle(probe).color;

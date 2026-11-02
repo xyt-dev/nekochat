@@ -21,7 +21,7 @@ pub fn validate_graphic(source: &str, complete: bool) -> Result<String, wasm_bin
     checked.map_err(|error| wasm_bindgen::JsValue::from_str(&error))
 }
 
-/// Rebuilds static SVG through the core allowlist.
+/// Validates and rebuilds bounded native SVG for isolated image rendering.
 #[wasm_bindgen]
 pub fn sanitize_graphic_svg(source: &str) -> Result<String, wasm_bindgen::JsValue> {
     nekochat_core::graphics::sanitize_graphic_svg(source).map_err(|error| wasm_bindgen::JsValue::from_str(&error))

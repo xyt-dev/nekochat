@@ -57,20 +57,20 @@ Create and customize characters in `/admin` using visual controls and live previ
   </tr>
 </table>
 
-### 🎨 From data charts to narrative illustration
+### 🎨 A pelican on a bicycle: an illustration inside a conversation
 
-Characters can compose cards, charts, parameterized plots, and static SVG directly inside a reply. Both images below were captured from real character responses in the chat UI. The illustration uses gradients, stars, and space to tell a story; the data view exposes an independent palette only for the explicitly requested bar chart, while its plot slider changes the curve locally.
+A white pelican in a terracotta scarf takes a mint-green bicycle along the coast. Its long bill, golden throat pouch, and wings resting on the handlebars sit above a complete bicycle frame, fork, chain guard, and spoked wheels. Cream paper texture, sea, sunset, and wildflowers create a warm coastal setting. The webbed feet follow opposite pedals, the knees bend through each stroke, the cranks and spokes turn together, and the scarf sways in the breeze. The looping GIF below was recorded from the SVG animation in the app's real chat interface, followed by a mobile capture. Download the [complete SVG source](docs/examples/pelican-on-a-bicycle.svg) and place its contents inside an `svg` code fence to reproduce it. The artwork and animation are self-contained and use no external assets. This example was authored for the demonstration.
 
 <p align="center">
-  <img src="docs/screenshots/graphics-svg-dark.webp" width="92%" alt="Real generated SVG illustration of a whale swimming from a deep blue sea toward a dragon constellation, connected by bubbles and a dotted path" />
+  <img src="docs/screenshots/pelican-on-a-bicycle.gif" width="92%" alt="Looping animation of a white pelican in a terracotta scarf cycling along a warm coast: its legs and webbed feet follow opposite pedals, the cranks and spokes turn together, and its scarf sways in the breeze" />
   <br />
-  <sub>Above the deep blue: generated static SVG with theme colors, gradients, and detail, safely rendered locally without default color controls.</sub>
+  <sub>Looping GIF · Recorded from the real chat interface and cropped to the artwork. A complete loop takes 4.8 seconds, with feet following the pedals and knees bending naturally. A <a href="docs/screenshots/graphics-svg-dark.webp">static desktop capture</a> is also available.</sub>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/graphics-dashboard-dark.webp" width="92%" alt="Sample learning dashboard with two metric cards, a blue focus-hours bar chart, and an interactive sine plot with amplitude set to 1.5" />
+  <img src="docs/screenshots/graphics-svg-mobile-dark.webp" width="38%" alt="A pelican on a bicycle rendered in the real chat UI at a 430px mobile viewport: the entire coastal poster, pelican, both bicycle wheels, and title fit the message, with its source disclosure closed" />
   <br />
-  <sub>Sample learning view: cards, data, and a parameterized plot in one reply. Sliders, chart switching, and requested component palettes run without another model call.</sub>
+  <sub>Mobile · 430px viewport: the same coastal illustration fits the message width, preserving the pelican, wheels, and typography. No extra color controls appear.</sub>
 </p>
 
 Ordinary replies default to four clickable suggested questions. Standalone choice blocks move to the end when the reply finishes, after the unified reference list in search replies; choices within mixed graphics stay in place. Clicking a choice fills the draft for editing and sending. A small source disclosure at the bottom opens the original specification, with its copy button inside the upper-right corner of the source frame. Parameters, views, and component colors can be restored in the current browser; graphic and choice generation is still guided by character instructions.
