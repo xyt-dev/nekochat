@@ -205,7 +205,7 @@ export function AssistantMessage(props: { node: NodeView }) {
         <Reasoning text={() => n().reasoning ?? ""} label={label} />
       </Show>
       <Markdown id={n().id} text={() => n().content} final={() => true} onQuestion={chooseQuestion} questionsDisabled={questionsDisabled()} />
-      <Show when={store.nodeErrors()[n().id]}>
+      <Show when={store.nodeErrors()[n().id] || (n().status === "error" ? n().content.trim() ? "本次回复未完成。可重新生成；已有内容和用量已保留。" : "未收到回复正文。请重新生成；若反复出现，请联系管理员检查模型协议与上游响应。" : null)}>
         {(msg) => <div class="msg-error" role="alert">{msg()}</div>}
       </Show>
       <DebugLine metrics={n().metrics} status={n().status} />

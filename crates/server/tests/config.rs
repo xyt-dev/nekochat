@@ -1,7 +1,8 @@
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 
-use nekochat_server::config::{Config, ProviderEntry, load, resolve_api_keys, startup_warnings};
+use nekochat_server::config::{Config, ProviderEntry, load, startup_warnings};
+use nekochat_server::providers::resolve_configured;
 
 fn cfg(listen: &str, access_password: Option<&str>, trusted_proxies: Vec<IpAddr>) -> Config {
     Config {
@@ -47,7 +48,9 @@ fn example_config_parses() {
 
 #[test]
 fn missing_api_key_names_provider_and_var() {
-    let err = resolve_api_keys(&cfg_with_one_provider(), |_| None)
+    let directory = tempfile::tempdir().unwrap();
+    let store = nekochat_store::Store::open(&directory.path().join("config.db")).unwrap();
+    let err = resolve_configured(&cfg_with_one_provider(), &store, |_| None)
         .unwrap_err()
         .to_string();
     assert!(err.contains("deepseek") && err.contains("DEEPSEEK_API_KEY"));

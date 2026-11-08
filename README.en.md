@@ -138,6 +138,7 @@ In `crates/server/src/generation.rs`, an independent server-side Tokio task owns
 - **Reconnect to a snapshot instead of restarting inference.** After a refresh or a device switch, `GET /api/conversations/{id}/turns` subscribes to the existing generation. The server sends its current `snapshot`, followed by incremental updates, without issuing another model request.
 - **Resume mobile replies automatically.** Returning to the page, restoring it from the page cache, or regaining connectivity reattaches observation of the current reply. Completed replies are fetched in full; running replies resume from a current snapshot. Drafts and message state stay intact, so graphics and source do not need a manual refresh.
 - **Aggregate streamed text in memory.** Text and reasoning fragments accumulate in the generation state. Generation startup and terminal states—completion, interruption, or failure—are persisted to SQLite, rather than writing every token separately.
+- **Empty replies remain visible failures.** A finished upstream response without an answer is marked as an error while preserving reported usage and reasoning. The error and regenerate action survive reloads. Refusals and final-only text remain visible; the server never retries or switches models automatically.
 
 ### 3. 🖼️ Shared image buffers and streaming sticker parsing
 
@@ -181,7 +182,7 @@ source .env.local
 Adjust `config.toml` for your model connection:
 
 - **Official ChatGPT subscription only (Plus / Pro):** comment out or remove the example `[[providers]]` sections and set `admin_password = "your-admin-password"`.
-- **DeepSeek / OpenCode Go API keys:** retain the relevant `[[providers]]` sections and set `export DEEPSEEK_API_KEY=...` or `export OPENCODE_API_KEY=...`. Each configured provider requires its corresponding environment variable to be nonempty at startup.
+- **Any compatible API endpoint:** add a site under Model Management after startup, enter its base URL and API key, fetch its models, and select which ones to list. Changes take effect without restarting. TOML providers also remain supported; their environment keys are required at startup until that provider is overridden or deleted in the admin console.
 
 ### 3. Build, deploy, and clean with one command
 
@@ -211,7 +212,7 @@ Existing programs are reused without checking source modification times, so expl
 ### 5. Configure a character and start chatting
 
 1. Open `http://127.0.0.1:10000/admin` and sign in with `admin_password`.
-2. In **Model Management (`模型管理`)**, connect an **official ChatGPT account (Sign in with ChatGPT)** or refresh an API provider's model directory. List the models you want to use with **`上架`**.
+2. In **Model Management (`模型管理`)**, connect an **official ChatGPT account (Sign in with ChatGPT)**, or add a compatible API site with its URL and key, fetch its model list, and select models to list. Model editing supports context capacities, reasoning levels, and fetching disclosed provider prices with their source; unreported or unsupported price schemes remain unknown.
 3. Optionally, in **Search Services (`搜索服务`)**, save the search connection using the two tokens from `.env.local`. Add a DeepSeek service or a GPT search service that reuses the site's ChatGPT connection.
 4. In **Character Management (`角色管理`)**, create a character: bind a listed model, enable `nekowhale` / `nekowhale-gpt` sticker packs, optionally assign a search service, upload an avatar and artwork, and set the default character.
 5. Return to `http://127.0.0.1:10000/`, register a chat account, and start a conversation.

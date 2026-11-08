@@ -82,6 +82,27 @@ impl SearchClient {
         let response = request.send().await.map_err(|error| if error.is_timeout() { SearchError::new(504,"engine_timeout") } else { SearchError::new(502,"engine_unavailable") })?;
         if !response.status().is_success() {
             let status = response.status().as_u16();
+            if status >= 500 {
+                let bytes = bounded_body(response, 4096).await?;
+                if let Ok(body) = serde_json::from_slice::<Value>(&bytes) {
+                    let code = match body["error"].as_str() {
+                        Some("provider_rejected_request") => "provider_rejected_request",
+                        Some("provider_authentication_failed") => "provider_authentication_failed",
+                        Some("provider_balance_insufficient") => "provider_balance_insufficient",
+                        Some("provider_access_denied") => "provider_access_denied",
+                        Some("provider_resource_unavailable") => "provider_resource_unavailable",
+                        Some("provider_request_too_large") => "provider_request_too_large",
+                        Some("provider_rate_limited") => "provider_rate_limited",
+                        Some("provider_timeout") => "provider_timeout",
+                        Some("provider_transport_failed") => "provider_transport_failed",
+                        Some("provider_failed") => "provider_failed",
+                        Some("invalid_provider_response") => "invalid_provider_response",
+                        Some("private_storage_unavailable") => "private_storage_unavailable",
+                        _ => "invalid_engine_response",
+                    };
+                    return Err(SearchError::new(status, code));
+                }
+            }
             return Err(match status {
                 400 => SearchError::new(400,"engine_rejected_request"),
                 401 => SearchError::new(401,"engine_authentication_required"),

@@ -14,32 +14,13 @@ use crate::model_defaults::{self, ModelDefaults};
 use crate::state::AppState;
 
 #[derive(Serialize)]
-pub struct ProviderSummary {
-    key: String,
-    label: String,
-    connected: bool,
-}
-
-pub async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderSummary>> {
-    Json(
-        state
-            .providers
-            .iter()
-            .map(|p| ProviderSummary {
-                key: p.key.clone(),
-                label: p.label.clone(),
-                connected: state.provider(&p.key).is_some(),
-            })
-            .collect(),
-    )
-}
-
-#[derive(Serialize)]
 pub struct UpstreamModel {
     upstream_id: String,
     listed_model_id: Option<String>,
     supported: bool,
     defaults: Option<ModelDefaults>,
+    price_source: Option<String>,
+    fetched_at_ms: i64,
 }
 
 pub async fn provider_models(
@@ -63,38 +44,58 @@ pub async fn provider_models(
                     supported: true,
                     defaults: Some(model.defaults()),
                     upstream_id: model.slug,
+                    price_source: None,
+                    fetched_at_ms: nekochat_store::now_ms(),
                 })
                 .collect(),
         ));
     }
     let provider = state.provider(&key).ok_or_else(ApiError::not_found)?;
+    catalog_rows(&state, &provider).await.map(Json)
+}
+
+/// Discover a form draft without changing provider credentials or model configuration.
+pub async fn discover_provider(
+    State(state): State<AppState>,
+    crate::providers::ProviderBody(body): crate::providers::ProviderBody,
+) -> Result<Json<Vec<UpstreamModel>>, ApiError> {
+    let provider = crate::providers::resolve_draft(&state, body)?;
+    catalog_rows(&state, &provider).await.map(Json)
+}
+
+async fn catalog_rows(
+    state: &AppState,
+    provider: &nekochat_gateway::Provider,
+) -> Result<Vec<UpstreamModel>, ApiError> {
     let upstream = nekochat_gateway::list_models(&state.http, provider)
         .await
         .map_err(|error| {
-            tracing::warn!(provider = %key, "listing upstream models failed: {}", match error {
-                nekochat_gateway::GatewayError::Http { status, .. } => format!("HTTP {status}"),
-                _ => "transport or protocol error".into(),
-            });
-            ApiError::new(StatusCode::BAD_GATEWAY, "获取上游模型列表失败")
+            let message = match error {
+                nekochat_gateway::GatewayError::Http { status: 401 | 403, .. } => "获取模型列表失败：API Key 无效或没有权限",
+                nekochat_gateway::GatewayError::Http { status: 404, .. } => "站点未提供此模型列表地址，请检查地址或手动上架模型",
+                nekochat_gateway::GatewayError::Http { status: 429, .. } => "获取模型列表触发站点频率限制，请稍后重试",
+                nekochat_gateway::GatewayError::Http { .. } => "获取模型列表失败：上游站点返回错误状态",
+                nekochat_gateway::GatewayError::Protocol(_) => "站点模型列表格式无法识别，请手动上架模型",
+                nekochat_gateway::GatewayError::Transport(_) => "无法连接模型列表地址或请求超时",
+            };
+            ApiError::new(StatusCode::BAD_GATEWAY, message)
         })?;
     let store = state.store.clone();
     let listed: HashMap<String, String> = blocking(move || store.list_models())
         .await?
         .into_iter()
-        .filter(|m| m.spec.provider == key)
-        .map(|m| (m.spec.upstream_id, m.id))
+        .filter(|model| model.spec.provider == provider.key)
+        .map(|model| (model.spec.upstream_id, model.id))
         .collect();
-    Ok(Json(
-        upstream
-            .into_iter()
-            .map(|upstream_id| UpstreamModel {
-                listed_model_id: listed.get(&upstream_id).cloned(),
-                supported: model_defaults::supported(provider, &upstream_id),
-                defaults: model_defaults::defaults(provider, &upstream_id),
-                upstream_id,
-            })
-            .collect(),
-    ))
+    let fetched_at_ms = nekochat_store::now_ms();
+    Ok(upstream.into_iter().map(|entry| UpstreamModel {
+        listed_model_id: listed.get(&entry.id).cloned(),
+        supported: model_defaults::supported(provider, &entry.id),
+        defaults: Some(model_defaults::from_catalog(provider, &entry)),
+        price_source: entry.price_source,
+        fetched_at_ms,
+        upstream_id: entry.id,
+    }).collect())
 }
 
 pub async fn list_models(
@@ -145,7 +146,7 @@ async fn check_spec(state: &AppState, spec: &ModelSpec) -> Result<(), ApiError> 
             "ChatGPT Responses 仅用于官方订阅账号",
         ));
     }
-    if !model_defaults::supported(provider, &spec.upstream_id) {
+    if !model_defaults::supported(&provider, &spec.upstream_id) {
         return Err(ApiError::bad_request("此模型需要尚未接入的上游协议"));
     }
     let native_protocol = if model_defaults::official_host(&provider.base_url, "opencode.ai") {

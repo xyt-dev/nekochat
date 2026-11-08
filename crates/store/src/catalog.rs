@@ -58,6 +58,7 @@ fn frequency_default() -> String {
 pub enum SettingKey {
     DefaultCharacter,
     SearchConnection,
+    Providers,
 }
 
 impl SettingKey {
@@ -65,6 +66,7 @@ impl SettingKey {
         match self {
             SettingKey::DefaultCharacter => "default_character_id",
             SettingKey::SearchConnection => "search_connection",
+            SettingKey::Providers => "providers",
         }
     }
 }

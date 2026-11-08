@@ -28,7 +28,7 @@ use crate::accounts::CurrentUser;
 use crate::api::user::NodeView;
 use crate::api::{ApiError, JsonBody, blocking};
 use crate::generation::Generation;
-use crate::chat_search::{SearchFailure, SearchTurn, TOOL_INSTRUCTIONS, call_refs};
+use crate::chat_search::{SearchFailure, SearchTurn, TOOL_INSTRUCTIONS, NO_TOOL_RECOVERY_INSTRUCTION, call_refs};
 use crate::state::{AppState, TurnGuard};
 use tokio_util::sync::CancellationToken;
 
@@ -483,7 +483,7 @@ fn context(
     for node in store.path_to(&conv.id, parent)? {
         let role = match node.role {
             NodeRole::User => ChatRole::User,
-            NodeRole::Assistant if node.content.is_empty() => continue,
+            NodeRole::Assistant if node.content.trim().is_empty() => continue,
             NodeRole::Assistant => ChatRole::Assistant,
         };
         messages.push(message_with_attachments(
@@ -744,12 +744,21 @@ impl Turn {
             start,
         );
         self.account_events.publish(&self.owner_user_id, &self.prepared.conv_id);
-        let end = self.stream(generation).await;
+        let mut end = self.stream(generation).await;
         let discard = generation.discarded() || matches!(&end, End::Deleted);
-        let status = end.status().unwrap_or(NodeStatus::Interrupted);
+        let mut empty_completion = false;
         if !discard {
-            generation.finalize_content(|content| crate::chat_search::finalize_reply(content, self.search.as_ref()));
+            let mut empty_reply = false;
+            generation.finalize_content(|content| {
+                empty_reply = content.trim().is_empty();
+                crate::chat_search::finalize_reply(content, self.search.as_ref());
+            });
+            empty_completion = matches!(&end, End::Done) && empty_reply;
+            if empty_completion {
+                end = End::Failed(GatewayError::Protocol("上游未返回回复正文，本次生成未完成。请重新生成；若反复出现，请联系管理员检查模型协议与上游响应。".into()));
+            }
         }
+        let status = end.status().unwrap_or(NodeStatus::Interrupted);
         if let End::Failed(error) = &end {
             let (kind, http_status) = match error {
                 GatewayError::Http { status, .. } => ("http", Some(*status)),
@@ -759,7 +768,7 @@ impl Turn {
             tracing::warn!(conversation = %self.prepared.conv_id, kind, http_status, "upstream error");
         }
         let (node, mut usage) =
-            generation.finalize(status, self.model.id, self.label.clone(), self.effort);
+            generation.finalize(status, self.model.id, self.label.clone(), self.effort, empty_completion);
         let node = if discard { None } else { node };
         if self.usage_incomplete {
             if let Some(usage) = &mut usage {
@@ -912,7 +921,18 @@ impl Turn {
                 Ok(calls) => calls,
                 Err(error) => break 'rounds End::Failed(error),
             };
-            if requested.is_empty() { break End::Done; }
+            if requested.is_empty() {
+                if exchange.content.trim().is_empty()
+                    && let Some(search) = &mut self.search
+                    && search.disable_tools()
+                {
+                    // Authorized search always prepends a trusted system prompt during preparation.
+                    self.prepared.messages[0].content.push_str(NO_TOOL_RECOVERY_INSTRUCTION);
+                    search.context.history.push(exchange);
+                    continue;
+                }
+                break End::Done;
+            }
             let Some(search) = &mut self.search else {
                 break End::Failed(GatewayError::Protocol("当前角色未授权工具调用".into()));
             };

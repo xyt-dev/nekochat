@@ -1,7 +1,7 @@
-//! Conservative defaults from official provider docs, verified 2026-10-27.
-//! Sources: opencode.ai/v2/docs/console/{models,go}, api-docs.deepseek.com/{quick_start/pricing,guides/thinking_mode}.
+//! Conservative official capabilities plus metadata disclosed by the configured provider.
+//! Prices remain unknown unless the provider's catalog supplies recognized USD rates.
 use nekochat_core::{Price, Protocol, ReasoningSpec, ReasoningStyle};
-use nekochat_gateway::Provider;
+use nekochat_gateway::{ModelCatalogEntry, Provider};
 use serde::Serialize;
 
 use crate::config::GoPlan;
@@ -36,8 +36,8 @@ pub struct ModelDefaults {
     pub(crate) price: Price,
 }
 
-pub fn defaults(provider: &Provider, id: &str) -> Option<ModelDefaults> {
-    let mut result = ModelDefaults {
+fn conservative(id: &str) -> ModelDefaults {
+    ModelDefaults {
         display_name: id.to_owned(),
         protocol: Protocol::ChatCompletions,
         reasoning: ReasoningSpec {
@@ -52,7 +52,35 @@ pub fn defaults(provider: &Provider, id: &str) -> Option<ModelDefaults> {
             uncached_in: None,
             output: None,
         },
-    };
+    }
+}
+
+/// Merge only disclosed catalog fields; absent relay metadata stays conservative.
+/// Callers must still enforce `supported` before offering official protocol routes.
+pub fn from_catalog(provider: &Provider, entry: &ModelCatalogEntry) -> ModelDefaults {
+    let mut result = defaults(provider, &entry.id).unwrap_or_else(|| conservative(&entry.id));
+    if let Some(name) = &entry.name {
+        result.display_name = name.clone();
+    }
+    if let Some(context_window) = entry.context_window {
+        result.context_window = Some(context_window);
+    }
+    if let Some(vision) = entry.vision {
+        result.vision = vision;
+    }
+    if let Some(reasoning) = &entry.reasoning {
+        let native_deepseek = result.reasoning.style == ReasoningStyle::DeepSeek;
+        result.reasoning = reasoning.clone();
+        if native_deepseek && reasoning.style == ReasoningStyle::Effort {
+            result.reasoning.style = ReasoningStyle::DeepSeek;
+        }
+    }
+    result.price = entry.price.clone();
+    result
+}
+
+pub fn defaults(provider: &Provider, id: &str) -> Option<ModelDefaults> {
+    let mut result = conservative(id);
     if official_host(&provider.base_url, "api.deepseek.com") {
         let (name, vision) = match id {
             "deepseek-flash" => ("DeepSeek V4.1 Flash", true),
@@ -92,33 +120,24 @@ pub fn defaults(provider: &Provider, id: &str) -> Option<ModelDefaults> {
         }
         return Some(result);
     }
-    let (name, price) = match id {
-        "glm-5.3-flash" => ("GLM 5.3 Flash", Some((0.03, 0.15, 0.50))),
-        "glm-5.3" => ("GLM 5.3", Some((0.26, 1.40, 4.40))),
-        "glm-5.2" => ("GLM 5.2", Some((0.26, 1.40, 4.40))),
-        "glm-5.1" => ("GLM 5.1", Some((0.26, 1.40, 4.40))),
-        "glm-5" => ("GLM 5", Some((0.20, 1.00, 3.20))),
-        "minimax-m3" => ("MiniMax M3", Some((0.06, 0.30, 1.20))),
-        "minimax-m2.7" => ("MiniMax M2.7", Some((0.06, 0.30, 1.20))),
-        "minimax-m2.5" => ("MiniMax M2.5", Some((0.06, 0.30, 1.20))),
-        "kimi-k2.7-code" => ("Kimi K2.7 Code", Some((0.19, 0.95, 4.00))),
-        "kimi-k2.6" => ("Kimi K2.6", Some((0.16, 0.95, 4.00))),
-        "kimi-k2.5" => ("Kimi K2.5", Some((0.10, 0.60, 3.00))),
-        "kimi-k3" => ("Kimi K3", Some((0.30, 3.00, 15.00))),
-        "deepseek-v4.1-flash" => ("DeepSeek V4.1 Flash", None),
-        "deepseek-v4-pro" => ("DeepSeek V4 Pro", None),
-        // Cache writes have a distinct rate that the current Price schema cannot express.
-        "qwen3.8-max" => ("Qwen3.8 Max", None),
+    result.display_name = match id {
+        "glm-5.3-flash" => "GLM 5.3 Flash",
+        "glm-5.3" => "GLM 5.3",
+        "glm-5.2" => "GLM 5.2",
+        "glm-5.1" => "GLM 5.1",
+        "glm-5" => "GLM 5",
+        "minimax-m3" => "MiniMax M3",
+        "minimax-m2.7" => "MiniMax M2.7",
+        "minimax-m2.5" => "MiniMax M2.5",
+        "kimi-k2.7-code" => "Kimi K2.7 Code",
+        "kimi-k2.6" => "Kimi K2.6",
+        "kimi-k2.5" => "Kimi K2.5",
+        "kimi-k3" => "Kimi K3",
+        "deepseek-v4.1-flash" => "DeepSeek V4.1 Flash",
+        "deepseek-v4-pro" => "DeepSeek V4 Pro",
+        "qwen3.8-max" => "Qwen3.8 Max",
         _ => return None,
-    };
-    result.display_name = name.into();
-    if let Some((cached_in, uncached_in, output)) = price {
-        result.price = Price {
-            cached_in: Some(cached_in),
-            uncached_in: Some(uncached_in),
-            output: Some(output),
-        };
-    }
+    }.into();
     Some(result)
 }
 
@@ -139,4 +158,76 @@ pub fn monthly_limit(id: &str, plan: GoPlan) -> Option<f64> {
         GoPlan::Go => go,
         GoPlan::GoPlus => plus,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nekochat_gateway::ModelCatalogEntry;
+
+    fn provider(base: &str) -> Provider {
+        Provider {
+            key: "custom".into(), label: "Custom".into(), base_url: base.into(),
+            models_url: None, api_key: String::new(), session_header: None,
+        }
+    }
+
+    fn entry(id: &str) -> ModelCatalogEntry {
+        ModelCatalogEntry {
+            id: id.into(), name: None, context_window: None, vision: None, reasoning: None,
+            price: Price { cached_in: None, uncached_in: None, output: None },
+            price_source: None,
+        }
+    }
+
+    #[test]
+    fn relay_names_do_not_inherit_official_capabilities_or_prices() {
+        let relay = provider("https://relay.example/v1");
+        assert!(defaults(&relay, "gpt-6-luna").is_none());
+        let result = from_catalog(&relay, &entry("gpt-6-luna"));
+        assert_eq!(result.protocol, Protocol::ChatCompletions);
+        assert_eq!(result.reasoning.style, ReasoningStyle::None);
+        assert!(!result.vision);
+        assert!(result.context_window.is_none());
+        assert!(result.price.uncached_in.is_none());
+        assert!(result.price.output.is_none());
+    }
+
+    #[test]
+    fn disclosed_values_override_defaults_including_false_and_zero() {
+        let provider = provider("https://api.deepseek.com/v1");
+        let mut entry = entry("deepseek-flash");
+        entry.name = Some("Disclosed name".into());
+        entry.context_window = Some(8192);
+        entry.vision = Some(false);
+        entry.reasoning = Some(ReasoningSpec {
+            style: ReasoningStyle::None, levels: vec![], default: None,
+        });
+        entry.price.uncached_in = Some(0.0);
+        let result = from_catalog(&provider, &entry);
+        assert_eq!(result.display_name, "Disclosed name");
+        assert_eq!(result.context_window, Some(8192));
+        assert!(!result.vision);
+        assert_eq!(result.reasoning.style, ReasoningStyle::None);
+        assert_eq!(result.price.uncached_in, Some(0.0));
+        assert!(result.price.cached_in.is_none());
+        assert!(result.price.output.is_none());
+    }
+
+    #[test]
+    fn official_protocol_rules_and_unknown_prices_are_preserved() {
+        let official = provider("https://opencode.ai/zen/v1");
+        assert!(!supported(&official, "claude-haiku-5-5"));
+        assert!(defaults(&official, "claude-haiku-5-5").is_none());
+        let gpt = from_catalog(&official, &entry("gpt-6-luna"));
+        assert_eq!(gpt.protocol, Protocol::Responses);
+        assert!(gpt.vision);
+        for id in ["glm-5.3", "kimi-k3", "minimax-m3", "deepseek-v4-pro"] {
+            let result = defaults(&official, id).unwrap();
+            assert!(result.price.cached_in.is_none());
+            assert!(result.price.uncached_in.is_none());
+            assert!(result.price.output.is_none());
+        }
+        assert!(supported(&provider("https://relay.example/v1"), "claude-haiku-5-5"));
+    }
 }

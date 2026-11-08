@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, bail};
+use anyhow::Context;
 use serde::{Deserialize, Deserializer};
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
@@ -94,30 +94,6 @@ pub fn load(path: &Path) -> anyhow::Result<Config> {
     toml::from_str(&text).with_context(|| format!("解析配置文件 {} 失败", path.display()))
 }
 
-/// Pairs each provider with its API key read through `env`.
-pub fn resolve_api_keys(
-    cfg: &Config,
-    env: impl Fn(&str) -> Option<String>,
-) -> anyhow::Result<Vec<(ProviderEntry, String)>> {
-    if cfg
-        .providers
-        .iter()
-        .any(|provider| provider.key == crate::codex::PROVIDER_KEY)
-    {
-        bail!("chatgpt-subscription 是官方账号连接的保留提供商标识，请勿在 providers 中配置");
-    }
-    cfg.providers
-        .iter()
-        .map(|p| match env(&p.api_key_env).filter(|k| !k.is_empty()) {
-            Some(key) => Ok((p.clone(), key)),
-            None => bail!(
-                "提供商 {} 缺少 API 密钥：环境变量 {} 未设置",
-                p.key,
-                p.api_key_env
-            ),
-        })
-        .collect()
-}
 
 pub fn startup_warnings(cfg: &Config) -> Vec<String> {
     let mut warnings = Vec::new();

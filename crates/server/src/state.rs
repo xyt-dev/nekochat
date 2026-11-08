@@ -81,7 +81,7 @@ impl Sessions {
 pub struct AppState {
     pub store: Arc<Store>,
     pub http: reqwest::Client,
-    pub providers: Arc<Vec<Provider>>,
+    pub(crate) providers: Arc<crate::providers::ProviderRegistry>,
     pub config: Arc<Config>,
     pub sessions: Sessions,
     pub running: RunningTurns,
@@ -120,11 +120,12 @@ impl AppState {
         let codex = Arc::new(crate::codex::CodexAccount::new(&config.data_dir));
         providers.push(crate::codex::provider());
         let store = Arc::new(store);
+        let providers = Arc::new(crate::providers::ProviderRegistry::new(providers, &store));
         let search = Arc::new(crate::search::SearchBridge::new(store.clone(), codex.clone(), http.clone()));
         AppState {
             store,
             http,
-            providers: Arc::new(providers),
+            providers,
             config: Arc::new(config),
             sessions: Sessions::default(),
             running: RunningTurns::default(),
@@ -136,11 +137,16 @@ impl AppState {
         }
     }
 
-    pub fn provider(&self, key: &str) -> Option<&Provider> {
+    pub fn provider(&self, key: &str) -> Option<Arc<Provider>> {
         if key == crate::codex::PROVIDER_KEY && !self.codex.connected() {
             return None;
         }
-        self.providers.iter().find(|p| p.key == key)
+        self.providers.get(key)
+    }
+
+    /// Deterministically ordered snapshots, including disconnected subscription metadata.
+    pub fn provider_list(&self) -> Vec<Arc<Provider>> {
+        self.providers.list()
     }
 
     /// Resolve a request-local credential; access tokens never enter persistent Provider metadata.
@@ -148,11 +154,8 @@ impl AppState {
         &self,
         key: &str,
     ) -> Result<Provider, crate::api::ApiError> {
-        let mut provider = self
-            .providers
-            .iter()
-            .find(|provider| provider.key == key)
-            .cloned()
+        let mut provider = self.providers.get(key)
+            .map(|provider| (*provider).clone())
             .ok_or_else(crate::api::ApiError::not_found)?;
         if key == crate::codex::PROVIDER_KEY {
             provider.api_key = self

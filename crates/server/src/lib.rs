@@ -11,6 +11,7 @@ pub mod config;
 pub mod generation;
 mod model_defaults;
 mod observation;
+pub mod providers;
 pub mod search;
 pub mod state;
 pub mod web;
@@ -20,11 +21,10 @@ use std::sync::Arc;
 use anyhow::Context;
 use axum::routing::{get, post, put};
 use axum::{Router, middleware};
-use nekochat_gateway::Provider;
 use nekochat_store::Store;
 
 use crate::api::{admin, user};
-use crate::config::{Config, resolve_api_keys, startup_warnings};
+use crate::config::{Config, startup_warnings};
 use crate::state::AppState;
 use crate::web::{EmbeddedDist, WebAssets};
 
@@ -143,7 +143,9 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
         .route("/api/admin/search/services/{id}", put(search::update_service).delete(search::delete_service))
         .route("/api/admin/search/services/{id}/test", post(search::test_service))
         .route("/api/admin/search/usage", get(search::usage))
-        .route("/api/admin/providers", get(admin::list_providers))
+        .route("/api/admin/providers", get(providers::list).post(providers::create))
+        .route("/api/admin/providers/discover", post(admin::discover_provider))
+        .route("/api/admin/providers/{key}", put(providers::update).delete(providers::delete))
         .route("/api/admin/stats", get(api::monitoring::stats))
         .route("/api/admin/quotas", get(api::monitoring::quotas))
         .route(
@@ -182,19 +184,9 @@ pub fn app_with_assets(state: AppState, assets: Arc<dyn WebAssets>) -> Router {
 }
 
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
-    let providers = resolve_api_keys(&cfg, |name| std::env::var(name).ok())?
-        .into_iter()
-        .map(|(p, api_key)| Provider {
-            key: p.key,
-            label: p.label,
-            base_url: p.base_url,
-            models_url: p.models_url,
-            api_key,
-            session_header: p.session_header,
-        })
-        .collect();
     let db = cfg.data_dir.join("nekochat.db");
     let store = Store::open(&db).with_context(|| format!("打开数据库 {} 失败", db.display()))?;
+    let providers = providers::resolve_configured(&cfg, &store, |name| std::env::var(name).ok())?;
     for warning in startup_warnings(&cfg) {
         tracing::warn!("{warning}");
     }

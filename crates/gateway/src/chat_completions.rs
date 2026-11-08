@@ -125,7 +125,7 @@ pub fn parse_usage(v: &Value) -> Usage {
     }
 }
 
-fn chunk_events(v: &Value, out: &mut VecDeque<StreamEvent>) {
+fn chunk_events(v: &Value, out: &mut VecDeque<StreamEvent>) -> Option<&'static str> {
     let delta = v.pointer("/choices/0/delta");
     let text_of = |k: &str| {
         delta
@@ -136,25 +136,45 @@ fn chunk_events(v: &Value, out: &mut VecDeque<StreamEvent>) {
     if let Some(r) = text_of("reasoning_content").or_else(|| text_of("reasoning")) {
         out.push_back(StreamEvent::Reasoning(r.to_owned()));
     }
-    if let Some(t) = text_of("content") {
-        out.push_back(StreamEvent::Text(t.to_owned()));
+    if let Some(content) = delta.and_then(|delta| delta.get("content")) {
+        if let Some(text) = content.as_str().filter(|text| !text.is_empty()) {
+            out.push_back(StreamEvent::Text(text.to_owned()));
+        } else if let Some(parts) = content.as_array() {
+            for part in parts {
+                if part.get("type").and_then(Value::as_str) == Some("text") {
+                    if let Some(text) = part.get("text").and_then(Value::as_str).filter(|text| !text.is_empty()) {
+                        out.push_back(StreamEvent::Text(text.to_owned()));
+                    }
+                }
+            }
+        }
     }
-    if let Some(calls) = delta.and_then(|delta| delta.get("tool_calls")).and_then(Value::as_array) {
-        for call in calls {
-            let Some(index) = call.get("index").and_then(Value::as_u64).and_then(|index| usize::try_from(index).ok()) else {
-                continue;
-            };
-            out.push_back(StreamEvent::ToolCallDelta(crate::ToolCallDelta {
-                index,
-                id: call.get("id").and_then(Value::as_str).map(str::to_owned),
-                name: call.pointer("/function/name").and_then(Value::as_str).map(str::to_owned),
-                arguments: call.pointer("/function/arguments").and_then(Value::as_str).unwrap_or_default().to_owned(),
-            }));
+    if let Some(text) = text_of("refusal") {
+        out.push_back(StreamEvent::Text(text.to_owned()));
+    }
+    let mut tool_error = None;
+    if let Some(value) = delta.and_then(|delta| delta.get("tool_calls")).filter(|value| !value.is_null()) {
+        if let Some(calls) = value.as_array() {
+            for call in calls {
+                let Some(index) = call.get("index").and_then(Value::as_u64).and_then(|index| usize::try_from(index).ok()) else {
+                    tool_error = Some("Chat Completions 返回了无效的工具调用索引");
+                    continue;
+                };
+                out.push_back(StreamEvent::ToolCallDelta(crate::ToolCallDelta {
+                    index,
+                    id: call.get("id").and_then(Value::as_str).map(str::to_owned),
+                    name: call.pointer("/function/name").and_then(Value::as_str).map(str::to_owned),
+                    arguments: call.pointer("/function/arguments").and_then(Value::as_str).unwrap_or_default().to_owned(),
+                }));
+            }
+        } else {
+            tool_error = Some("Chat Completions 返回了无效的工具调用列表");
         }
     }
     if let Some(us) = v.get("usage").filter(|x| x.is_object()) {
         out.push_back(StreamEvent::Usage(parse_usage(us)));
     }
+    tool_error
 }
 
 /// POSTs `{base_url}/chat/completions` and streams parsed events.
@@ -175,25 +195,28 @@ pub async fn stream_chat(
     let resp = check_status(rb.send().await.map_err(transport)?).await?;
     let events = resp.bytes_stream().eventsource();
 
-    // State: (sse stream, pending events, finished)
+    // A failed finish reason precedes the usage trailer; drain it before reporting failure.
     let s = stream::unfold(
-        (events, VecDeque::new(), false),
-        |(mut events, mut pending, done)| async move {
+        (events, VecDeque::new(), false, None::<String>),
+        |(mut events, mut pending, done, mut finish_error)| async move {
             loop {
                 if let Some(ev) = pending.pop_front() {
-                    return Some((Ok(ev), (events, pending, done)));
+                    return Some((Ok(ev), (events, pending, done, finish_error)));
                 }
                 if done {
                     return None;
                 }
                 match events.next().await {
                     None => {
-                        let err = GatewayError::Transport("stream ended before [DONE]".into());
-                        return Some((Err(err), (events, pending, true)));
+                        let err = finish_error.take().map(GatewayError::Protocol).unwrap_or_else(|| {
+                            GatewayError::Transport("stream ended before [DONE]".into())
+                        });
+                        return Some((Err(err), (events, pending, true, finish_error)));
                     }
                     Some(Err(e)) => {
-                        let err = GatewayError::Transport(e.to_string());
-                        return Some((Err(err), (events, pending, true)));
+                        let err = finish_error.take().map(GatewayError::Protocol)
+                            .unwrap_or_else(|| GatewayError::Transport(e.to_string()));
+                        return Some((Err(err), (events, pending, true, finish_error)));
                     }
                     Some(Ok(ev)) => {
                         let data = ev.data.trim();
@@ -201,7 +224,9 @@ pub async fn stream_chat(
                             continue;
                         }
                         if data == "[DONE]" {
-                            return None;
+                            return finish_error.take().map(|message| {
+                                (Err(GatewayError::Protocol(message)), (events, pending, true, finish_error))
+                            });
                         }
                         match serde_json::from_str::<Value>(data) {
                             Ok(v) => {
@@ -211,13 +236,22 @@ pub async fn stream_chat(
                                         .and_then(Value::as_str)
                                         .map_or_else(|| e.to_string(), str::to_owned);
                                     let err = GatewayError::Protocol(message);
-                                    return Some((Err(err), (events, pending, true)));
+                                    return Some((Err(err), (events, pending, true, finish_error)));
                                 }
-                                chunk_events(&v, &mut pending)
+                                if let Some(message) = chunk_events(&v, &mut pending) {
+                                    finish_error.get_or_insert_with(|| message.to_owned());
+                                }
+                                if finish_error.is_none() {
+                                    finish_error = match v.pointer("/choices/0/finish_reason").and_then(Value::as_str) {
+                                        Some("length") => Some("Chat Completions 回复未完成：length（达到输出上限）".into()),
+                                        Some("content_filter") => Some("Chat Completions 回复未完成：content_filter（内容过滤）".into()),
+                                        _ => None,
+                                    };
+                                }
                             }
                             Err(e) => {
                                 let err = GatewayError::Protocol(format!("invalid SSE JSON: {e}"));
-                                return Some((Err(err), (events, pending, true)));
+                                return Some((Err(err), (events, pending, true, finish_error)));
                             }
                         }
                     }
@@ -226,48 +260,4 @@ pub async fn stream_chat(
         },
     );
     Ok(s.boxed())
-}
-
-/// GETs `models_url` (or `{base_url}/models`) and returns `data[].id`.
-pub async fn list_models(
-    http: &reqwest::Client,
-    p: &Provider,
-) -> Result<Vec<String>, GatewayError> {
-    let url = p
-        .models_url
-        .clone()
-        .unwrap_or_else(|| endpoint(&p.base_url, "/models"));
-    let mut resp = http
-        .get(url)
-        .header(reqwest::header::USER_AGENT, USER_AGENT)
-        .bearer_auth(&p.api_key)
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(transport)?;
-    if !resp.status().is_success() {
-        return Err(GatewayError::Http {
-            status: resp.status().as_u16(),
-            message: "model catalog request failed".into(),
-        });
-    }
-    let mut body = Vec::new();
-    while let Some(chunk) = resp.chunk().await.map_err(transport)? {
-        if body.len() + chunk.len() > 2 * 1024 * 1024 {
-            return Err(GatewayError::Protocol(
-                "model catalog response too large".into(),
-            ));
-        }
-        body.extend_from_slice(&chunk);
-    }
-    let v: Value = serde_json::from_slice(&body)
-        .map_err(|_| GatewayError::Protocol("invalid model catalog JSON".into()))?;
-    let data = v
-        .get("data")
-        .and_then(Value::as_array)
-        .ok_or_else(|| GatewayError::Protocol("models response lacks data[]".into()))?;
-    Ok(data
-        .iter()
-        .filter_map(|m| m.get("id")?.as_str().map(str::to_owned))
-        .collect())
 }

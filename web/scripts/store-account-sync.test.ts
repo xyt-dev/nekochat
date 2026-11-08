@@ -414,3 +414,31 @@ test("a pending POST rejected after remote deletion replays the deferred delete"
   assert.equal(modelPosts, 1);
   assert.equal(turnGets, 0);
 });
+
+test("regeneration keeps its live parent path when history still selects the previous sibling", async () => {
+  await login();
+  const previous = { ...answer, id: "previous-reply", content: "previous answer" };
+  views.set("chat", { ...initial(), leaf_id: previous.id, nodes: [question, previous] });
+  await store.openConversation("chat", false);
+  assert.equal(store.path().at(-1)?.id, previous.id);
+  const generating = store.runTurn({ action: "regenerate", node_id: question.id });
+  await reached(() => store.currentLive()?.started() === true);
+  const live = store.currentLive();
+  views.set("chat", { ...initial(), title: "Regenerating", leaf_id: previous.id, nodes: [question, previous], active_turn_id: answer.id });
+  notify("chat");
+  await reached(() => store.conv()?.title === "Regenerating" && store.conv()?.leaf_id === previous.id);
+  assert.deepEqual(store.path().map(node => node.id), [question.id]);
+  assert.equal(store.currentLive(), live);
+  assert.equal(modelPosts, 1);
+  assert.equal(turnGets, 0);
+  turnEvent("text", { t: "new answer" });
+  await reached(() => live?.content() === "new answer");
+  assert.deepEqual(store.path().map(node => node.id), [question.id]);
+  views.set("chat", { ...initial(), leaf_id: answer.id, nodes: [question, previous, answer] });
+  turnEvent("done", { node: answer });
+  for (const controller of turnStreams) controller.close(); turnStreams.clear();
+  await generating;
+  assert.equal(store.currentLive(), undefined);
+  assert.deepEqual(store.path().map(node => node.id), [question.id, answer.id]);
+  assert.equal(store.conv()?.nodes.filter(node => node.role === "assistant").length, 2);
+});

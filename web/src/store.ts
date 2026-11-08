@@ -312,7 +312,13 @@ function createAppStore() {
   }
 
   const index = createMemo<TreeIndex>(() => indexTree(conv()?.nodes ?? []));
-  const path = createMemo(() => pathTo(index(), conv()?.leaf_id ?? null));
+  const path = createMemo(() => {
+    const current = conv();
+    const turn = current && live()[current.id];
+    // History keeps the previous persisted leaf until regeneration finishes.
+    const leaf = turn && (turn.started() || turn.error() !== null) ? turn.parentId() : current?.leaf_id ?? null;
+    return pathTo(index(), leaf);
+  });
   const currentLive = createMemo(() => {
     const c = conv();
     return c ? live()[c.id] : undefined;

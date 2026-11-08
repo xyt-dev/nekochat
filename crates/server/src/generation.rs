@@ -158,6 +158,7 @@ impl Generation {
         model_id: String,
         model_label: String,
         effort: Option<String>,
+        empty_completion: bool,
     ) -> (Option<Arc<Node>>, Option<Usage>) {
         let mut data = self.lock();
         let end = Instant::now();
@@ -172,7 +173,7 @@ impl Generation {
             Arc::new(node)
         });
         let keep = node.as_ref().is_some_and(|node| {
-            node.status != NodeStatus::Error || !node.content.is_empty() || node.reasoning.is_some()
+            empty_completion || node.status != NodeStatus::Error || !node.content.is_empty() || node.reasoning.is_some() || data.progress.usage.is_some()
         });
         data.finalizing = node.clone();
         (if keep { node } else { None }, data.progress.usage.take())
@@ -405,6 +406,7 @@ mod tests {
             "model".into(),
             "private-label".into(),
             None,
+            false,
         );
         let node = node.unwrap();
         assert_eq!(node.content, format!("{}tail\n\n**参考来源**\n\n[1] [Source](<https://example.com/>)", "x".repeat(count)));

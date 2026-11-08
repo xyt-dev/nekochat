@@ -1698,7 +1698,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nekochat-core"
-version = "0.18.0"
+version = "0.19.4"
 dependencies = [
  "cssparser",
  "roxmltree",
@@ -1708,7 +1708,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-gateway"
-version = "0.18.0"
+version = "0.19.4"
 dependencies = [
  "axum",
  "eventsource-stream",
@@ -1722,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-mdwasm"
-version = "0.18.0"
+version = "0.19.4"
 dependencies = [
  "nekochat-core",
  "pulldown-cmark",
@@ -1732,7 +1732,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-resources"
-version = "0.18.0"
+version = "0.19.4"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1767,7 +1767,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-server"
-version = "0.18.0"
+version = "0.19.4"
 dependencies = [
  "anyhow",
  "axum",
@@ -1808,7 +1808,7 @@ dependencies = [
 
 [[package]]
 name = "nekochat-store"
-version = "0.18.0"
+version = "0.19.4"
 dependencies = [
  "argon2",
  "getrandom 0.3.4",

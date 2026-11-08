@@ -1,12 +1,14 @@
 //! Provider-protocol layer: streams one completion from an upstream provider.
 
+mod catalog;
 mod chat_completions;
 mod chatgpt;
 mod http;
 mod responses;
 mod tools;
 
-pub use chat_completions::{build_body, list_models, parse_usage, stream_chat};
+pub use catalog::{ModelCatalogEntry, list_models};
+pub use chat_completions::{build_body, parse_usage, stream_chat};
 pub use chatgpt::stream_chatgpt;
 pub use responses::stream_responses;
 pub use tools::{MAX_ARGUMENT_BYTES, ToolAccumulator, ToolCall, ToolCallDelta, ToolContext, ToolDefinition, ToolExchange, ToolResult};

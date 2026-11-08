@@ -47,13 +47,10 @@ async fn provider_models_mark_listed() {
         .json()
         .await
         .unwrap();
-    assert_eq!(
-        providers,
-        json!([
-            {"key": PROVIDER_KEY, "label": "Mock", "connected": true},
-            {"key": "chatgpt-subscription", "label": "ChatGPT 订阅（官方账号）", "connected": false}
-        ])
-    );
+    let rows = providers.as_array().unwrap();
+    assert!(rows.iter().any(|provider| provider["key"] == PROVIDER_KEY && provider["connected"] == true));
+    assert!(rows.iter().any(|provider| provider["key"] == "chatgpt-subscription"));
+    assert!(!providers.to_string().contains("test-key"));
 
     let r = app
         .client

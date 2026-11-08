@@ -1,6 +1,15 @@
 import type { CharacterBackground } from "../api";
 
-export interface Provider { key: string; label: string; connected?: boolean }
+export type ProviderProtocol = "chat_completions" | "responses";
+
+export interface Provider {
+  key: string; label: string; connected?: boolean; base_url?: string; models_url?: string | null;
+  session_header?: string | null; managed?: boolean; has_api_key?: boolean; protocol?: ProviderProtocol | null;
+}
+export interface ProviderWrite {
+  key: string; label: string; base_url: string; api_key?: string;
+  models_url?: string | null; session_header?: string | null; protocol?: ProviderProtocol | null;
+}
 export interface CharacterParameters {
   effort?: string | null; temperature?: number | null; top_p?: number | null;
   max_output_tokens?: number | null; seed?: number | null;
@@ -38,7 +47,10 @@ export interface ModelDefaults {
 }
 export interface ModelSpec extends ModelDefaults { provider: string; upstream_id: string; sort: number }
 export interface ListedModel extends ModelSpec { id: string }
-export interface UpstreamModel { upstream_id: string; listed_model_id: string | null; supported: boolean; defaults: ModelDefaults | null }
+export interface UpstreamModel {
+  upstream_id: string; listed_model_id: string | null; supported: boolean; defaults: ModelDefaults | null;
+  price_source?: string | null; fetched_at_ms?: number | null;
+}
 export interface Totals {
   requests: number; cached_in: number; uncached_in: number; reasoning: number; output: number;
   cost_usd: number | null; unpriced_requests: number;
@@ -120,6 +132,9 @@ export const errorMessage = (error: unknown) => error instanceof Error ? error.m
 export interface AdminApi {
   session(password: string): Promise<void>;
   providers(): Promise<Provider[]>;
+  saveProvider(key: string | null, body: ProviderWrite): Promise<Provider>;
+  deleteProvider(key: string): Promise<void>;
+  discoverProvider(body: ProviderWrite): Promise<UpstreamModel[]>;
   directory(key: string): Promise<UpstreamModel[]>;
   models(): Promise<ListedModel[]>;
   saveModel(modelId: string | null, spec: ModelSpec): Promise<ListedModel>;
@@ -185,6 +200,9 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
   return {
     session: (password: string) => request<void>("/session", "POST", { password }),
     providers: () => request<Provider[]>("/providers"),
+    saveProvider: (key, body) => request<Provider>(`/providers${key ? `/${id(key)}` : ""}`, key ? "PUT" : "POST", body),
+    deleteProvider: (key) => request<void>(`/providers/${id(key)}`, "DELETE"),
+    discoverProvider: (body) => request<UpstreamModel[]>("/providers/discover", "POST", body),
     directory: (key: string) => request<UpstreamModel[]>(`/providers/${id(key)}/models`),
     models: () => request<ListedModel[]>("/models"),
     saveModel: (modelId: string | null, spec: ModelSpec) => request<ListedModel>(`/models${modelId ? `/${id(modelId)}` : ""}`, modelId ? "PUT" : "POST", spec),
@@ -225,7 +243,21 @@ export function createAdminApi(onAccessError: (status: number) => void): AdminAp
     searchUsage: (from, to, signal) => request<SearchUsageDashboard>(`/search/usage?${new URLSearchParams({ from_ms: String(from), to_ms: String(to) })}`, "GET", undefined, signal),
   };
 }
-export const emptyModel = (provider: string, upstream_id = "", defaults: ModelDefaults | null = null): ModelSpec => ({
-  provider, upstream_id, sort: 0,
-  ...(defaults ?? { display_name: upstream_id, protocol: provider === "chatgpt-subscription" ? "chatgpt_responses" : "chat_completions", reasoning: { style: "none", levels: [], default: null }, vision: false, context_window: null, price: { cached_in: null, uncached_in: null, output: null } }),
-});
+export function newModelProtocol(provider: Provider | undefined, fallback: ModelSpec["protocol"] = "chat_completions", upstream = ""): ModelSpec["protocol"] {
+  if (provider?.key === "chatgpt-subscription") return "chatgpt_responses";
+  let hostname = "";
+  try { hostname = new URL(provider?.base_url ?? "").hostname; } catch { /* Providers without an API address use the model default. */ }
+  if (hostname === "opencode.ai") return upstream.startsWith("gpt-") ? "responses" : "chat_completions";
+  if (hostname === "api.deepseek.com") return "chat_completions";
+  return provider?.protocol ?? fallback;
+}
+
+export const emptyModel = (provider: string, upstream_id = "", defaults: ModelDefaults | null = null, site?: Provider): ModelSpec => {
+  const model: ModelSpec = {
+    provider, upstream_id, sort: 0,
+    ...(defaults ?? { display_name: upstream_id, protocol: provider === "chatgpt-subscription" ? "chatgpt_responses" : "chat_completions", reasoning: { style: "none", levels: [], default: null }, vision: false, context_window: null, price: { cached_in: null, uncached_in: null, output: null } }),
+    protocol: newModelProtocol(site, defaults?.protocol ?? (provider === "chatgpt-subscription" ? "chatgpt_responses" : "chat_completions"), upstream_id),
+  };
+  if (model.protocol !== "chat_completions" && model.reasoning.style === "deepseek") model.reasoning = { ...model.reasoning, style: "effort" };
+  return model;
+};

@@ -181,7 +181,8 @@ pub async fn quotas(State(state): State<AppState>) -> Result<Json<Quotas>, ApiEr
     let store = state.store.clone();
     let (allowances, listed) =
         blocking(move || Ok((store.allowance_windows(as_of_ms)?, store.list_models()?))).await?;
-    let mut providers = Vec::with_capacity(state.providers.len());
+    let provider_list = state.provider_list();
+    let mut providers = Vec::with_capacity(provider_list.len());
     // At most one request per DeepSeek provider, each with a total deadline and response cap.
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
@@ -189,12 +190,12 @@ pub async fn quotas(State(state): State<AppState>) -> Result<Json<Quotas>, ApiEr
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| ApiError::internal())?;
-    for provider in state.providers.iter() {
+    for provider in &provider_list {
         let entry = state
             .config
             .providers
             .iter()
-            .find(|p| p.key == provider.key);
+            .find(|p| p.key == provider.key && p.base_url == provider.base_url);
         let monitoring = entry.and_then(|e| e.monitoring.as_ref());
         let mut quota = ProviderQuota {
             key: provider.key.clone(),

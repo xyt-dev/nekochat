@@ -186,8 +186,17 @@ pub struct NodeView<'a> {
     created_at: i64,
 }
 
+fn public_node_status(node: &Node) -> NodeStatus {
+    if node.role == NodeRole::Assistant && node.status == NodeStatus::Complete && node.content.trim().is_empty() {
+        NodeStatus::Error
+    } else {
+        node.status.clone()
+    }
+}
+
 impl From<Node> for NodeView<'static> {
     fn from(n: Node) -> Self {
+        let status = public_node_status(&n);
         Self {
             id: Cow::Owned(n.id),
             parent_id: n.parent_id.map(Cow::Owned),
@@ -198,7 +207,7 @@ impl From<Node> for NodeView<'static> {
             character_id: n.character_id.map(Cow::Owned),
             character_name: n.character_name.map(Cow::Owned),
             character_avatar: n.character_avatar.map(Cow::Owned),
-            status: n.status,
+            status,
             metrics: n.metrics.as_ref().map(MetricsView::from),
             created_at: n.created_at,
         }
@@ -217,7 +226,7 @@ impl<'a> From<&'a Node> for NodeView<'a> {
             character_id: n.character_id.as_deref().map(Cow::Borrowed),
             character_name: n.character_name.as_deref().map(Cow::Borrowed),
             character_avatar: n.character_avatar.as_deref().map(Cow::Borrowed),
-            status: n.status.clone(),
+            status: public_node_status(n),
             metrics: n.metrics.as_ref().map(MetricsView::from),
             created_at: n.created_at,
         }

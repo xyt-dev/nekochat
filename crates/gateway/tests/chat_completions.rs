@@ -5,7 +5,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::post;
 use futures_util::StreamExt;
 use nekochat_core::ReasoningStyle;
 use nekochat_gateway::*;
@@ -415,22 +415,58 @@ async fn http_error_without_json_uses_raw_text() {
 }
 
 #[tokio::test]
-async fn list_models_uses_models_url() {
-    let app = Router::new().route(
-        "/v1/models",
-        get(|h: HeaderMap| async move {
-            assert!(h["user-agent"].to_str().unwrap().starts_with("nekochat/"));
-            axum::Json(json!({"data":[{"id":"a"},{"id":"b"}]}))
-        }),
+async fn explicit_refusal_delta_is_visible_alongside_text() {
+    let body = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"说明：\",\"refusal\":\"无法回答。\"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+        "data: [DONE]\n\n",
     );
-    let base = serve(app).await;
-    let mut p = provider("http://127.0.0.1:1");
-    p.models_url = Some(format!("{base}/v1/models"));
-    let http = reqwest::Client::new();
-    assert_eq!(list_models(&http, &p).await.unwrap(), vec!["a", "b"]);
-    // base_url fallback with trailing slash trimmed
-    assert_eq!(
-        list_models(&http, &provider(&base)).await.unwrap(),
-        vec!["a", "b"]
+    let base = serve(Router::new().route("/v1/chat/completions", post(move || async move { body }))).await;
+    assert_eq!(collect(&base).await, vec![StreamEvent::Text("说明：".into()), StreamEvent::Text("无法回答。".into())]);
+}
+
+#[tokio::test]
+async fn text_content_parts_are_visible_without_interpreting_other_part_shapes() {
+    let body = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":[{\"type\":\"text\",\"text\":\"你\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"ignored\"}},{\"type\":\"text\",\"text\":\"🐈\"}]}}]}\n\n",
+        "data: [DONE]\n\n",
     );
+    let base = serve(Router::new().route("/v1/chat/completions", post(move || async move { body }))).await;
+    assert_eq!(collect(&base).await, vec![StreamEvent::Text("你".into()), StreamEvent::Text("🐈".into())]);
+}
+
+#[tokio::test]
+async fn output_limit_and_content_filter_keep_partial_text_and_actual_usage_before_error() {
+    for reason in ["length", "content_filter"] {
+        for done_marker in [true, false] {
+            let mut body = format!(
+                "data: {{\"choices\":[{{\"delta\":{{\"content\":\"partial\"}}}}]}}\n\ndata: {{\"choices\":[{{\"delta\":{{}},\"finish_reason\":\"{reason}\"}}]}}\n\ndata: {{\"choices\":[],\"usage\":{{\"prompt_tokens\":31,\"completion_tokens\":7,\"completion_tokens_details\":{{\"reasoning_tokens\":2}}}}}}\n\n"
+            );
+            if done_marker {
+                body.push_str("data: [DONE]\n\n");
+            }
+            let base = serve(Router::new().route("/v1/chat/completions", post(move || {
+                let body = body.clone();
+                async move { body }
+            }))).await;
+            let events: Vec<_> = stream_chat(&reqwest::Client::new(), &provider(&base), &req(ReasoningStyle::None, None)).await.unwrap().collect().await;
+            assert_eq!(events.len(), 3, "{events:?}");
+            assert_eq!(events[0].as_ref().unwrap(), &StreamEvent::Text("partial".into()));
+            assert!(matches!(&events[1], Ok(StreamEvent::Usage(usage)) if usage.uncached_in == 31 && usage.output == 5 && usage.reasoning == 2));
+            assert!(matches!(&events[2], Err(GatewayError::Protocol(message)) if message.contains(reason)));
+        }
+    }
+}
+
+#[tokio::test]
+async fn standard_stop_and_tool_calls_still_accept_usage_trailers() {
+    for reason in ["stop", "tool_calls"] {
+        let body = format!("data: {{\"choices\":[{{\"delta\":{{}},\"finish_reason\":\"{reason}\"}}]}}\n\ndata: {{\"choices\":[],\"usage\":{{\"prompt_tokens\":4,\"completion_tokens\":1}}}}\n\ndata: [DONE]\n\n");
+        let base = serve(Router::new().route("/v1/chat/completions", post(move || {
+            let body = body.clone();
+            async move { body }
+        }))).await;
+        let events = collect(&base).await;
+        assert!(matches!(events.as_slice(), [StreamEvent::Usage(usage)] if usage.uncached_in == 4 && usage.output == 1));
+    }
 }
